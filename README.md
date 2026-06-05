@@ -92,14 +92,14 @@
 
 ## 7. 데이터베이스 설계 (ERD)
 
-https://www.erdcloud.com/d/Rrj66rbJaaH6NsCoQ
+[ERD](https://www.erdcloud.com/d/Rrj66rbJaaH6NsCoQ)
 
 <br>
 
 
 ## 8. 화면 기능 설계서
 
-https://www.figma.com/design/HAyNurdsY2cy5S5nGAFhgZ/Meetbowl_%ED%99%94%EB%A9%B4-%EC%84%A4%EA%B3%84%EC%84%9C?node-id=0-1&t=AwxcJscBceFyrRws-1
+[화면 기능 설계서](https://www.figma.com/design/HAyNurdsY2cy5S5nGAFhgZ/Meetbowl_%ED%99%94%EB%A9%B4-%EC%84%A4%EA%B3%84%EC%84%9C?node-id=0-1&t=AwxcJscBceFyrRws-1)
 
 <br>
 
