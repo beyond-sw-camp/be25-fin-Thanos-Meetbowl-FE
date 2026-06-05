@@ -110,7 +110,7 @@
 
 ## 10. API 명세서
 
-
+[API 명세서](https://app.notion.com/p/playdatacademy/372d943bcac2801c9be8e3fdbe38b6b4?v=372d943bcac2805d92ec000cfbed638d&source=copy_link)
 
 <br>
 
