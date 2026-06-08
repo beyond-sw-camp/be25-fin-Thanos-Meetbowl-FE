@@ -1,30 +1,28 @@
 import { createRouter, createWebHistory } from 'vue-router'
 import AppShell from '../components/AppShell.vue'
 import { useAuthStore } from '../stores/auth'
-import {
-  AdminDashboardPage,
-  AdminLogsPage,
-  AdminReservationsPage,
-  AdminRoomsPage,
-  BackupDetailPage,
-  CommunityPage,
-  DashboardPage,
-  JoinPage,
-  LoginPage,
-  MailPage,
-  MeetingPage,
-  MeetingsPage,
-  MembersPage,
-  MyReservationsPage,
-  OrganizationPage,
-  PolicyPage,
-  RecordingsPage,
-  RoomsPage,
-  SharedDocsPage,
-  SettingsPage,
-  SimpleDocsPage,
-  WorkspacePage,
-} from '../pages'
+import AdminDashboardPage from '../pages/admin/AdminDashboardPage.vue'
+import AdminLogsPage from '../pages/admin/AdminLogsPage.vue'
+import AdminReservationsPage from '../pages/admin/AdminReservationsPage.vue'
+import AdminRoomsPage from '../pages/admin/AdminRoomsPage.vue'
+import MembersPage from '../pages/admin/MembersPage.vue'
+import OrganizationPage from '../pages/admin/OrganizationPage.vue'
+import PolicyPage from '../pages/admin/PolicyPage.vue'
+import JoinPage from '../pages/auth/JoinPage.vue'
+import LoginPage from '../pages/auth/LoginPage.vue'
+import CommunityPage from '../pages/community/CommunityPage.vue'
+import DashboardPage from '../pages/dashboard/DashboardPage.vue'
+import SimpleDocsPage from '../pages/docs/SimpleDocsPage.vue'
+import MailPage from '../pages/mail/MailPage.vue'
+import MeetingPage from '../pages/meeting/MeetingPage.vue'
+import MeetingsPage from '../pages/meetings/MeetingsPage.vue'
+import RecordingsPage from '../pages/recordings/RecordingsPage.vue'
+import BackupDetailPage from '../pages/backup/BackupDetailPage.vue'
+import MyReservationsPage from '../pages/reservations/MyReservationsPage.vue'
+import RoomsPage from '../pages/rooms/RoomsPage.vue'
+import SettingsPage from '../pages/settings/SettingsPage.vue'
+import SharedDocsPage from '../pages/shared-docs/SharedDocsPage.vue'
+import WorkspacePage from '../pages/workspace/WorkspacePage.vue'
 
 const routes = [
   { path: '/', redirect: '/app/dashboard' },
