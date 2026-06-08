@@ -2,7 +2,7 @@
 import { computed, defineComponent, ref } from 'vue'
 import {
   colleagueInfo,
-  favoriteRecordings,
+  favoriteMinutes,
   initialMemos,
   workspaceBackupMails,
   workspaceDateKey,
@@ -157,7 +157,7 @@ export default defineComponent({
       hoveredColleague,
       backupMails,
       driveFiles,
-      favoriteRecordings,
+      favoriteMinutes,
       cells,
       eventsByDate,
       selectedEvents,
@@ -314,8 +314,8 @@ export default defineComponent({
       </div>
 
       <article v-else-if="activeTab === 'favorites'" class="card workspace-panel">
-        <div class="workspace-panel-head"><h2>즐겨찾기한 회의록</h2><span>총 {{ favoriteRecordings.length }}건</span></div>
-        <RouterLink v-for="item in favoriteRecordings" :key="item.title" to="/app/recordings" class="workspace-file-row">
+        <div class="workspace-panel-head"><h2>즐겨찾기한 회의록</h2><span>총 {{ favoriteMinutes.length }}건</span></div>
+        <RouterLink v-for="item in favoriteMinutes" :key="item.title" to="/app/minutes" class="workspace-file-row">
           <span class="workspace-file-icon">문서</span>
           <div><strong>{{ item.title }}</strong><small>{{ item.meta }}</small></div>
           <em>북마크</em>

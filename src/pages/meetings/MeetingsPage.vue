@@ -134,7 +134,7 @@ function saveMeeting() {
 }
 
 function enterMeeting(meeting) {
-  if (meeting.status === 'ended') router.push('/app/recordings')
+  if (meeting.status === 'ended') router.push('/app/minutes')
   else router.push('/app/meeting')
 }
 </script>

@@ -1,7 +1,7 @@
 <script>
 import { computed, defineComponent, ref } from 'vue'
 import { useAuthStore } from '../../stores/auth'
-import { mails, myMeetings, recordings, todayReservations } from '../../data/mockData'
+import { mails, myMeetings, minutes, todayReservations } from '../../data/mockData'
 
 const statusLabel = {
   live: '진행 중',
@@ -20,7 +20,7 @@ export default defineComponent({
     const kpis = [
       { label: '읽지 않은 메일', value: mails.filter((mail) => mail.unread).length, to: '/app/mail' },
       { label: '오늘 예정된 회의', value: todays.length, to: '/app/meetings' },
-      { label: '최근 내 회의록', value: recordings.length, to: '/app/recordings' },
+      { label: '최근 내 회의록', value: minutes.length, to: '/app/minutes' },
       { label: '현재 진행 중', value: myMeetings.filter((meeting) => meeting.status === 'live').length, to: '/app/meeting' },
     ]
     return { user: auth.user, todays, selectedId, selected, kpis, myMeetings, todayReservations, statusLabel }

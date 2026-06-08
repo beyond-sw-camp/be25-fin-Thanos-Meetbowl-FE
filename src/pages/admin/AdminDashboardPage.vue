@@ -1,6 +1,6 @@
 <script>
 import { defineComponent } from 'vue'
-import { adminLogs, members, recordings, rooms } from '../../data/mockData'
+import { adminLogs, members, minutes, rooms } from '../../data/mockData'
 import { adminHourlyUsage, adminRoomUsage, adminSites } from '../../data/adminData'
 
 export default defineComponent({
@@ -19,7 +19,7 @@ export default defineComponent({
       { label: '전체 사용자', value: members.length, sub: `활성 ${activeMembers} · 비활성 ${inactiveMembers}` },
       { label: '운영 회의실', value: rooms.length, sub: `사용 제한 ${rooms.filter((room) => room.restricted).length}` },
       { label: '회의실 사용 30일', value: totalUsage, sub: `피크 ${peak.hour}시 · ${peak.count}건` },
-      { label: '보관 회의록', value: recordings.length, sub: '이번 달 생성 86' },
+      { label: '보관 회의록', value: minutes.length, sub: '이번 달 생성 86' },
     ]
     return { adminHourlyUsage, adminLogs, adminRoomUsage, inactiveMembers, kpis, maxUsage, peak, rooms, siteRates }
   },

@@ -1,9 +1,9 @@
 <template>
-  <aside class="card recording-list-panel">
+  <aside class="card minute-list-panel">
     <input :value="query" placeholder="내 회의록 검색" @input="$emit('update:query', $event.target.value)">
-    <button v-for="recording in items" :key="recording.id" :class="{ active: selectedId === recording.id }" @click="$emit('select', recording.id)">
-      <strong><span v-if="favorites[recording.id]">★</span>{{ recording.title }}</strong>
-      <small>{{ recording.date }} · {{ recording.duration }} · 참석 {{ recording.attendees }}명</small>
+    <button v-for="minute in items" :key="minute.id" :class="{ active: selectedId === minute.id }" @click="$emit('select', minute.id)">
+      <strong><span v-if="favorites[minute.id]">★</span>{{ minute.title }}</strong>
+      <small>{{ minute.date }} · {{ minute.duration }} · 참석 {{ minute.attendees }}명</small>
     </button>
   </aside>
 </template>

@@ -31,11 +31,11 @@ export const mails = [
   { id: 'm6', from: '경영지원실', dept: '경영지원실', subject: '[공지] 6월 휴무일 안내', preview: '6월 6일은 공휴일로 전사 휴무입니다.', date: '2026-05-18', unread: false, hasAttachment: false, category: 'notice', body: '6월 휴무일과 전후 근무 시 사전 결재 기준을 안내드립니다.' },
 ]
 
-export const recordings = [
-  { id: 'rec1', title: '주간 전략 회의', date: '2026-05-20', duration: '58분', attendees: 5, summary: 'OKR 진행률 점검 및 Q2 우선순위 재정렬. 신규 제품 라인 PoC 시작 결정.', expireDays: 30, reviewer: '박서연', reviewStatus: 'accepted' },
-  { id: 'rec2', title: 'Q2 캠페인 킥오프', date: '2026-05-19', duration: '1시간 24분', attendees: 8, summary: '타겟 세그먼트 확정, 6월 1일 런칭 일정 합의.', expireDays: 21, reviewer: '이지연', reviewStatus: 'reviewing' },
-  { id: 'rec3', title: '제품 디자인 리뷰', date: '2026-05-15', duration: '42분', attendees: 4, summary: '메인 대시보드 IA 변경안 승인. 컴포넌트 토큰화 진행.', expireDays: 7, reviewer: '이지연', reviewStatus: 'draft' },
-  { id: 'rec4', title: '월간 전사 공유', date: '2026-05-02', duration: '1시간 12분', attendees: 47, summary: '전사 매출 현황 공유 및 분기 전략 발표.', expireDays: 60, reviewer: '정도현', reviewStatus: 'sent' },
+export const minutes = [
+  { id: 'min1', title: '주간 전략 회의', date: '2026-05-20', duration: '58분', attendees: 5, summary: 'OKR 진행률 점검 및 Q2 우선순위 재정렬. 신규 제품 라인 PoC 시작 결정.', expireDays: 30, reviewer: '박서연', reviewStatus: 'accepted' },
+  { id: 'min2', title: 'Q2 캠페인 킥오프', date: '2026-05-19', duration: '1시간 24분', attendees: 8, summary: '타겟 세그먼트 확정, 6월 1일 런칭 일정 합의.', expireDays: 21, reviewer: '이지연', reviewStatus: 'reviewing' },
+  { id: 'min3', title: '제품 디자인 리뷰', date: '2026-05-15', duration: '42분', attendees: 4, summary: '메인 대시보드 IA 변경안 승인. 컴포넌트 토큰화 진행.', expireDays: 7, reviewer: '이지연', reviewStatus: 'draft' },
+  { id: 'min4', title: '월간 전사 공유', date: '2026-05-02', duration: '1시간 12분', attendees: 47, summary: '전사 매출 현황 공유 및 분기 전략 발표.', expireDays: 60, reviewer: '정도현', reviewStatus: 'sent' },
 ]
 
 export const reviewMeta = {

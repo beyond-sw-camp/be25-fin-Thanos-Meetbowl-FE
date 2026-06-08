@@ -1,15 +1,15 @@
 <template>
-  <article class="card recording-detail-panel">
+  <article class="card minute-detail-panel">
     <header>
       <div>
-        <div class="recording-title-row">
+        <div class="minute-title-row">
           <input v-if="editing" v-model="localDraft.title">
-          <h2 v-else>{{ recording.title }}</h2>
-          <button @click="$emit('toggle-favorite', recording.id)">{{ favorites[recording.id] ? '★' : '☆' }}</button>
+          <h2 v-else>{{ minute.title }}</h2>
+          <button @click="$emit('toggle-favorite', minute.id)">{{ favorites[minute.id] ? '★' : '☆' }}</button>
         </div>
-        <p>{{ recording.date }} · {{ recording.duration }} · 참석자 {{ recording.attendees }}명 · 검토자 {{ recording.reviewer }}</p>
+        <p>{{ minute.date }} · {{ minute.duration }} · 참석자 {{ minute.attendees }}명 · 검토자 {{ minute.reviewer }}</p>
       </div>
-      <div class="recording-actions">
+      <div class="minute-actions">
         <button class="secondary-button small">PDF 다운로드</button>
         <button v-if="!editing" class="secondary-button small" @click="$emit('start-edit')">수정</button>
         <button class="primary-button small" @click="$emit('share')">내부 메일 공유</button>
@@ -22,7 +22,7 @@
         <div class="modal-actions"><button class="secondary-button" @click="$emit('cancel-edit')">취소</button><button class="primary-button" @click="$emit('save-edit', localDraft)">수정 저장</button></div>
       </template>
       <template v-else>
-        <p>{{ recording.summary }}</p>
+        <p>{{ minute.summary }}</p>
         <div class="key-summary"><strong>핵심 요약</strong><ul><li>Q2 우선순위를 캠페인 일정 조정과 신규 제품 라인 PoC로 재정렬했습니다.</li><li>예산은 보수적으로 산정하되 디자인 리소스 영향 분석을 선행하기로 했습니다.</li><li>박서연 책임이 리소스 영향 분석 결과를 공유합니다.</li></ul></div>
       </template>
     </section>
@@ -36,7 +36,7 @@ import { reactive, watch } from 'vue'
 import TranscriptBox from './TranscriptBox.vue'
 
 const props = defineProps({
-  recording: { type: Object, required: true },
+  minute: { type: Object, required: true },
   editing: { type: Boolean, default: false },
   favorites: { type: Object, default: () => ({}) },
   transcriptOpen: { type: Boolean, default: false },
@@ -45,10 +45,10 @@ const props = defineProps({
 
 defineEmits(['toggle-favorite', 'start-edit', 'cancel-edit', 'save-edit', 'toggle-transcript', 'share'])
 
-const localDraft = reactive({ title: props.recording.title, summary: props.recording.summary })
+const localDraft = reactive({ title: props.minute.title, summary: props.minute.summary })
 
-watch(() => props.recording, (recording) => {
-  localDraft.title = recording.title
-  localDraft.summary = recording.summary
+watch(() => props.minute, (minute) => {
+  localDraft.title = minute.title
+  localDraft.summary = minute.summary
 })
 </script>

@@ -34,7 +34,7 @@ export const colleagueInfo = {
   한유진: { dept: 'HR팀', position: '선임', email: 'han@meetbowl.co', phone: '010-3322-1188', status: 'away' },
 }
 
-export const favoriteRecordings = [
+export const favoriteMinutes = [
   { title: '월간 전사 공유 회의록', meta: '5/2 · 47명' },
   { title: '임원 라운드 테이블', meta: '5/12 · 12명' },
   { title: '주간 전략 회의', meta: '5/20 · 5명' },

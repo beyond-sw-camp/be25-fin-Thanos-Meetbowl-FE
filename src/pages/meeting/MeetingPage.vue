@@ -19,7 +19,7 @@
     <div class="meeting-main">
       <header><strong>Q2 캠페인 킥오프</strong><span>01:24:08</span></header>
       <div class="video-grid"><div v-for="name in participants" :key="name" class="video-tile"><span>{{ name[0] }}</span><em>{{ name }}</em></div></div>
-      <footer><button class="control" @click="mic = !mic">{{ mic ? '마이크' : '음소거' }}</button><button class="control" @click="cam = !cam">{{ cam ? '카메라' : '카메라 꺼짐' }}</button><button class="control">화면 공유</button><button class="danger-button" @click="router.push('/app/recordings')">회의 종료</button></footer>
+      <footer><button class="control" @click="mic = !mic">{{ mic ? '마이크' : '음소거' }}</button><button class="control" @click="cam = !cam">{{ cam ? '카메라' : '카메라 꺼짐' }}</button><button class="control">화면 공유</button><button class="danger-button" @click="router.push('/app/minutes')">회의 종료</button></footer>
     </div>
     <aside class="meeting-side">
       <nav><button :class="{ active: tab === 'stt' }" @click="tab = 'stt'">회의 원문</button><button :class="{ active: tab === 'people' }" @click="tab = 'people'">참석자</button><button :class="{ active: tab === 'chat' }" @click="tab = 'chat'">채팅</button></nav>

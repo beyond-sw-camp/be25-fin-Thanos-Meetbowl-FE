@@ -100,7 +100,7 @@ const navSections = [
       { to: '/app/rooms', label: '회의실 예약', icon: '□' },
       { to: '/app/my-reservations', label: '내 예약', icon: '◷' },
       { to: '/app/meetings', label: '회의', icon: '▶' },
-      { to: '/app/recordings', label: '내 회의록', icon: '≡' },
+      { to: '/app/minutes', label: '내 회의록', icon: '≡' },
       { to: '/app/mail', label: '메일', icon: '✉' },
       { to: '/app/workspace', label: '개인 워크스페이스', icon: '▣' },
       { to: '/app/shared-docs', label: '공유 워크스페이스', icon: '▤' },
@@ -117,7 +117,7 @@ const navSections = [
       { to: '/admin/rooms', label: '회의실 관리', icon: '□' },
       { to: '/admin/reservations', label: '예약 현황', icon: '◷' },
       { to: '/admin/mail-policy', label: '메일 정책 관리', icon: '✉' },
-      { to: '/admin/recording-policy', label: '보관 정책 관리', icon: '◫' },
+      { to: '/admin/minutes-policy', label: '보관 정책 관리', icon: '◫' },
       { to: '/admin/logs', label: '관리자 작업 로그', icon: '≣' },
     ],
   },
@@ -127,7 +127,7 @@ const notifications = [
   { title: '새 메일 3건', desc: '김지연 외 2명에게 메일이 도착했습니다.', time: '5분 전', to: '/app/mail' },
   { title: '회의 시작 임박', desc: 'Q2 캠페인 킥오프가 10분 후 시작됩니다.', time: '10분 전', to: '/app/meeting' },
   { title: '회의실 예약 승인', desc: '테헤란로 대회의실 예약이 승인되었습니다.', time: '1시간 전', to: '/app/my-reservations' },
-  { title: '회의록 공유 완료', desc: '주간 전략 회의 회의록이 공유되었습니다.', time: '3시간 전', to: '/app/recordings' },
+  { title: '회의록 공유 완료', desc: '주간 전략 회의 회의록이 공유되었습니다.', time: '3시간 전', to: '/app/minutes' },
 ]
 
 const visibleSections = computed(() =>

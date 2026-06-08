@@ -558,7 +558,7 @@ input:focus { border-color: var(--primary); box-shadow: 0 0 0 3px rgba(243,115,3
 .org-member-group span { display: inline-block; margin-right: 8px; }
 .admin-site-filter { display: grid; gap: 10px; margin-bottom: 16px; }
 .admin-warning-box { display: grid; gap: 10px; border: 1px solid #fde68a; border-radius: 8px; background: #fffbeb; padding: 12px; }
-.mail-page-full, .mail-detail-page, .recordings-page-full { max-width: 1500px; }
+.mail-page-full, .mail-detail-page, .minutes-page-full { max-width: 1500px; }
 .mail-tabs { display: flex; align-items: center; gap: 8px; border-bottom: 1px solid var(--border); margin-bottom: 14px; }
 .mail-tabs button { min-height: 40px; border: 0; border-bottom: 2px solid transparent; background: transparent; padding: 0 14px; color: var(--muted-foreground); font-weight: 800; }
 .mail-tabs button.active { border-bottom-color: var(--primary); color: var(--foreground); }
@@ -612,27 +612,27 @@ input:focus { border-color: var(--primary); box-shadow: 0 0 0 3px rgba(243,115,3
 .mail-message-card pre { white-space: pre-wrap; margin: 24px 0 0; font: inherit; line-height: 1.8; }
 .mail-attachments { display: grid; gap: 9px; border-top: 1px solid var(--border); margin-top: 26px; padding-top: 18px; }
 .mail-attachments button { display: flex; justify-content: space-between; align-items: center; border: 1px solid var(--border); border-radius: 8px; background: var(--muted); padding: 12px; text-align: left; }
-.recording-layout { display: grid; gap: 18px; }
-.recording-list-panel { padding: 0; overflow: hidden; align-self: start; }
-.recording-list-panel > input { width: calc(100% - 24px); height: 38px; margin: 12px; border: 1px solid var(--border); border-radius: 8px; padding: 0 12px; }
-.recording-list-panel button { width: 100%; display: grid; gap: 6px; border: 0; border-top: 1px solid var(--border); background: white; padding: 14px 16px; text-align: left; }
-.recording-list-panel button:hover, .recording-list-panel button.active { background: #fff7ed; box-shadow: inset 2px 0 0 var(--primary); }
-.recording-list-panel strong { display: flex; gap: 5px; align-items: center; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.recording-list-panel small { color: var(--muted-foreground); }
-.recording-detail-panel { padding: 0; overflow: hidden; }
-.recording-detail-panel > header { display: flex; justify-content: space-between; gap: 16px; border-bottom: 1px solid var(--border); padding: 20px 24px; }
-.recording-title-row { display: flex; align-items: center; gap: 8px; }
-.recording-title-row h2 { margin: 0; }
-.recording-title-row input { height: 38px; border: 1px solid var(--border); border-radius: 8px; padding: 0 10px; font-weight: 800; }
-.recording-title-row button { width: 34px; height: 34px; border: 0; border-radius: 8px; background: transparent; color: var(--primary); font-size: 18px; }
-.recording-detail-panel header p { margin: 6px 0 0; color: var(--muted-foreground); font-size: 12px; }
-.recording-actions { display: flex; flex-wrap: wrap; gap: 8px; justify-content: flex-end; }
+.minute-layout { display: grid; gap: 18px; }
+.minute-list-panel { padding: 0; overflow: hidden; align-self: start; }
+.minute-list-panel > input { width: calc(100% - 24px); height: 38px; margin: 12px; border: 1px solid var(--border); border-radius: 8px; padding: 0 12px; }
+.minute-list-panel button { width: 100%; display: grid; gap: 6px; border: 0; border-top: 1px solid var(--border); background: white; padding: 14px 16px; text-align: left; }
+.minute-list-panel button:hover, .minute-list-panel button.active { background: #fff7ed; box-shadow: inset 2px 0 0 var(--primary); }
+.minute-list-panel strong { display: flex; gap: 5px; align-items: center; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.minute-list-panel small { color: var(--muted-foreground); }
+.minute-detail-panel { padding: 0; overflow: hidden; }
+.minute-detail-panel > header { display: flex; justify-content: space-between; gap: 16px; border-bottom: 1px solid var(--border); padding: 20px 24px; }
+.minute-title-row { display: flex; align-items: center; gap: 8px; }
+.minute-title-row h2 { margin: 0; }
+.minute-title-row input { height: 38px; border: 1px solid var(--border); border-radius: 8px; padding: 0 10px; font-weight: 800; }
+.minute-title-row button { width: 34px; height: 34px; border: 0; border-radius: 8px; background: transparent; color: var(--primary); font-size: 18px; }
+.minute-detail-panel header p { margin: 6px 0 0; color: var(--muted-foreground); font-size: 12px; }
+.minute-actions { display: flex; flex-wrap: wrap; gap: 8px; justify-content: flex-end; }
 .ai-minutes-box { display: grid; gap: 12px; margin: 22px 24px; border: 1px solid #fed7aa; border-radius: 10px; background: #fff7ed; padding: 18px; }
 .ai-minutes-box > strong { color: var(--primary-dark); font-size: 12px; letter-spacing: .08em; text-transform: uppercase; }
 .ai-minutes-box textarea { width: 100%; border: 1px solid var(--border); border-radius: 8px; padding: 12px; resize: vertical; font: inherit; }
 .key-summary { border: 1px solid #fed7aa; border-radius: 8px; background: rgba(255,255,255,.72); padding: 12px; }
 .key-summary ul { margin: 8px 0 0; padding-left: 18px; color: var(--muted-foreground); }
-.recording-detail-panel > .secondary-button { margin: 0 24px 20px; }
+.minute-detail-panel > .secondary-button { margin: 0 24px 20px; }
 .transcript-box { position: relative; display: grid; gap: 12px; max-height: 420px; overflow: auto; border-top: 1px solid var(--border); background: white; padding: 18px 24px; }
 .transcript-box .watermark { position: absolute; inset: 0; display: grid; place-items: center; transform: rotate(-12deg); color: rgba(15,23,42,.045); font-size: 44px; font-weight: 900; pointer-events: none; }
 .transcript-box p { position: relative; display: grid; grid-template-columns: 70px 90px 1fr; gap: 12px; margin: 0; color: var(--foreground); }
@@ -665,7 +665,7 @@ input:focus { border-color: var(--primary); box-shadow: 0 0 0 3px rgba(243,115,3
   .admin-dashboard-grid { grid-template-columns: 2fr 1fr; }
   .admin-dashboard-grid .wide { min-width: 0; }
   .admin-org-layout { grid-template-columns: 360px 1fr; }
-  .recording-layout { grid-template-columns: 360px 1fr; }
+  .minute-layout { grid-template-columns: 360px 1fr; }
 }
 
 @media (max-width: 640px) {
@@ -690,7 +690,7 @@ input:focus { border-color: var(--primary); box-shadow: 0 0 0 3px rgba(243,115,3
   .admin-actions, .admin-toolbar, .admin-progress-list div { flex-direction: column; align-items: stretch; }
   .admin-bar-chart { overflow-x: auto; grid-template-columns: repeat(10, 42px); }
   .admin-tabs { overflow-x: auto; }
-  .mail-tabs, .mail-bulkbar, .recording-detail-panel > header, .recording-actions { flex-direction: column; align-items: stretch; }
+  .mail-tabs, .mail-bulkbar, .minute-detail-panel > header, .minute-actions { flex-direction: column; align-items: stretch; }
   .mail-tabs select { margin-left: 0; }
   .mail-row-button { grid-template-columns: 24px 1fr; }
   .mail-row-button i, .mail-row-button time { display: none; }

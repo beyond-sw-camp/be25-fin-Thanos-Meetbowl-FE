@@ -1,10 +1,10 @@
 <template>
-  <section class="page recordings-page-full">
+  <section class="page minutes-page-full">
     <header class="page-header"><h1>내 회의록</h1><p>AI가 자동 생성한 내 회의록을 확인·수정하고 내부 메일로 공유하세요.</p></header>
-    <div class="recording-layout">
-      <RecordingList v-model:query="q" :items="filtered" :selected-id="selectedId" :favorites="favorites" @select="selectRecording" />
-      <RecordingDetail
-        :recording="selected"
+    <div class="minute-layout">
+      <MinuteList v-model:query="q" :items="filtered" :selected-id="selectedId" :favorites="favorites" @select="selectMinute" />
+      <MinuteDetail
+        :minute="selected"
         :editing="editing"
         :favorites="favorites"
         :transcript-open="transcriptOpen"
@@ -23,10 +23,10 @@
 
 <script setup>
 import { computed, ref } from 'vue'
-import RecordingDetail from '../../components/recordings/RecordingDetail.vue'
-import RecordingList from '../../components/recordings/RecordingList.vue'
-import ShareMailModal from '../../components/recordings/ShareMailModal.vue'
-import { members, recordings } from '../../data/mockData'
+import MinuteDetail from '../../components/minutes/MinuteDetail.vue'
+import MinuteList from '../../components/minutes/MinuteList.vue'
+import ShareMailModal from '../../components/minutes/ShareMailModal.vue'
+import { members, minutes } from '../../data/mockData'
 
 const mockTranscript = [
   { t: '00:00:08', who: '이지연', text: '오늘은 OKR 점검과 Q2 우선순위 재정렬을 진행하겠습니다.' },
@@ -35,25 +35,25 @@ const mockTranscript = [
   { t: '00:02:03', who: '이지연', text: '좋습니다. 일정 변경에 따른 리소스 영향은 박서연 책임이 정리해 주세요.' },
 ]
 
-const recs = ref(recordings.map((recording) => ({ ...recording })))
-const selectedId = ref(recordings[0].id)
+const minuteItems = ref(minutes.map((minute) => ({ ...minute })))
+const selectedId = ref(minutes[0].id)
 const q = ref('')
 const shareOpen = ref(false)
 const transcriptOpen = ref(false)
 const editing = ref(false)
-const favorites = ref({ rec1: true })
+const favorites = ref({ min1: true })
 const share = ref({ recipients: members.slice(4, 7), query: '', subject: '', body: '' })
 
-const filtered = computed(() => recs.value.filter((recording) => recording.title.toLowerCase().includes(q.value.toLowerCase())))
-const selected = computed(() => recs.value.find((recording) => recording.id === selectedId.value) || recs.value[0])
+const filtered = computed(() => minuteItems.value.filter((minute) => minute.title.toLowerCase().includes(q.value.toLowerCase())))
+const selected = computed(() => minuteItems.value.find((minute) => minute.id === selectedId.value) || minuteItems.value[0])
 
-function selectRecording(id) {
+function selectMinute(id) {
   selectedId.value = id
   editing.value = false
 }
 
 function saveEdit(draft) {
-  recs.value = recs.value.map((recording) => recording.id === selected.value.id ? { ...recording, title: draft.title || recording.title, summary: draft.summary } : recording)
+  minuteItems.value = minuteItems.value.map((minute) => minute.id === selected.value.id ? { ...minute, title: draft.title || minute.title, summary: draft.summary } : minute)
   editing.value = false
 }
 

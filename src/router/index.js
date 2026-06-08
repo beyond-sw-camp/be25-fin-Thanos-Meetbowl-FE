@@ -16,7 +16,7 @@ import SimpleDocsPage from '../pages/docs/SimpleDocsPage.vue'
 import MailPage from '../pages/mail/MailPage.vue'
 import MeetingPage from '../pages/meeting/MeetingPage.vue'
 import MeetingsPage from '../pages/meetings/MeetingsPage.vue'
-import RecordingsPage from '../pages/recordings/RecordingsPage.vue'
+import MinutesPage from '../pages/minutes/MinutesPage.vue'
 import BackupDetailPage from '../pages/backup/BackupDetailPage.vue'
 import MyReservationsPage from '../pages/reservations/MyReservationsPage.vue'
 import RoomsPage from '../pages/rooms/RoomsPage.vue'
@@ -39,7 +39,8 @@ const routes = [
       { path: 'app/meetings', component: MeetingsPage, meta: { role: 'user' } },
       { path: 'app/meeting', component: MeetingPage, meta: { role: 'user' } },
       { path: 'app/mail', component: MailPage, meta: { role: 'user' } },
-      { path: 'app/recordings', component: RecordingsPage, meta: { role: 'user' } },
+      { path: 'app/minutes', component: MinutesPage, meta: { role: 'user' } },
+      { path: 'app/recordings', redirect: '/app/minutes', meta: { role: 'user' } },
       { path: 'app/workspace', component: WorkspacePage, meta: { role: 'user' } },
       { path: 'app/shared-docs', component: SharedDocsPage, meta: { role: 'user' } },
       { path: 'app/community', component: CommunityPage, meta: { role: 'user' } },
@@ -69,9 +70,14 @@ const routes = [
         meta: { role: 'admin' },
       },
       {
-        path: 'admin/recording-policy',
+        path: 'admin/minutes-policy',
         component: PolicyPage,
-        props: { title: '보관 정책 관리', description: '회의록과 녹음 파일의 보관 기간과 알림 정책을 관리합니다.', kind: 'recording' },
+        props: { title: '보관 정책 관리', description: '회의록과 녹음 파일의 보관 기간과 알림 정책을 관리합니다.', kind: 'minute' },
+        meta: { role: 'admin' },
+      },
+      {
+        path: 'admin/recording-policy',
+        redirect: '/admin/minutes-policy',
         meta: { role: 'admin' },
       },
       { path: 'admin/logs', component: AdminLogsPage, meta: { role: 'admin' } },
