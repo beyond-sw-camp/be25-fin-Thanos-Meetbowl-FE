@@ -58,6 +58,14 @@
               <strong>{{ user?.name }}</strong>
               <span>{{ user?.department }} · {{ user?.position }}</span>
               <span>{{ user?.email }}</span>
+              <RouterLink
+                v-if="user?.role === 'user'"
+                to="/app/settings"
+                class="profile-menu-link"
+                @click="profileOpen = false"
+              >
+                설정
+              </RouterLink>
               <button type="button" class="ghost-button" @click="handleLogout">로그아웃</button>
             </div>
           </div>
