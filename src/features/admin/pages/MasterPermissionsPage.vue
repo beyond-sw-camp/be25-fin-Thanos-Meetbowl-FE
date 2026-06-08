@@ -1,8 +1,0 @@
-<script setup>
-import { ShieldCheck } from '@lucide/vue'
-import PageHeader from '../../../shared/components/PageHeader.vue'
-import UiBadge from '../../../shared/components/UiBadge.vue'
-import UiCard from '../../../shared/components/UiCard.vue'
-import { MEMBERS } from '../../../shared/api/mock-data'
-</script>
-<template><div class="mx-auto max-w-[1300px] p-6 lg:p-8"><p class="mb-3 text-[11px] font-semibold uppercase tracking-[0.12em] text-primary"><ShieldCheck class="mr-1 inline h-3.5 w-3.5" /> Master Console</p><PageHeader title="관리자 권한 관리" description="Admin 권한을 부여하거나 회수합니다." /><UiCard class="scroll-table"><table class="w-full text-[12.5px]"><tr class="bg-muted/40 text-muted-foreground"><th v-for="head in ['이름','부서','현재 권한','최근 변경','']" :key="head" class="px-5 py-2.5 text-left font-medium">{{ head }}</th></tr><tr v-for="member in MEMBERS" :key="member.id" class="border-t"><td class="px-5 py-3 font-medium">{{ member.name }}</td><td class="px-5 py-3 text-muted-foreground">{{ member.dept }}</td><td class="px-5 py-3"><UiBadge :tone="member.role === 'Master' ? 'primary' : member.role === 'Admin' ? 'navy' : 'muted'">{{ member.role }}</UiBadge></td><td class="px-5 py-3">2026-05-{{ 10 + Number(member.id) }}</td><td class="px-5 py-3 text-right"><button v-if="member.role === 'User'" class="h-8 rounded-md bg-primary px-3 text-primary-foreground">Admin 부여</button><button v-else-if="member.role === 'Admin'" class="h-8 rounded-md border border-destructive/30 px-3 text-destructive">권한 회수</button><small v-else class="text-muted-foreground">Master</small></td></tr></table></UiCard></div></template>

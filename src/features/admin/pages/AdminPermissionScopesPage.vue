@@ -1,8 +1,0 @@
-<script setup>
-import { reactive } from 'vue'
-import PageHeader from '../../../shared/components/PageHeader.vue'
-import UiCard from '../../../shared/components/UiCard.vue'
-const scopes = [{ id: 'members', label: '회원 관리', desc: '사용자 생성·수정·비활성' }, { id: 'org', label: '조직 정보 관리', desc: '부서·직급 구조 편집' }, { id: 'rooms', label: '회의실 관리', desc: '회의실 등록·수정' }, { id: 'logs', label: '관리자 작업 로그', desc: '감사 로그 열람' }]
-const permissions = reactive({ members: true, org: true, rooms: true, logs: true })
-</script>
-<template><div class="mx-auto max-w-3xl p-6 lg:p-8"><PageHeader title="Admin 세부 권한 설정" description="Admin이 사용할 수 있는 관리 기능 범위를 지정합니다." /><UiCard class="mb-4 p-5"><label class="text-[11.5px] text-muted-foreground">대상 Admin<select class="inp mt-1"><option>박관리 (IT운영팀)</option></select></label></UiCard><UiCard><h3 class="border-b px-5 py-3.5 text-sm font-semibold">권한 범위</h3><div v-for="scope in scopes" :key="scope.id" class="flex items-center justify-between border-b px-5 py-3.5"><div><b class="text-[13px]">{{ scope.label }}</b><p class="text-[11.5px] text-muted-foreground">{{ scope.desc }}</p></div><button :class="permissions[scope.id] ? 'bg-primary' : 'bg-muted'" class="h-6 w-10 rounded-full p-0.5" @click="permissions[scope.id] = !permissions[scope.id]"><i :class="permissions[scope.id] ? 'translate-x-4' : ''" class="block h-5 w-5 rounded-full bg-white shadow" /></button></div><div class="flex justify-end gap-2 px-5 py-3"><button class="h-9 rounded-md border px-3.5">취소</button><button class="h-9 rounded-md bg-primary px-3.5 text-primary-foreground">저장</button></div></UiCard></div></template>
