@@ -23,6 +23,97 @@ const statusLabel = {
   booked: '예약됨',
 }
 
+const roomHours = Array.from({ length: 18 }, (_, index) => index + 6)
+const roomHourPx = 70
+const activeUserName = '이지연'
+const todayDate = '2026-05-22'
+
+function timeToMinutes(time) {
+  const [hour, minute] = time.split(':').map(Number)
+  return hour * 60 + minute
+}
+
+function minutesToTime(minutes) {
+  const hour = String(Math.floor(minutes / 60)).padStart(2, '0')
+  const minute = String(minutes % 60).padStart(2, '0')
+  return `${hour}:${minute}`
+}
+
+function addMinutes(time, minutes) {
+  return minutesToTime(timeToMinutes(time) + minutes)
+}
+
+function overlaps(startA, endA, startB, endB) {
+  return timeToMinutes(startA) < timeToMinutes(endB) && timeToMinutes(endA) > timeToMinutes(startB)
+}
+
+function toDateTimeInput(value) {
+  return value.replace(' ', 'T')
+}
+
+function fromDateTimeInput(value) {
+  return value.replace('T', ' ')
+}
+
+function addOneHour(value) {
+  const date = new Date(value)
+  date.setHours(date.getHours() + 1)
+  const yyyy = date.getFullYear()
+  const mm = String(date.getMonth() + 1).padStart(2, '0')
+  const dd = String(date.getDate()).padStart(2, '0')
+  const hh = String(date.getHours()).padStart(2, '0')
+  const min = String(date.getMinutes()).padStart(2, '0')
+  return `${yyyy}-${mm}-${dd}T${hh}:${min}`
+}
+
+function meetingEnd(meeting) {
+  const input = toDateTimeInput(meeting.start)
+  return fromDateTimeInput(addOneHour(input))
+}
+
+function parseCsv(text) {
+  const rows = []
+  let row = []
+  let field = ''
+  let quoted = false
+  for (let index = 0; index < text.length; index += 1) {
+    const char = text[index]
+    if (quoted) {
+      if (char === '"') {
+        if (text[index + 1] === '"') {
+          field += '"'
+          index += 1
+        } else quoted = false
+      } else field += char
+    } else if (char === '"') quoted = true
+    else if (char === ',') {
+      row.push(field)
+      field = ''
+    } else if (char === '\n') {
+      row.push(field)
+      rows.push(row)
+      row = []
+      field = ''
+    } else if (char !== '\r') field += char
+  }
+  if (field.length || row.length) {
+    row.push(field)
+    rows.push(row)
+  }
+  return rows
+}
+
+function downloadCsv(filename, headers, rows) {
+  const csv = [headers, ...rows].map((row) => row.map((cell) => `"${String(cell ?? '').replace(/"/g, '""')}"`).join(',')).join('\n')
+  const blob = new Blob([`\uFEFF${csv}`], { type: 'text/csv;charset=utf-8;' })
+  const url = URL.createObjectURL(blob)
+  const anchor = document.createElement('a')
+  anchor.href = url
+  anchor.download = filename
+  anchor.click()
+  URL.revokeObjectURL(url)
+}
+
 function page(title, description) {
   return { title, description }
 }
@@ -303,28 +394,219 @@ export const DashboardPage = defineComponent({
 
 export const RoomsPage = defineComponent({
   setup() {
+    const reservations = ref(todayReservations.map((item) => ({ date: todayDate, endDate: todayDate, reviewer: item.attendees[0] || '', content: '', ...item })))
     const site = ref('전체')
+    const date = ref(todayDate)
+    const modal = ref(false)
+    const detail = ref(null)
+    const attendeeQuery = ref('')
+    const form = ref({
+      title: '',
+      roomId: rooms[0]?.id || '',
+      date: todayDate,
+      endDate: todayDate,
+      start: '09:00',
+      end: '10:00',
+      attendees: [],
+      reviewer: '',
+      content: '',
+    })
     const sites = ['전체', ...new Set(rooms.map((room) => room.site))]
     const filteredRooms = computed(() => site.value === '전체' ? rooms : rooms.filter((room) => room.site === site.value))
-    return { site, sites, rooms: filteredRooms, todayReservations, statusLabel }
+    const myBooked = computed(() => reservations.value.filter((item) => item.status === 'mine'))
+    const myInvited = computed(() => reservations.value.filter((item) => item.status !== 'mine' && item.attendees.includes(activeUserName)))
+    const memberOptions = computed(() => {
+      const query = attendeeQuery.value.trim().toLowerCase()
+      return members
+        .filter((member) => member.name !== activeUserName)
+        .filter((member) => !form.value.attendees.includes(member.name))
+        .filter((member) => !query || `${member.name} ${member.dept} ${member.email}`.toLowerCase().includes(query))
+        .slice(0, 6)
+    })
+    const selectedRoom = computed(() => rooms.find((room) => room.id === form.value.roomId) || rooms[0])
+    const roomReservations = computed(() => reservations.value.filter((item) => item.roomId === form.value.roomId && item.date === form.value.date))
+    const conflict = computed(() => reservations.value.some((item) => item.roomId === form.value.roomId && item.date === form.value.date && overlaps(form.value.start, form.value.end, item.start, item.end)))
+
+    function openReservation(roomId, start = '09:00') {
+      const end = addMinutes(start, 60)
+      form.value = { title: '', roomId, date: date.value, endDate: date.value, start, end, attendees: [], reviewer: '', content: '' }
+      attendeeQuery.value = ''
+      modal.value = true
+    }
+    function addAttendee(name) {
+      form.value.attendees.push(name)
+      if (!form.value.reviewer) form.value.reviewer = name
+      attendeeQuery.value = ''
+    }
+    function removeAttendee(name) {
+      form.value.attendees = form.value.attendees.filter((item) => item !== name)
+      if (form.value.reviewer === name) form.value.reviewer = form.value.attendees[0] || ''
+    }
+    function saveReservation() {
+      if (!form.value.title.trim() || conflict.value || selectedRoom.value?.restricted) return
+      reservations.value.push({
+        id: `new-${Date.now()}`,
+        status: 'mine',
+        owner: activeUserName,
+        ...form.value,
+        title: form.value.title.trim(),
+      })
+      modal.value = false
+    }
+    function cancelReservation(id) {
+      reservations.value = reservations.value.filter((item) => item.id !== id)
+      detail.value = null
+    }
+    function reservationStyle(item) {
+      const left = ((timeToMinutes(item.start) - 360) / 60) * roomHourPx
+      const width = ((timeToMinutes(item.end) - timeToMinutes(item.start)) / 60) * roomHourPx
+      return { left: `${left}px`, width: `${Math.max(width, 36)}px` }
+    }
+    function slotTime(event) {
+      const rect = event.currentTarget.getBoundingClientRect()
+      const raw = Math.max(0, Math.min(17.5, (event.clientX - rect.left) / roomHourPx))
+      const minutes = 360 + Math.floor(raw * 2) * 30
+      return minutesToTime(minutes)
+    }
+    return {
+      activeUserName,
+      addAttendee,
+      cancelReservation,
+      conflict,
+      date,
+      detail,
+      filteredRooms,
+      form,
+      memberOptions,
+      modal,
+      myBooked,
+      myInvited,
+      openReservation,
+      removeAttendee,
+      reservationStyle,
+      reservations,
+      rooms,
+      roomHourPx,
+      roomHours,
+      roomReservations,
+      saveReservation,
+      selectedRoom,
+      site,
+      sites,
+      slotTime,
+      statusLabel,
+      attendeeQuery,
+    }
   },
   template: `
-    <section class="page">
-      <header class="page-header"><h1>회의실 예약</h1><p>지점과 수용 인원, 장비를 확인하고 오늘 예약 현황을 함께 봅니다.</p></header>
-      <div class="toolbar"><button v-for="item in sites" :key="item" class="chip" :class="{ active: site === item }" @click="site = item">{{ item }}</button></div>
-      <div class="room-grid">
-        <article v-for="room in rooms" :key="room.id" class="card">
-          <div class="room-title"><h2>{{ room.name }}</h2><span :class="['badge', room.restricted ? 'danger' : 'success']">{{ room.restricted ? '사용 제한' : '예약 가능' }}</span></div>
-          <p>{{ room.site }} · {{ room.floor }}층 · {{ room.capacity }}명</p>
-          <div class="tag-row"><span v-for="item in room.equipment" :key="item">{{ item }}</span></div>
-          <p v-if="room.restricted" class="warning-text">{{ room.restrictReason }} · {{ room.restrictUntil }}</p>
-          <h3>오늘 예약</h3>
-          <ul class="compact-list">
-            <li v-for="res in todayReservations.filter((r) => r.roomId === room.id)" :key="res.id">
-              <strong>{{ res.start }}-{{ res.end }} {{ res.title }}</strong><span>{{ res.owner }} · {{ statusLabel[res.status] }}</span>
-            </li>
-            <li v-if="!todayReservations.some((r) => r.roomId === room.id)"><span>예약 없음</span></li>
-          </ul>
+    <section class="page rooms-page">
+      <header class="page-header rooms-header">
+        <div><h1>회의실 예약 현황</h1><p>회의실별 예약 시간을 확인하고 빈 시간대를 바로 예약합니다.</p></div>
+        <button class="primary-button" @click="openReservation(filteredRooms[0]?.id || selectedRoom.id)">회의/회의실 예약</button>
+      </header>
+
+      <div class="reservation-summary-grid">
+        <article class="card reservation-summary">
+          <div class="card-head"><h2>내가 예약한 회의</h2><span>{{ myBooked.length }}건</span></div>
+          <button v-for="item in myBooked" :key="item.id" @click="detail = item">
+            <strong>{{ item.title }}</strong><span>{{ item.start }}-{{ item.end }} · {{ filteredRooms.find((room) => room.id === item.roomId)?.name || rooms.find((room) => room.id === item.roomId)?.name }}</span>
+          </button>
+          <p v-if="!myBooked.length">예약한 회의가 없습니다.</p>
+        </article>
+        <article class="card reservation-summary">
+          <div class="card-head"><h2>내가 참석해야 하는 회의</h2><span>{{ myInvited.length }}건</span></div>
+          <button v-for="item in myInvited" :key="item.id" @click="detail = item">
+            <strong>{{ item.title }}</strong><span>{{ item.start }}-{{ item.end }} · {{ item.owner }}</span>
+          </button>
+          <p v-if="!myInvited.length">참석 예정 회의가 없습니다.</p>
+        </article>
+      </div>
+
+      <div class="card rooms-toolbar">
+        <div class="room-date-control">
+          <input type="date" v-model="date">
+          <button class="secondary-button" @click="date = '2026-05-22'">오늘</button>
+        </div>
+        <div class="toolbar">
+          <button v-for="item in sites" :key="item" class="chip" :class="{ active: site === item }" @click="site = item">{{ item }}</button>
+        </div>
+        <div class="room-legend"><span><i class="mine"></i>내 예약</span><span><i></i>예약됨</span><span><i class="restricted"></i>사용 제한</span></div>
+      </div>
+
+      <div class="card room-timeline-card">
+        <div class="room-timeline-scroll" :style="{ '--hour-px': roomHourPx + 'px' }">
+          <div class="room-time-header">
+            <div class="room-name-spacer"></div>
+            <div class="room-hours">
+              <span v-for="hour in roomHours" :key="hour">{{ String(hour).padStart(2, '0') }}:00</span>
+            </div>
+          </div>
+          <div v-for="room in filteredRooms" :key="room.id" class="room-row" :class="{ restricted: room.restricted }">
+            <div class="room-row-meta">
+              <strong>{{ room.name }}</strong>
+              <small>{{ room.site }} · {{ room.floor }}층 · {{ room.capacity }}명</small>
+              <em v-if="room.restricted">{{ room.restrictReason }}</em>
+            </div>
+            <div class="room-track" @click="!room.restricted && openReservation(room.id, slotTime($event))">
+              <span v-for="hour in roomHours" :key="hour" class="hour-line"></span>
+              <button
+                v-for="item in reservations.filter((res) => res.roomId === room.id && res.date === date)"
+                :key="item.id"
+                type="button"
+                :class="['reservation-block', item.status]"
+                :style="reservationStyle(item)"
+                @click.stop="detail = item"
+              >
+                <strong>{{ item.title }}</strong><span>{{ item.start }}-{{ item.end }}</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div v-if="modal" class="modal-backdrop" @click.self="modal = false">
+        <article class="card write-modal room-modal">
+          <header><div><h2>회의/회의실 예약</h2><p>참석자와 검토자를 지정하고 회의실 충돌 여부를 확인합니다.</p></div><button @click="modal = false">닫기</button></header>
+          <div class="room-modal-grid">
+            <form class="form-grid" @submit.prevent="saveReservation">
+              <label>회의 제목<input v-model="form.title" required placeholder="회의 제목"></label>
+              <label>회의실<select v-model="form.roomId"><option v-for="room in rooms" :key="room.id" :value="room.id">{{ room.name }}</option></select></label>
+              <div class="form-row two"><label>시작일<input type="date" v-model="form.date"></label><label>종료일<input type="date" v-model="form.endDate"></label></div>
+              <div class="form-row two"><label>시작 시간<input type="time" v-model="form.start"></label><label>종료 시간<input type="time" v-model="form.end"></label></div>
+              <label>참석자 검색<input v-model="attendeeQuery" placeholder="이름, 부서, 이메일"></label>
+              <div class="member-picker-results"><button v-for="member in memberOptions" :key="member.id" type="button" @click="addAttendee(member.name)"><strong>{{ member.name }}</strong><span>{{ member.dept }} · {{ member.email }}</span></button></div>
+              <div class="participant-chips"><span v-for="name in form.attendees" :key="name">{{ name }}<button type="button" @click="removeAttendee(name)">×</button></span></div>
+              <label>회의록 검토자<select v-model="form.reviewer"><option value="">선택 안 함</option><option v-for="name in form.attendees" :key="name" :value="name">{{ name }}</option></select></label>
+              <label>회의 내용<textarea v-model="form.content" rows="4" placeholder="회의 목적과 안건"></textarea></label>
+              <p v-if="selectedRoom?.restricted" class="warning-text">해당 회의실은 {{ selectedRoom.restrictReason }} 사유로 {{ selectedRoom.restrictUntil }}까지 사용 제한 중입니다.</p>
+              <p v-else-if="conflict" class="warning-text">선택한 시간에 이미 예약이 있습니다. 다른 시간을 선택하세요.</p>
+              <div class="modal-actions"><button type="button" class="secondary-button" @click="modal = false">취소</button><button class="primary-button" :disabled="conflict || selectedRoom?.restricted">예약 저장</button></div>
+            </form>
+            <aside class="room-side-panel">
+              <h3>{{ selectedRoom?.name }}</h3>
+              <p>{{ selectedRoom?.site }} · {{ selectedRoom?.floor }}층 · {{ selectedRoom?.capacity }}명</p>
+              <div class="tag-row"><span v-for="item in selectedRoom?.equipment || []" :key="item">{{ item }}</span></div>
+              <h4>선택일 예약</h4>
+              <ul class="compact-list">
+                <li v-for="item in roomReservations" :key="item.id"><strong>{{ item.start }}-{{ item.end }} {{ item.title }}</strong><span>{{ item.owner }}</span></li>
+                <li v-if="!roomReservations.length"><span>예약 없음</span></li>
+              </ul>
+            </aside>
+          </div>
+        </article>
+      </div>
+
+      <div v-if="detail" class="modal-backdrop" @click.self="detail = null">
+        <article class="card write-modal detail-modal">
+          <header><div><h2>{{ detail.title }}</h2><p>{{ detail.start }}-{{ detail.end }} · {{ rooms.find((room) => room.id === detail.roomId)?.name }}</p></div><button @click="detail = null">닫기</button></header>
+          <dl class="detail-list">
+            <div><dt>예약자</dt><dd>{{ detail.owner }}</dd></div>
+            <div><dt>상태</dt><dd>{{ statusLabel[detail.status] }}</dd></div>
+            <div><dt>참석자</dt><dd>{{ detail.attendees.join(', ') || '-' }}</dd></div>
+            <div><dt>검토자</dt><dd>{{ detail.reviewer || '-' }}</dd></div>
+          </dl>
+          <p v-if="detail.content">{{ detail.content }}</p>
+          <div class="modal-actions"><button v-if="detail.status === 'mine'" class="danger-button" @click="cancelReservation(detail.id)">예약 취소</button><RouterLink to="/app/meeting" class="primary-button">회의 입장</RouterLink></div>
         </article>
       </div>
     </section>
@@ -344,15 +626,190 @@ export const MyReservationsPage = defineComponent({
 
 export const MeetingsPage = defineComponent({
   setup() {
-    const filter = ref('all')
-    const filtered = computed(() => filter.value === 'all' ? myMeetings : myMeetings.filter((meeting) => meeting.status === filter.value))
-    return { filter, filtered, statusLabel }
+    const router = useRouter()
+    const items = ref(myMeetings.map((meeting) => ({ ...meeting, end: meetingEnd(meeting), content: '' })))
+    const tab = ref('all')
+    const range = ref('all')
+    const sort = ref('latest')
+    const pageNo = ref(1)
+    const modal = ref(false)
+    const mode = ref('create')
+    const attendeeQuery = ref('')
+    const form = ref({
+      id: '',
+      title: '',
+      start: '2026-05-22T10:00',
+      end: '2026-05-22T11:00',
+      room: rooms[0]?.name || '원격',
+      attendees: [],
+      reviewer: '',
+      content: '',
+    })
+    const pageSize = 15
+    const filtered = computed(() => {
+      const now = new Date('2026-06-01T00:00:00')
+      const cutoff = range.value === '3m' ? new Date('2026-03-01T00:00:00') : range.value === '6m' ? new Date('2025-12-01T00:00:00') : null
+      return items.value
+        .filter((meeting) => tab.value === 'all' || meeting.role === tab.value)
+        .filter((meeting) => !cutoff || new Date(toDateTimeInput(meeting.start)) >= cutoff && new Date(toDateTimeInput(meeting.start)) <= now)
+        .sort((a, b) => sort.value === 'latest'
+          ? new Date(toDateTimeInput(b.start)) - new Date(toDateTimeInput(a.start))
+          : new Date(toDateTimeInput(a.start)) - new Date(toDateTimeInput(b.start)))
+    })
+    const totalPages = computed(() => Math.max(1, Math.ceil(filtered.value.length / pageSize)))
+    const paged = computed(() => filtered.value.slice((pageNo.value - 1) * pageSize, pageNo.value * pageSize))
+    const memberOptions = computed(() => {
+      const query = attendeeQuery.value.trim().toLowerCase()
+      return members
+        .filter((member) => member.name !== activeUserName)
+        .filter((member) => !form.value.attendees.includes(member.name))
+        .filter((member) => !query || `${member.name} ${member.dept} ${member.email}`.toLowerCase().includes(query))
+        .slice(0, 6)
+    })
+    function changeTab(value) {
+      tab.value = value
+      pageNo.value = 1
+    }
+    function openCreate() {
+      mode.value = 'create'
+      form.value = { id: '', title: '', start: '2026-05-22T10:00', end: '2026-05-22T11:00', room: rooms[0]?.name || '원격', attendees: [], reviewer: '', content: '' }
+      attendeeQuery.value = ''
+      modal.value = true
+    }
+    function openEdit(meeting) {
+      mode.value = 'edit'
+      form.value = {
+        id: meeting.id,
+        title: meeting.title,
+        start: toDateTimeInput(meeting.start),
+        end: toDateTimeInput(meeting.end || meetingEnd(meeting)),
+        room: meeting.room,
+        attendees: [...meeting.attendees],
+        reviewer: meeting.reviewer || '',
+        content: meeting.content || '',
+      }
+      attendeeQuery.value = ''
+      modal.value = true
+    }
+    function addAttendee(name) {
+      form.value.attendees.push(name)
+      if (!form.value.reviewer) form.value.reviewer = name
+      attendeeQuery.value = ''
+    }
+    function removeAttendee(name) {
+      form.value.attendees = form.value.attendees.filter((item) => item !== name)
+      if (form.value.reviewer === name) form.value.reviewer = form.value.attendees[0] || ''
+    }
+    function saveMeeting() {
+      const payload = {
+        title: form.value.title.trim(),
+        start: fromDateTimeInput(form.value.start),
+        end: fromDateTimeInput(form.value.end),
+        room: form.value.room,
+        attendees: [...form.value.attendees],
+        reviewer: form.value.reviewer,
+        content: form.value.content,
+      }
+      if (!payload.title) return
+      if (mode.value === 'edit') {
+        items.value = items.value.map((item) => item.id === form.value.id ? { ...item, ...payload } : item)
+      } else {
+        items.value.unshift({ id: `mt-${Date.now()}`, role: 'host', status: 'upcoming', ...payload })
+      }
+      modal.value = false
+    }
+    function enterMeeting(meeting) {
+      if (meeting.status === 'ended') router.push('/app/recordings')
+      else router.push('/app/meeting')
+    }
+    return {
+      addAttendee,
+      attendeeQuery,
+      changeTab,
+      enterMeeting,
+      filtered,
+      form,
+      memberOptions,
+      modal,
+      mode,
+      openCreate,
+      openEdit,
+      pageNo,
+      paged,
+      range,
+      removeAttendee,
+      roomNames: ['원격', ...rooms.map((room) => room.name)],
+      saveMeeting,
+      sort,
+      statusLabel,
+      tab,
+      totalPages,
+    }
   },
   template: `
-    <section class="page">
-      <header class="page-header"><h1>내 회의 목록</h1><p>참여 예정, 진행 중, 종료된 회의를 상태별로 확인합니다.</p></header>
-      <div class="toolbar"><button v-for="item in ['all','live','upcoming','ended']" :key="item" class="chip" :class="{ active: filter === item }" @click="filter = item">{{ item === 'all' ? '전체' : statusLabel[item] }}</button></div>
-      <div class="card-list"><article v-for="meeting in filtered" :key="meeting.id" class="card row-card"><div><h2>{{ meeting.title }}</h2><p>{{ meeting.start }} · {{ meeting.room }}</p><p>참석자 {{ meeting.attendees.join(', ') }}</p></div><div class="row-actions"><span :class="['badge', meeting.status === 'live' ? 'danger' : 'primary']">{{ statusLabel[meeting.status] }}</span><RouterLink v-if="meeting.status === 'live'" to="/app/meeting" class="primary-button small">입장</RouterLink></div></article></div>
+    <section class="page meetings-page">
+      <header class="page-header rooms-header">
+        <div><h1>회의</h1><p>내가 주최하거나 초대된 회의를 확인하고 새 회의를 생성합니다.</p></div>
+        <button class="primary-button" @click="openCreate">내 회의 생성</button>
+      </header>
+
+      <div class="card meetings-filter-card">
+        <div class="toolbar">
+          <button v-for="item in [{key:'all',label:'전체'},{key:'host',label:'내가 주최한 회의'},{key:'attendee',label:'초대된 회의'}]" :key="item.key" class="chip" :class="{ active: tab === item.key }" @click="changeTab(item.key)">{{ item.label }}</button>
+        </div>
+        <div class="meeting-filter-controls">
+          <select v-model="range" @change="pageNo = 1"><option value="all">전체 기간</option><option value="3m">최근 3개월</option><option value="6m">최근 6개월</option></select>
+          <select v-model="sort"><option value="latest">최신순</option><option value="oldest">오래된순</option></select>
+          <span>총 {{ filtered.length }}건</span>
+        </div>
+      </div>
+
+      <div class="card meeting-list-card">
+        <article v-for="meeting in paged" :key="meeting.id" class="meeting-row">
+          <div class="meeting-row-main">
+            <div class="meeting-title-row">
+              <h2>{{ meeting.title }}</h2>
+              <span :class="['badge', meeting.status === 'live' ? 'danger' : meeting.status === 'ended' ? 'muted' : 'primary']">{{ statusLabel[meeting.status] }}</span>
+              <span :class="['badge', meeting.role === 'host' ? 'success' : 'navy']">{{ meeting.role === 'host' ? '주최자' : '참석자' }}</span>
+            </div>
+            <div class="meeting-meta-grid">
+              <span>{{ meeting.start }} - {{ meeting.end?.split(' ')[1] }}</span>
+              <span>{{ meeting.room }}</span>
+              <span>참석자 {{ meeting.attendees.join(', ') || '-' }}</span>
+              <span>검토자 {{ meeting.reviewer || '-' }}</span>
+            </div>
+          </div>
+          <div class="row-actions">
+            <button v-if="meeting.role === 'host' && meeting.status !== 'ended'" class="secondary-button small" @click="openEdit(meeting)">수정</button>
+            <button class="primary-button small" @click="enterMeeting(meeting)">{{ meeting.status === 'ended' ? '내 회의록 보기' : '입장' }}</button>
+          </div>
+        </article>
+        <p v-if="!paged.length" class="empty-text">조건에 맞는 회의가 없습니다.</p>
+      </div>
+
+      <div v-if="totalPages > 1" class="pagination">
+        <button :disabled="pageNo === 1" @click="pageNo--">이전</button>
+        <span>{{ pageNo }} / {{ totalPages }}</span>
+        <button :disabled="pageNo === totalPages" @click="pageNo++">다음</button>
+      </div>
+
+      <div v-if="modal" class="modal-backdrop" @click.self="modal = false">
+        <article class="card write-modal meeting-modal">
+          <header><div><h2>{{ mode === 'create' ? '내 회의 생성' : '회의 수정' }}</h2><p v-if="mode === 'edit'">참석자에게 변경 알림이 발송됩니다.</p></div><button @click="modal = false">닫기</button></header>
+          <form class="form-grid" @submit.prevent="saveMeeting">
+            <label>회의 제목<input v-model="form.title" required placeholder="회의 제목"></label>
+            <div class="form-row two"><label>시작<input type="datetime-local" v-model="form.start"></label><label>종료<input type="datetime-local" v-model="form.end"></label></div>
+            <label>회의실<select v-model="form.room"><option v-for="room in roomNames" :key="room" :value="room">{{ room }}</option></select></label>
+            <label>참석자 검색<input v-model="attendeeQuery" placeholder="이름, 부서, 이메일"></label>
+            <div class="member-picker-results"><button v-for="member in memberOptions" :key="member.id" type="button" @click="addAttendee(member.name)"><strong>{{ member.name }}</strong><span>{{ member.dept }} · {{ member.email }}</span></button></div>
+            <div class="participant-chips"><span v-for="name in form.attendees" :key="name">{{ name }}<button type="button" @click="removeAttendee(name)">×</button></span></div>
+            <label>회의록 검토자<select v-model="form.reviewer"><option value="">선택 안 함</option><option v-for="name in form.attendees" :key="name" :value="name">{{ name }}</option></select></label>
+            <label>회의 내용<textarea v-model="form.content" rows="4" placeholder="회의 목적과 안건"></textarea></label>
+            <div v-if="mode === 'edit'" class="copy-box">https://meetbowl.local/join/{{ form.id }}</div>
+            <div class="modal-actions"><button type="button" class="secondary-button" @click="modal = false">취소</button><button class="primary-button">저장</button></div>
+          </form>
+        </article>
+      </div>
     </section>
   `,
 })
@@ -1480,34 +1937,327 @@ export const CommunityPage = defineComponent({
   `,
 })
 
+const adminHourlyUsage = [
+  { hour: '09', count: 12 },
+  { hour: '10', count: 24 },
+  { hour: '11', count: 21 },
+  { hour: '12', count: 7 },
+  { hour: '13', count: 15 },
+  { hour: '14', count: 27 },
+  { hour: '15', count: 23 },
+  { hour: '16', count: 19 },
+  { hour: '17', count: 13 },
+  { hour: '18', count: 6 },
+]
+
+const adminSites = [
+  { name: '테헤란로', building: '본관' },
+  { name: '봉은사로', building: '별관' },
+  { name: '안양', building: '연구동' },
+]
+
+const adminRoomUsage = [
+  { room: '테헤란로(대 회의실)', site: '테헤란로', building: '본관', floor: '12F', rate: 88, hours: 126, peak: '14:00' },
+  { room: '테헤란로(중 회의실)', site: '테헤란로', building: '본관', floor: '12F', rate: 81, hours: 114, peak: '10:00' },
+  { room: '테헤란로(소 회의실)', site: '테헤란로', building: '본관', floor: '12F', rate: 73, hours: 98, peak: '16:00' },
+  { room: '봉은사로(회의실 1)', site: '봉은사로', building: '별관', floor: '5F', rate: 67, hours: 82, peak: '15:00' },
+  { room: '봉은사로(회의실 3)', site: '봉은사로', building: '별관', floor: '5F', rate: 61, hours: 74, peak: '11:00' },
+  { room: '안양(대 : 도시계획부)', site: '안양', building: '연구동', floor: '3F', rate: 54, hours: 63, peak: '16:00' },
+]
+
+const initialDepts = [
+  { id: 'd1', name: '경영지원실', count: 8, children: ['인사팀', '재무팀', '법무팀', 'IT운영팀'] },
+  { id: 'd2', name: '프로덕트본부', count: 24, children: ['프로덕트팀', '디자인팀', '개발팀'] },
+  { id: 'd3', name: '전략기획팀', count: 5, children: [] },
+  { id: 'd4', name: '마케팅팀', count: 7, children: [] },
+  { id: 'd5', name: '영업본부', count: 31, children: ['영업 1팀', '영업 2팀', '영업 3팀'] },
+]
+
+const initialRanks = [
+  { id: 'r1', name: '사원', order: 1, count: 12 },
+  { id: 'r2', name: '선임', order: 2, count: 8 },
+  { id: 'r3', name: '책임', order: 3, count: 5 },
+  { id: 'r4', name: '수석', order: 4, count: 3 },
+  { id: 'r5', name: '이사', order: 5, count: 1 },
+]
+
+const initialTitles = [
+  { id: 't1', name: '팀원', count: 22 },
+  { id: 't2', name: '파트장', count: 6 },
+  { id: 't3', name: '팀장', count: 4 },
+  { id: 't4', name: '본부장', count: 2 },
+]
+
+function memberSeed(member, index) {
+  return {
+    ...member,
+    hireOn: `202${Math.min(index + 1, 5)}-0${(index % 6) + 1}-01`,
+    retireOn: member.status === '비활성' ? '2026-05-31' : '2999-01-01',
+  }
+}
+
 export const AdminDashboardPage = defineComponent({
-  setup: () => ({ rooms, members, recordings, adminLogs }),
-  template: `<section class="page"><header class="page-header"><h1>관리자 대시보드</h1><p>회원, 회의실, 정책, 작업 로그 상태를 한 화면에서 확인합니다.</p></header><div class="metric-grid"><div class="metric-card"><span>회원</span><strong>{{ members.length }}</strong></div><div class="metric-card"><span>회의실</span><strong>{{ rooms.length }}</strong></div><div class="metric-card"><span>회의록</span><strong>{{ recordings.length }}</strong></div><div class="metric-card"><span>작업 로그</span><strong>{{ adminLogs.length }}</strong></div></div><div class="card-list"><article v-for="log in adminLogs.slice(0, 3)" :key="log.id" class="card row-card"><div><h2>{{ log.action }}</h2><p>{{ log.time }} · {{ log.actor }} · {{ log.area }}</p></div><span class="badge success">{{ log.result }}</span></article></div></section>`,
+  setup() {
+    const activeMembers = members.filter((member) => member.status === '활성').length
+    const inactiveMembers = members.length - activeMembers
+    const totalUsage = adminHourlyUsage.reduce((sum, item) => sum + item.count, 0)
+    const peak = adminHourlyUsage.reduce((top, item) => item.count > top.count ? item : top, adminHourlyUsage[0])
+    const maxUsage = Math.max(...adminHourlyUsage.map((item) => item.count))
+    const siteRates = adminSites.map((site) => ({
+      ...site,
+      rooms: rooms.filter((room) => room.site === site.name).length,
+      rate: site.name === '테헤란로' ? 82 : site.name === '봉은사로' ? 64 : 47,
+    }))
+    const kpis = [
+      { label: '전체 사용자', value: members.length, sub: `활성 ${activeMembers} · 비활성 ${inactiveMembers}` },
+      { label: '운영 회의실', value: rooms.length, sub: `사용 제한 ${rooms.filter((room) => room.restricted).length}` },
+      { label: '회의실 사용 30일', value: totalUsage, sub: `피크 ${peak.hour}시 · ${peak.count}건` },
+      { label: '보관 회의록', value: recordings.length, sub: '이번 달 생성 86' },
+    ]
+    return { adminHourlyUsage, adminLogs, adminRoomUsage, inactiveMembers, kpis, maxUsage, peak, rooms, siteRates }
+  },
+  template: `
+    <section class="page admin-page">
+      <div class="admin-eyebrow"><span></span>Admin Console</div>
+      <header class="page-header"><h1>관리자 대시보드</h1><p>플랫폼 운영 현황과 회의 활동을 한눈에 확인합니다.</p></header>
+      <article class="card admin-alert">
+        <div class="card-head"><h2>주의 항목</h2><span class="badge warning">점검 필요</span></div>
+        <div class="admin-alert-grid">
+          <p><strong>사용 제한 회의실 {{ rooms.filter((room) => room.restricted).length }}건</strong><span>{{ rooms.find((room) => room.restricted)?.name }} · {{ rooms.find((room) => room.restricted)?.restrictReason }}</span></p>
+          <p><strong>비활성 사용자 {{ inactiveMembers }}명</strong><span>30일 이상 미접속 계정 검토 필요</span></p>
+        </div>
+      </article>
+      <div class="metric-grid"><article v-for="kpi in kpis" :key="kpi.label" class="metric-card"><span>{{ kpi.label }}</span><strong>{{ kpi.value }}</strong><em>{{ kpi.sub }}</em></article></div>
+      <div class="admin-dashboard-grid">
+        <article class="card admin-chart-card">
+          <div class="card-head"><div><h2>시간대별 회의실 사용 빈도</h2><p>최근 30일 기준 회의실 점유 횟수</p></div><span class="badge">30일</span></div>
+          <div class="admin-bar-chart">
+            <div v-for="item in adminHourlyUsage" :key="item.hour" class="admin-bar-item">
+              <div class="admin-bar-track"><i :style="{ height: (item.count / maxUsage * 100) + '%' }"></i></div>
+              <span>{{ item.hour }}시</span>
+              <small>{{ item.count }}</small>
+            </div>
+          </div>
+        </article>
+        <article class="card admin-site-card">
+          <div class="card-head"><h2>사이트/건물별 사용률</h2><span class="badge">이번 달</span></div>
+          <ul class="admin-progress-list">
+            <li v-for="site in siteRates" :key="site.name"><div><strong>{{ site.name }}</strong><span>{{ site.building }} · {{ site.rooms }}실 · {{ site.rate }}%</span></div><b><i :style="{ width: site.rate + '%' }"></i></b></li>
+          </ul>
+          <p>가장 붐비는 시간대는 <strong>{{ peak.hour }}시</strong>입니다.</p>
+        </article>
+      </div>
+      <div class="admin-dashboard-grid">
+        <article class="card admin-table-card wide">
+          <div class="card-head"><h2>회의실별 사용률 상세</h2><span class="badge">최근 30일</span></div>
+          <div class="table-card embedded-table"><table><thead><tr><th>회의실</th><th>사이트/건물</th><th>층</th><th>사용률</th><th>사용 시간</th><th>피크</th></tr></thead><tbody><tr v-for="room in adminRoomUsage" :key="room.room"><td>{{ room.room }}</td><td>{{ room.site }} · {{ room.building }}</td><td>{{ room.floor }}</td><td><span class="progress-cell"><i :style="{ width: room.rate + '%' }"></i></span>{{ room.rate }}%</td><td>{{ room.hours }}h</td><td>{{ room.peak }}</td></tr></tbody></table></div>
+        </article>
+        <article class="card admin-table-card">
+          <div class="card-head"><h2>관리자 작업 로그</h2><span class="badge">최근</span></div>
+          <ul class="compact-list"><li v-for="log in adminLogs.slice(0, 5)" :key="log.id"><strong>{{ log.action }}</strong><span>{{ log.actor }} · {{ log.time }}</span></li></ul>
+        </article>
+      </div>
+    </section>
+  `,
 })
 
 export const MembersPage = defineComponent({
-  setup: () => ({ members, companies }),
-  template: `<section class="page"><header class="page-header"><h1>회원 관리</h1><p>계열사, 부서, 직급, 권한과 활성 상태를 관리합니다.</p></header><div class="toolbar"><span v-for="company in companies" :key="company" class="chip">{{ company }}</span></div><div class="table-card"><table><thead><tr><th>이름</th><th>이메일</th><th>소속</th><th>직급</th><th>권한</th><th>상태</th></tr></thead><tbody><tr v-for="member in members" :key="member.id"><td>{{ member.name }}</td><td>{{ member.email }}</td><td>{{ member.company }} · {{ member.dept }}</td><td>{{ member.position }} · {{ member.title }}</td><td><span class="badge primary">{{ member.role }}</span></td><td>{{ member.status }}</td></tr></tbody></table></div></section>`,
+  setup() {
+    const list = ref(members.map(memberSeed))
+    const q = ref('')
+    const filter = ref('전체')
+    const modal = ref(false)
+    const detail = ref(null)
+    const editingId = ref('')
+    const fileInput = ref(null)
+    const form = ref({ name: '', emailLocal: '', company: companies[0], dept: '프로덕트팀', position: '사원', hireOn: '2026-01-01', retireOn: '2999-01-01', role: 'User' })
+    const filtered = computed(() => list.value.filter((member) => {
+      const employed = member.retireOn === '2999-01-01'
+      const matchesStatus = filter.value === '전체' || (filter.value === '재직' ? employed : !employed)
+      const matchesQuery = !q.value || `${member.name} ${member.email} ${member.company} ${member.dept}`.toLowerCase().includes(q.value.toLowerCase())
+      return matchesStatus && matchesQuery
+    }))
+    function openModal(member) {
+      editingId.value = member?.id || ''
+      form.value = member ? { ...member, emailLocal: member.email.split('@')[0] } : { name: '', emailLocal: '', company: companies[0], dept: '프로덕트팀', position: '사원', hireOn: '2026-01-01', retireOn: '2999-01-01', role: 'User' }
+      modal.value = true
+    }
+    function saveMember() {
+      const payload = { ...form.value, email: `${form.value.emailLocal || 'user'}@meetbowl.co`, status: form.value.retireOn === '2999-01-01' ? '활성' : '비활성', title: form.value.role === 'Admin' ? '관리자' : '팀원' }
+      delete payload.emailLocal
+      if (editingId.value) list.value = list.value.map((member) => member.id === editingId.value ? { ...member, ...payload } : member)
+      else list.value.push({ id: `u${Date.now()}`, ...payload })
+      modal.value = false
+    }
+    function removeMember(id) {
+      list.value = list.value.filter((member) => member.id !== id)
+      detail.value = null
+    }
+    function downloadMembers() {
+      downloadCsv('회원.csv', ['이름', '이메일', '계열사', '부서', '직급', '입사일', '퇴사일'], list.value.map((member) => [member.name, member.email, member.company, member.dept, member.position, member.hireOn, member.retireOn]))
+    }
+    function uploadMembers(event) {
+      const file = event.target.files?.[0]
+      if (!file) return
+      const reader = new FileReader()
+      reader.onload = () => {
+        const rows = parseCsv(String(reader.result || '').replace(/^\uFEFF/, '')).filter((row) => row.some((cell) => cell.trim()))
+        list.value = rows.slice(1).map((row, index) => ({ id: `csv-${Date.now()}-${index}`, name: row[0] || '', email: row[1] || '', company: row[2] || companies[0], dept: row[3] || '', position: row[4] || '사원', hireOn: row[5] || '2026-01-01', retireOn: row[6] || '2999-01-01', role: 'User', status: row[6] && row[6] !== '2999-01-01' ? '비활성' : '활성', title: '팀원' })).filter((member) => member.name)
+      }
+      reader.readAsText(file, 'utf-8')
+      event.target.value = ''
+    }
+    return { companies, detail, downloadMembers, fileInput, filter, filtered, form, list, modal, openModal, q, removeMember, saveMember, uploadMembers }
+  },
+  template: `
+    <section class="page admin-page">
+      <header class="page-header rooms-header"><div><h1>회원 관리</h1><p>사용자 계정, 계열사, 부서·직급, 입사일과 퇴사일을 관리합니다.</p></div><div class="admin-actions"><input ref="fileInput" type="file" accept=".csv,text/csv" hidden @change="uploadMembers"><button class="secondary-button" @click="fileInput.click()">엑셀 업로드</button><button class="secondary-button" @click="downloadMembers">엑셀 다운로드</button><button class="primary-button" @click="openModal()">회원 추가</button></div></header>
+      <div class="card admin-toolbar"><input v-model="q" placeholder="이름, 이메일, 계열사, 부서 검색"><div class="toolbar"><button v-for="item in ['전체','재직','퇴직']" :key="item" class="chip" :class="{ active: filter === item }" @click="filter = item">{{ item }}</button></div></div>
+      <div class="table-card admin-data-table"><table><thead><tr><th>이름</th><th>이메일</th><th>계열사</th><th>부서</th><th>직급</th><th>입사일</th><th>퇴사일</th><th>액션</th></tr></thead><tbody><tr v-for="member in filtered" :key="member.id" @click="detail = member"><td><span class="table-avatar">{{ member.name[0] }}</span>{{ member.name }}</td><td>{{ member.email }}</td><td>{{ member.company }}</td><td>{{ member.dept }}</td><td>{{ member.position }}</td><td>{{ member.hireOn }}</td><td><span :class="['badge', member.retireOn === '2999-01-01' ? 'success' : 'warning']">{{ member.retireOn === '2999-01-01' ? '활성' : '비활성' }}</span> {{ member.retireOn }}</td><td><button class="icon-text" @click.stop="openModal(member)">수정</button><button class="icon-text danger-text" @click.stop="removeMember(member.id)">삭제</button></td></tr></tbody></table></div>
+      <div v-if="modal" class="modal-backdrop" @click.self="modal = false"><article class="card write-modal admin-modal"><header><h2>{{ form.id ? '회원 정보 수정' : '회원 추가' }}</h2><button @click="modal = false">닫기</button></header><form class="form-grid" @submit.prevent="saveMember"><label>이름<input v-model="form.name" required></label><label>이메일<div class="email-input"><input v-model="form.emailLocal" placeholder="user"><span>@meetbowl.co</span></div></label><label>계열사<select v-model="form.company"><option v-for="company in companies" :key="company">{{ company }}</option></select></label><div class="form-row two"><label>부서<input v-model="form.dept"></label><label>직급<select v-model="form.position"><option v-for="rank in ['사원','선임','책임','수석','팀장','이사']" :key="rank">{{ rank }}</option></select></label></div><div class="form-row two"><label>입사일<input type="date" v-model="form.hireOn"></label><label>퇴사일<input type="date" v-model="form.retireOn"></label></div><label>권한<select v-model="form.role"><option>User</option><option>Admin</option></select></label><div class="modal-actions"><button type="button" class="secondary-button" @click="modal = false">취소</button><button class="primary-button">저장</button></div></form></article></div>
+      <div v-if="detail" class="modal-backdrop" @click.self="detail = null"><article class="card write-modal detail-modal"><header><div><h2>{{ detail.name }}</h2><p>{{ detail.dept }} · {{ detail.position }}</p></div><button @click="detail = null">닫기</button></header><dl class="detail-list"><div><dt>이메일</dt><dd>{{ detail.email }}</dd></div><div><dt>계열사</dt><dd>{{ detail.company }}</dd></div><div><dt>입사일</dt><dd>{{ detail.hireOn }}</dd></div><div><dt>퇴사일</dt><dd>{{ detail.retireOn }}</dd></div></dl><div class="modal-actions"><button class="secondary-button" @click="openModal(detail); detail = null">정보 수정</button></div></article></div>
+    </section>
+  `,
 })
 
 export const OrganizationPage = defineComponent({
-  setup: () => ({ companies, members }),
-  template: `<section class="page"><header class="page-header"><h1>조직/직급 관리</h1><p>계열사별 조직과 직급 체계를 확인합니다.</p></header><div class="doc-grid"><article v-for="company in companies" :key="company" class="card"><h2>{{ company }}</h2><p>{{ members.filter((member) => member.company === company).length }}명 등록</p><ul class="compact-list"><li v-for="member in members.filter((m) => m.company === company)" :key="member.id"><strong>{{ member.name }}</strong><span>{{ member.dept }} · {{ member.position }}</span></li></ul></article></div></section>`,
+  setup() {
+    const tab = ref('dept')
+    const depts = ref([...initialDepts])
+    const ranks = ref([...initialRanks])
+    const titles = ref([...initialTitles])
+    const editing = ref(null)
+    const form = ref({ name: '', count: 0, order: 1 })
+    const rows = computed(() => tab.value === 'dept' ? depts.value : tab.value === 'rank' ? ranks.value : titles.value)
+    function openEdit(row = null) {
+      editing.value = row
+      form.value = row ? { ...row } : { name: '', count: 0, order: rows.value.length + 1 }
+    }
+    function saveItem() {
+      const target = tab.value === 'dept' ? depts : tab.value === 'rank' ? ranks : titles
+      if (editing.value) target.value = target.value.map((item) => item.id === editing.value.id ? { ...item, ...form.value } : item)
+      else target.value.push({ id: `${tab.value}-${Date.now()}`, ...form.value, children: tab.value === 'dept' ? [] : undefined })
+      editing.value = null
+    }
+    function removeItem(id) {
+      const target = tab.value === 'dept' ? depts : tab.value === 'rank' ? ranks : titles
+      target.value = target.value.filter((item) => item.id !== id)
+    }
+    return { depts, editing, form, members, openEdit, ranks, removeItem, rows, saveItem, tab, titles }
+  },
+  template: `
+    <section class="page admin-page">
+      <header class="page-header rooms-header"><div><h1>조직/직급 관리</h1><p>부서, 직급, 직책을 분리해 관리하고 조직도를 확인합니다.</p></div><button class="primary-button" @click="openEdit()">{{ tab === 'dept' ? '부서 추가' : tab === 'rank' ? '직급 추가' : '직책 추가' }}</button></header>
+      <div class="admin-tabs"><button v-for="item in [{key:'dept',label:'조직 관리'},{key:'rank',label:'직급 관리'},{key:'title',label:'직책 관리'}]" :key="item.key" :class="{ active: tab === item.key }" @click="tab = item.key">{{ item.label }}</button></div>
+      <div v-if="tab === 'dept'" class="admin-org-layout">
+        <article class="card admin-org-tree"><h2>Meetbowl</h2><div v-for="dept in depts" :key="dept.id" class="org-node"><strong>{{ dept.name }}</strong><span>{{ dept.count }}명</span><p v-if="dept.children?.length">{{ dept.children.join(' · ') }}</p></div></article>
+        <article class="card admin-org-members"><h2>조직도</h2><div v-for="dept in depts" :key="dept.id" class="org-member-group"><strong>{{ dept.name }}</strong><span v-for="member in members.filter((item) => item.dept === dept.name || dept.children?.includes(item.dept))" :key="member.id">{{ member.name }} · {{ member.position }}</span></div></article>
+      </div>
+      <div class="table-card admin-data-table"><table><thead><tr><th>이름</th><th v-if="tab === 'rank'">순서</th><th>인원</th><th>액션</th></tr></thead><tbody><tr v-for="row in rows" :key="row.id"><td>{{ row.name }}</td><td v-if="tab === 'rank'">{{ row.order }}</td><td>{{ row.count }}명</td><td><button class="icon-text" @click="openEdit(row)">수정</button><button class="icon-text danger-text" @click="removeItem(row.id)">삭제</button></td></tr></tbody></table></div>
+      <div v-if="editing !== null" class="modal-backdrop" @click.self="editing = null"><article class="card write-modal admin-modal"><header><h2>항목 저장</h2><button @click="editing = null">닫기</button></header><form class="form-grid" @submit.prevent="saveItem"><label>이름<input v-model="form.name" required></label><label v-if="tab === 'rank'">순서<input type="number" v-model.number="form.order"></label><label>인원<input type="number" v-model.number="form.count"></label><div class="modal-actions"><button type="button" class="secondary-button" @click="editing = null">취소</button><button class="primary-button">저장</button></div></form></article></div>
+    </section>
+  `,
 })
 
 export const AdminRoomsPage = defineComponent({
-  setup: () => ({ rooms }),
-  template: `<section class="page"><header class="page-header"><h1>회의실 관리</h1><p>회의실 수용 인원, 장비, 사용 제한 상태를 관리합니다.</p></header><div class="table-card"><table><thead><tr><th>회의실</th><th>지점</th><th>층</th><th>수용</th><th>장비</th><th>상태</th></tr></thead><tbody><tr v-for="room in rooms" :key="room.id"><td>{{ room.name }}</td><td>{{ room.site }}</td><td>{{ room.floor }}층</td><td>{{ room.capacity }}명</td><td>{{ room.equipment.join(', ') }}</td><td><span :class="['badge', room.restricted ? 'danger' : 'success']">{{ room.restricted ? room.restrictReason : '사용 가능' }}</span></td></tr></tbody></table></div></section>`,
+  setup() {
+    const list = ref(rooms.map((room) => ({ ...room, building: adminSites.find((site) => site.name === room.site)?.building || '본관', active: !room.restricted })))
+    const sites = ref([...adminSites])
+    const siteFilter = ref('전체')
+    const roomModal = ref(false)
+    const siteModal = ref(false)
+    const editingId = ref('')
+    const roomForm = ref({ name: '', site: sites.value[0].name, building: sites.value[0].building, floor: 1, capacity: 6, equipment: 'TV', active: true, restrictReason: '', restrictUntil: '' })
+    const siteForm = ref({ name: '', building: '' })
+    const filteredRooms = computed(() => siteFilter.value === '전체' ? list.value : list.value.filter((room) => room.site === siteFilter.value))
+    function openRoom(room) {
+      editingId.value = room?.id || ''
+      roomForm.value = room ? { ...room, equipment: room.equipment.join(', ') } : { name: '', site: sites.value[0].name, building: sites.value[0].building, floor: 1, capacity: 6, equipment: 'TV', active: true, restrictReason: '', restrictUntil: '' }
+      roomModal.value = true
+    }
+    function saveRoom() {
+      const payload = { ...roomForm.value, floor: Number(roomForm.value.floor), capacity: Number(roomForm.value.capacity), equipment: roomForm.value.equipment.split(',').map((item) => item.trim()).filter(Boolean), restricted: !roomForm.value.active }
+      if (editingId.value) list.value = list.value.map((room) => room.id === editingId.value ? { ...room, ...payload } : room)
+      else list.value.push({ id: `room-${Date.now()}`, ...payload })
+      roomModal.value = false
+    }
+    function saveSite() {
+      sites.value.push({ ...siteForm.value })
+      siteForm.value = { name: '', building: '' }
+      siteModal.value = false
+    }
+    return { filteredRooms, list, openRoom, roomForm, roomModal, saveRoom, saveSite, siteFilter, siteForm, siteModal, sites }
+  },
+  template: `
+    <section class="page admin-page">
+      <header class="page-header rooms-header"><div><h1>회의실 관리</h1><p>사이트·건물을 등록하고 회의실 운영 상태를 관리합니다.</p></div><div class="admin-actions"><button class="secondary-button" @click="siteModal = true">사이트/건물 추가</button><button class="primary-button" @click="openRoom()">회의실 등록</button></div></header>
+      <article class="card admin-site-filter"><strong>사이트 / 건물</strong><div class="toolbar"><button class="chip" :class="{ active: siteFilter === '전체' }" @click="siteFilter = '전체'">전체 ({{ list.length }}실)</button><button v-for="site in sites" :key="site.name" class="chip" :class="{ active: siteFilter === site.name }" @click="siteFilter = siteFilter === site.name ? '전체' : site.name">{{ site.name }} · {{ site.building }} ({{ list.filter((room) => room.site === site.name).length }}실)</button></div></article>
+      <div class="table-card admin-data-table"><table><thead><tr><th>회의실</th><th>사이트</th><th>건물</th><th>층</th><th>정원</th><th>장비</th><th>상태</th><th>액션</th></tr></thead><tbody><tr v-for="room in filteredRooms" :key="room.id"><td>{{ room.name }}</td><td>{{ room.site }}</td><td>{{ room.building }}</td><td>{{ room.floor }}F</td><td>{{ room.capacity }}명</td><td>{{ room.equipment.join(', ') }}</td><td><span :class="['badge', room.active ? 'success' : 'warning']">{{ room.active ? '운영 중' : '사용 제한' }}</span><small v-if="!room.active">{{ room.restrictReason }} {{ room.restrictUntil }}</small></td><td><button class="icon-text" @click="openRoom(room)">수정</button></td></tr></tbody></table></div>
+      <div v-if="roomModal" class="modal-backdrop" @click.self="roomModal = false"><article class="card write-modal admin-modal"><header><h2>회의실 정보</h2><button @click="roomModal = false">닫기</button></header><form class="form-grid" @submit.prevent="saveRoom"><label>회의실 이름<input v-model="roomForm.name" required></label><div class="form-row two"><label>사이트<select v-model="roomForm.site"><option v-for="site in sites" :key="site.name">{{ site.name }}</option></select></label><label>건물<input v-model="roomForm.building"></label></div><div class="form-row two"><label>층<input type="number" v-model.number="roomForm.floor"></label><label>정원<input type="number" v-model.number="roomForm.capacity"></label></div><label>장비<input v-model="roomForm.equipment" placeholder="TV, 화상회의"></label><label class="settings-toggle-row"><span>운영 중</span><input type="checkbox" v-model="roomForm.active"></label><div v-if="!roomForm.active" class="admin-warning-box"><label>제한 종료 일시<input v-model="roomForm.restrictUntil" placeholder="2026-06-15 18:00"></label><label>제한 사유<textarea v-model="roomForm.restrictReason" rows="2"></textarea></label></div><div class="modal-actions"><button type="button" class="secondary-button" @click="roomModal = false">취소</button><button class="primary-button">저장</button></div></form></article></div>
+      <div v-if="siteModal" class="modal-backdrop" @click.self="siteModal = false"><article class="card write-modal admin-modal"><header><h2>사이트 / 건물 추가</h2><button @click="siteModal = false">닫기</button></header><form class="form-grid" @submit.prevent="saveSite"><label>사이트<input v-model="siteForm.name" required placeholder="예: 판교"></label><label>건물<input v-model="siteForm.building" required placeholder="예: 본관"></label><div class="modal-actions"><button type="button" class="secondary-button" @click="siteModal = false">취소</button><button class="primary-button">추가</button></div></form></article></div>
+    </section>
+  `,
+})
+
+export const AdminReservationsPage = defineComponent({
+  setup() {
+    const list = ref(todayReservations.map((reservation) => ({ ...reservation, date: todayDate })))
+    const site = ref('전체')
+    const status = ref('전체')
+    const selected = ref(null)
+    const filtered = computed(() => list.value.filter((reservation) => {
+      const room = rooms.find((item) => item.id === reservation.roomId)
+      const siteMatch = site.value === '전체' || room?.site === site.value
+      const statusMatch = status.value === '전체' || reservation.status === status.value
+      return siteMatch && statusMatch
+    }))
+    function cancel(id) {
+      list.value = list.value.filter((reservation) => reservation.id !== id)
+      selected.value = null
+    }
+    return { cancel, filtered, list, rooms, selected, site, sites: ['전체', ...new Set(rooms.map((room) => room.site))], status, statusLabel }
+  },
+  template: `
+    <section class="page admin-page">
+      <header class="page-header"><h1>예약 현황 관리</h1><p>전사 회의실 예약을 조회하고 필요 시 강제 취소합니다.</p></header>
+      <div class="card admin-toolbar"><div class="toolbar"><button v-for="item in sites" :key="item" class="chip" :class="{ active: site === item }" @click="site = item">{{ item }}</button></div><div class="toolbar"><button v-for="item in ['전체','mine','booked']" :key="item" class="chip" :class="{ active: status === item }" @click="status = item">{{ item === '전체' ? '전체 상태' : statusLabel[item] }}</button></div></div>
+      <div class="table-card admin-data-table"><table><thead><tr><th>회의 제목</th><th>주최자</th><th>회의실</th><th>날짜</th><th>시간</th><th>상태</th><th>액션</th></tr></thead><tbody><tr v-for="item in filtered" :key="item.id" @click="selected = item"><td>{{ item.title }}</td><td>{{ item.owner }}</td><td>{{ rooms.find((room) => room.id === item.roomId)?.name }}</td><td>{{ item.date }}</td><td>{{ item.start }}-{{ item.end }}</td><td><span :class="['badge', item.status === 'mine' ? 'primary' : 'navy']">{{ statusLabel[item.status] }}</span></td><td><button class="icon-text danger-text" @click.stop="cancel(item.id)">강제 취소</button></td></tr></tbody></table></div>
+      <div v-if="selected" class="modal-backdrop" @click.self="selected = null"><article class="card write-modal detail-modal"><header><div><h2>{{ selected.title }}</h2><p>{{ selected.start }}-{{ selected.end }} · {{ rooms.find((room) => room.id === selected.roomId)?.name }}</p></div><button @click="selected = null">닫기</button></header><dl class="detail-list"><div><dt>주최자</dt><dd>{{ selected.owner }}</dd></div><div><dt>참석자</dt><dd>{{ selected.attendees.join(', ') || '-' }}</dd></div><div><dt>상태</dt><dd>{{ statusLabel[selected.status] }}</dd></div><div><dt>회의실</dt><dd>{{ rooms.find((room) => room.id === selected.roomId)?.site }}</dd></div></dl><div class="modal-actions"><button class="danger-button" @click="cancel(selected.id)">강제 취소</button></div></article></div>
+    </section>
+  `,
 })
 
 export const AdminLogsPage = defineComponent({
-  setup: () => ({ adminLogs }),
-  template: `<section class="page embedded"><header class="page-header"><h1>관리자 작업 로그</h1><p>권한 변경, 정책 변경, 회의실 변경 이력을 확인합니다.</p></header><div class="table-card"><table><thead><tr><th>시간</th><th>작업자</th><th>영역</th><th>작업</th><th>대상</th><th>IP</th></tr></thead><tbody><tr v-for="log in adminLogs" :key="log.id"><td>{{ log.time }}</td><td>{{ log.actor }}</td><td>{{ log.area }}</td><td>{{ log.action }}</td><td>{{ log.target }}</td><td>{{ log.ip }}</td></tr></tbody></table></div></section>`,
+  setup() {
+    const area = ref('전체')
+    const q = ref('')
+    const areas = ['전체', ...new Set(adminLogs.map((log) => log.area))]
+    const filtered = computed(() => adminLogs.filter((log) => (area.value === '전체' || log.area === area.value) && (!q.value || `${log.actor} ${log.action} ${log.target} ${log.ip}`.toLowerCase().includes(q.value.toLowerCase()))))
+    return { area, areas, filtered, q }
+  },
+  template: `<section class="page admin-page"><header class="page-header"><h1>관리자 작업 로그</h1><p>권한 변경, 정책 변경, 회의실 변경 이력을 확인합니다.</p></header><div class="card admin-toolbar"><input v-model="q" placeholder="작업자, 작업, 대상, IP 검색"><div class="toolbar"><button v-for="item in areas" :key="item" class="chip" :class="{ active: area === item }" @click="area = item">{{ item }}</button></div></div><div class="table-card admin-data-table"><table><thead><tr><th>시간</th><th>작업자</th><th>영역</th><th>작업</th><th>대상</th><th>결과</th><th>IP</th></tr></thead><tbody><tr v-for="log in filtered" :key="log.id"><td>{{ log.time }}</td><td>{{ log.actor }}</td><td>{{ log.area }}</td><td>{{ log.action }}</td><td>{{ log.target }}</td><td><span class="badge success">{{ log.result }}</span></td><td>{{ log.ip }}</td></tr></tbody></table></div></section>`,
 })
 
 export const PolicyPage = defineComponent({
-  props: ['title', 'description'],
-  template: `<section class="page"><header class="page-header"><h1>{{ title }}</h1><p>{{ description }}</p></header><div class="doc-grid"><article class="card"><h2>기본 보관 기간</h2><p>회의록 60일, 휴지통 14일, 백업 문서 90일</p></article><article class="card"><h2>자동 알림</h2><p>검토 지연 24시간 후 재알림, 공유 승인 완료 시 메일 알림</p></article><article class="card"><h2>권한 기준</h2><p>Master 권한은 일반 Admin이 변경할 수 없습니다.</p></article></div></section>`,
+  props: ['title', 'description', 'kind'],
+  setup(props) {
+    const policy = ref(props.kind === 'mail'
+      ? { retainDays: 90, trashDays: 14, backupDays: 180, reviewHours: 24, autoShare: true, guestAccess: false }
+      : { retainDays: 60, trashDays: 14, backupDays: 90, reviewHours: 24, autoShare: false, guestAccess: false })
+    const saved = ref(false)
+    function save() {
+      saved.value = true
+      setTimeout(() => { saved.value = false }, 1800)
+    }
+    return { policy, save, saved }
+  },
+  template: `
+    <section class="page admin-page settings-page">
+      <header class="page-header"><h1>{{ title }}</h1><p>{{ description }}</p></header>
+      <article class="card settings-card"><div class="settings-card-head"><h2>보관 정책</h2><button class="primary-button small" @click="save">저장</button></div><div class="settings-form-grid"><label>기본 보관 기간<input type="number" v-model.number="policy.retainDays"></label><label>휴지통 보관 기간<input type="number" v-model.number="policy.trashDays"></label><label>백업 문서 보관 기간<input type="number" v-model.number="policy.backupDays"></label><label>검토 지연 알림<input type="number" v-model.number="policy.reviewHours"></label></div><p v-if="saved" class="settings-success">정책을 저장했습니다.</p></article>
+      <article class="card settings-card"><h2>알림 / 권한 기준</h2><label class="settings-toggle-row"><span>검토 완료 시 자동 공유 메일 발송</span><input type="checkbox" v-model="policy.autoShare"></label><label class="settings-toggle-row"><span>게스트 외부 접근 허용</span><input type="checkbox" v-model="policy.guestAccess"></label><div class="settings-alert">Master 권한은 일반 Admin이 변경할 수 없으며, 정책 변경 이력은 관리자 작업 로그에 남깁니다.</div></article>
+    </section>
+  `,
 })
 
 export const JoinPage = defineComponent({

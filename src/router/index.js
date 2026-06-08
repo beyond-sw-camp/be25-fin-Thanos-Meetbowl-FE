@@ -4,6 +4,7 @@ import { useAuthStore } from '../stores/auth'
 import {
   AdminDashboardPage,
   AdminLogsPage,
+  AdminReservationsPage,
   AdminRoomsPage,
   BackupDetailPage,
   CommunityPage,
@@ -60,20 +61,19 @@ const routes = [
       { path: 'admin/rooms', component: AdminRoomsPage, meta: { role: 'admin' } },
       {
         path: 'admin/reservations',
-        component: SimpleDocsPage,
-        props: { title: '예약 현황', description: '전체 회의실 예약 상태와 사용 제한 현황을 확인합니다.' },
+        component: AdminReservationsPage,
         meta: { role: 'admin' },
       },
       {
         path: 'admin/mail-policy',
         component: PolicyPage,
-        props: { title: '메일 정책 관리', description: '내부 메일 보관, 백업, 삭제 정책을 관리합니다.' },
+        props: { title: '메일 정책 관리', description: '내부 메일 보관, 백업, 삭제 정책을 관리합니다.', kind: 'mail' },
         meta: { role: 'admin' },
       },
       {
         path: 'admin/recording-policy',
         component: PolicyPage,
-        props: { title: '보관 정책 관리', description: '회의록과 녹음 파일의 보관 기간과 알림 정책을 관리합니다.' },
+        props: { title: '보관 정책 관리', description: '회의록과 녹음 파일의 보관 기간과 알림 정책을 관리합니다.', kind: 'recording' },
         meta: { role: 'admin' },
       },
       { path: 'admin/logs', component: AdminLogsPage, meta: { role: 'admin' } },
