@@ -71,6 +71,20 @@ function meetingEnd(meeting) {
   return fromDateTimeInput(addOneHour(input))
 }
 
+const mailTemplates = [
+  { id: 'meeting', label: '회의 요청', subject: '[회의 요청] {주제} 일정 협의', body: '안녕하세요,\n\n아래와 같이 회의를 요청드립니다.\n\n- 안건: \n- 일시: YYYY-MM-DD HH:MM\n- 장소: \n- 참석자: \n\n참석 가능 여부 회신 부탁드립니다.\n\n감사합니다.' },
+  { id: 'minutes', label: '회의록 공유', subject: '[회의록 공유] {회의명}', body: '안녕하세요,\n\n{회의명} 회의록을 공유드립니다.\n\n[AI 요약]\n- \n\n[액션 아이템]\n- \n\n확인 부탁드립니다.' },
+  { id: 'vacation', label: '휴가 신청', subject: '[휴가 신청] {이름} / {기간}', body: '안녕하세요,\n\n아래와 같이 휴가를 신청합니다.\n\n- 사유: \n- 기간: YYYY-MM-DD ~ YYYY-MM-DD\n- 업무 인수인계: \n- 비상 연락처: \n\n승인 부탁드립니다.' },
+  { id: 'cowork', label: '업무 협조 요청', subject: '[협조 요청] {업무명}', body: '안녕하세요,\n\n아래 업무에 대한 협조를 요청드립니다.\n\n- 요청 내용: \n- 회신 기한: \n- 참고 자료: \n\n바쁘시겠지만 검토 부탁드립니다.' },
+]
+
+const mockTranscript = [
+  { t: '00:00:08', who: '이지연', text: '오늘은 OKR 점검과 Q2 우선순위 재정렬을 진행하겠습니다.' },
+  { t: '00:00:42', who: '박서연', text: '프로덕트팀 KR-1은 진행률 78%로, 6월 첫 주 완료 가능합니다.' },
+  { t: '00:01:21', who: '정도현', text: '마케팅 측에서는 캠페인 일정을 한 주 당기는 것을 제안합니다.' },
+  { t: '00:02:03', who: '이지연', text: '좋습니다. 일정 변경에 따른 리소스 영향은 박서연 책임이 정리해 주세요.' },
+]
+
 function parseCsv(text) {
   const rows = []
   let row = []
@@ -462,6 +476,9 @@ export const RoomsPage = defineComponent({
       const width = ((timeToMinutes(item.end) - timeToMinutes(item.start)) / 60) * roomHourPx
       return { left: `${left}px`, width: `${Math.max(width, 36)}px` }
     }
+    function nowMarkerStyle() {
+      return { left: `${((timeToMinutes('13:30') - 360) / 60) * roomHourPx}px` }
+    }
     function slotTime(event) {
       const rect = event.currentTarget.getBoundingClientRect()
       const raw = Math.max(0, Math.min(17.5, (event.clientX - rect.left) / roomHourPx))
@@ -481,6 +498,7 @@ export const RoomsPage = defineComponent({
       modal,
       myBooked,
       myInvited,
+      nowMarkerStyle,
       openReservation,
       removeAttendee,
       reservationStyle,
@@ -549,6 +567,7 @@ export const RoomsPage = defineComponent({
             </div>
             <div class="room-track" @click="!room.restricted && openReservation(room.id, slotTime($event))">
               <span v-for="hour in roomHours" :key="hour" class="hour-line"></span>
+              <span class="now-marker" :style="nowMarkerStyle()"><em>현재</em></span>
               <button
                 v-for="item in reservations.filter((res) => res.roomId === room.id && res.date === date)"
                 :key="item.id"
@@ -658,6 +677,8 @@ export const MeetingsPage = defineComponent({
     })
     const totalPages = computed(() => Math.max(1, Math.ceil(filtered.value.length / pageSize)))
     const paged = computed(() => filtered.value.slice((pageNo.value - 1) * pageSize, pageNo.value * pageSize))
+    const selectedRoom = computed(() => rooms.find((room) => room.name === form.value.room))
+    const selectedRoomReservations = computed(() => selectedRoom.value ? todayReservations.filter((item) => item.roomId === selectedRoom.value.id) : [])
     const memberOptions = computed(() => {
       const query = attendeeQuery.value.trim().toLowerCase()
       return members
@@ -740,6 +761,8 @@ export const MeetingsPage = defineComponent({
       removeAttendee,
       roomNames: ['원격', ...rooms.map((room) => room.name)],
       saveMeeting,
+      selectedRoom,
+      selectedRoomReservations,
       sort,
       statusLabel,
       tab,
@@ -796,18 +819,31 @@ export const MeetingsPage = defineComponent({
       <div v-if="modal" class="modal-backdrop" @click.self="modal = false">
         <article class="card write-modal meeting-modal">
           <header><div><h2>{{ mode === 'create' ? '내 회의 생성' : '회의 수정' }}</h2><p v-if="mode === 'edit'">참석자에게 변경 알림이 발송됩니다.</p></div><button @click="modal = false">닫기</button></header>
-          <form class="form-grid" @submit.prevent="saveMeeting">
-            <label>회의 제목<input v-model="form.title" required placeholder="회의 제목"></label>
-            <div class="form-row two"><label>시작<input type="datetime-local" v-model="form.start"></label><label>종료<input type="datetime-local" v-model="form.end"></label></div>
-            <label>회의실<select v-model="form.room"><option v-for="room in roomNames" :key="room" :value="room">{{ room }}</option></select></label>
-            <label>참석자 검색<input v-model="attendeeQuery" placeholder="이름, 부서, 이메일"></label>
-            <div class="member-picker-results"><button v-for="member in memberOptions" :key="member.id" type="button" @click="addAttendee(member.name)"><strong>{{ member.name }}</strong><span>{{ member.dept }} · {{ member.email }}</span></button></div>
-            <div class="participant-chips"><span v-for="name in form.attendees" :key="name">{{ name }}<button type="button" @click="removeAttendee(name)">×</button></span></div>
-            <label>회의록 검토자<select v-model="form.reviewer"><option value="">선택 안 함</option><option v-for="name in form.attendees" :key="name" :value="name">{{ name }}</option></select></label>
-            <label>회의 내용<textarea v-model="form.content" rows="4" placeholder="회의 목적과 안건"></textarea></label>
-            <div v-if="mode === 'edit'" class="copy-box">https://meetbowl.local/join/{{ form.id }}</div>
-            <div class="modal-actions"><button type="button" class="secondary-button" @click="modal = false">취소</button><button class="primary-button">저장</button></div>
-          </form>
+          <div class="meeting-modal-grid">
+            <form class="form-grid" @submit.prevent="saveMeeting">
+              <label>회의 제목<input v-model="form.title" required placeholder="회의 제목"></label>
+              <div class="form-row two"><label>시작<input type="datetime-local" v-model="form.start"></label><label>종료<input type="datetime-local" v-model="form.end"></label></div>
+              <label>회의실<select v-model="form.room"><option v-for="room in roomNames" :key="room" :value="room">{{ room }}</option></select></label>
+              <label>참석자 검색<input v-model="attendeeQuery" placeholder="이름, 부서, 이메일"></label>
+              <div class="member-picker-results"><button v-for="member in memberOptions" :key="member.id" type="button" @click="addAttendee(member.name)"><strong>{{ member.name }}</strong><span>{{ member.dept }} · {{ member.email }}</span></button></div>
+              <div class="participant-chips"><span v-for="name in form.attendees" :key="name">{{ name }}<button type="button" @click="removeAttendee(name)">×</button></span></div>
+              <label>회의록 검토자<select v-model="form.reviewer"><option value="">선택 안 함</option><option v-for="name in form.attendees" :key="name" :value="name">{{ name }}</option></select></label>
+              <label>회의 내용<textarea v-model="form.content" rows="4" placeholder="회의 목적과 안건"></textarea></label>
+              <div v-if="mode === 'edit'" class="copy-box">https://meetbowl.local/join/{{ form.id }}</div>
+              <div class="modal-actions"><button type="button" class="secondary-button" @click="modal = false">취소</button><button class="primary-button">저장</button></div>
+            </form>
+            <aside class="room-side-panel">
+              <h3>{{ form.room }}</h3>
+              <p v-if="selectedRoom">{{ selectedRoom.site }} · {{ selectedRoom.floor }}층 · {{ selectedRoom.capacity }}명</p>
+              <p v-else>원격 회의</p>
+              <div v-if="selectedRoom" class="tag-row"><span v-for="item in selectedRoom.equipment" :key="item">{{ item }}</span></div>
+              <h4>오늘 예약</h4>
+              <ul class="compact-list">
+                <li v-for="item in selectedRoomReservations" :key="item.id"><strong>{{ item.start }}-{{ item.end }} {{ item.title }}</strong><span>{{ item.owner }}</span></li>
+                <li v-if="!selectedRoomReservations.length"><span>예약 없음</span></li>
+              </ul>
+            </aside>
+          </div>
         </article>
       </div>
     </section>
@@ -855,29 +891,280 @@ export const MeetingPage = defineComponent({
 
 export const MailPage = defineComponent({
   setup() {
-    const category = ref('inbox')
-    const currentId = ref(mails[0].id)
-    const categories = [{ key: 'inbox', label: '받은메일' }, { key: 'sent', label: '보낸메일' }, { key: 'backup', label: '백업' }, { key: 'notice', label: '공지' }]
-    const filtered = computed(() => mails.filter((mail) => mail.category === category.value))
-    const selected = computed(() => mails.find((mail) => mail.id === currentId.value) || filtered.value[0] || mails[0])
-    return { category, currentId, categories, filtered, selected }
+    const mailList = ref(mails.map((mail) => ({ ...mail })))
+    const tab = ref('inbox')
+    const open = ref(null)
+    const compose = ref(false)
+    const q = ref('')
+    const sort = ref('latest')
+    const pageNo = ref(1)
+    const selected = ref(new Set())
+    const pageSize = 15
+    const tabs = [
+      { id: 'inbox', label: '받은 메일함' },
+      { id: 'sent', label: '보낸 메일함' },
+      { id: 'trash', label: '휴지통' },
+      { id: 'backup', label: '백업' },
+      { id: 'notice', label: '공지' },
+    ]
+    const filtered = computed(() => mailList.value
+      .filter((mail) => mail.category === tab.value && (!q.value || `${mail.subject} ${mail.from} ${mail.dept}`.toLowerCase().includes(q.value.toLowerCase())))
+      .sort((a, b) => sort.value === 'latest' ? b.date.localeCompare(a.date) : a.date.localeCompare(b.date)))
+    const totalPages = computed(() => Math.max(1, Math.ceil(filtered.value.length / pageSize)))
+    const pageItems = computed(() => filtered.value.slice((pageNo.value - 1) * pageSize, pageNo.value * pageSize))
+    const allChecked = computed(() => pageItems.value.length > 0 && pageItems.value.every((mail) => selected.value.has(mail.id)))
+
+    const recipients = ref([])
+    const recipientQuery = ref('')
+    const composeDraft = ref({ subject: '', body: '', attachments: [] })
+    const templateOpen = ref(false)
+    const recipientMatches = computed(() => {
+      const query = recipientQuery.value.toLowerCase()
+      return members
+        .filter((member) => !recipients.value.some((item) => item.id === member.id))
+        .filter((member) => !query || `${member.name} ${member.company} ${member.dept} ${member.position} ${member.email}`.toLowerCase().includes(query))
+        .slice(0, 8)
+    })
+
+    function changeTab(value) {
+      tab.value = value
+      selected.value = new Set()
+      pageNo.value = 1
+      open.value = null
+    }
+    function toggleAll() {
+      const next = new Set(selected.value)
+      if (allChecked.value) pageItems.value.forEach((mail) => next.delete(mail.id))
+      else pageItems.value.forEach((mail) => next.add(mail.id))
+      selected.value = next
+    }
+    function toggleOne(id) {
+      const next = new Set(selected.value)
+      next.has(id) ? next.delete(id) : next.add(id)
+      selected.value = next
+    }
+    function deleteSelected() {
+      if (tab.value === 'trash') mailList.value = mailList.value.filter((mail) => !selected.value.has(mail.id))
+      else mailList.value = mailList.value.map((mail) => selected.value.has(mail.id) ? { ...mail, category: 'trash' } : mail)
+      selected.value = new Set()
+    }
+    function backupSelected() {
+      mailList.value = mailList.value.map((mail) => selected.value.has(mail.id) ? { ...mail, category: 'backup' } : mail)
+      selected.value = new Set()
+    }
+    function backupMail(id) {
+      mailList.value = mailList.value.map((mail) => mail.id === id ? { ...mail, category: 'backup' } : mail)
+      open.value = null
+    }
+    function applyTemplate(template) {
+      composeDraft.value.subject = template.subject
+      composeDraft.value.body = template.body
+      templateOpen.value = false
+    }
+    function addRecipient(member) {
+      recipients.value.push(member)
+      recipientQuery.value = ''
+    }
+    function removeRecipient(id) {
+      recipients.value = recipients.value.filter((member) => member.id !== id)
+    }
+    function addAttachment() {
+      composeDraft.value.attachments.push(`첨부파일_${composeDraft.value.attachments.length + 1}.pdf`)
+    }
+    function sendMail() {
+      mailList.value.unshift({
+        id: `mail-${Date.now()}`,
+        from: activeUserName,
+        dept: '전략기획팀',
+        subject: composeDraft.value.subject || '(제목 없음)',
+        preview: composeDraft.value.body.slice(0, 70),
+        date: '2026-05-22',
+        unread: false,
+        hasAttachment: composeDraft.value.attachments.length > 0,
+        category: 'sent',
+        body: composeDraft.value.body,
+      })
+      compose.value = false
+      recipients.value = []
+      composeDraft.value = { subject: '', body: '', attachments: [] }
+    }
+    return {
+      addAttachment,
+      addRecipient,
+      allChecked,
+      applyTemplate,
+      backupMail,
+      backupSelected,
+      changeTab,
+      compose,
+      composeDraft,
+      deleteSelected,
+      filtered,
+      mailTemplates,
+      open,
+      pageItems,
+      pageNo,
+      q,
+      recipientMatches,
+      recipientQuery,
+      recipients,
+      removeRecipient,
+      selected,
+      sendMail,
+      sort,
+      tab,
+      tabs,
+      templateOpen,
+      toggleAll,
+      toggleOne,
+      totalPages,
+    }
   },
   template: `
-    <section class="page">
-      <header class="page-header"><h1>메일</h1><p>회의록 공유, 공지, 내부 메일을 확인합니다.</p></header>
-      <div class="mail-layout"><aside class="card mail-nav"><button v-for="item in categories" :key="item.key" class="nav-like" :class="{ active: category === item.key }" @click="category = item.key; currentId = filtered[0]?.id || currentId">{{ item.label }}</button></aside>
-      <div class="card mail-list"><button v-for="mail in filtered" :key="mail.id" :class="{ selected: currentId === mail.id }" @click="currentId = mail.id"><strong>{{ mail.subject }}</strong><span>{{ mail.from }} · {{ mail.date }}</span><p>{{ mail.preview }}</p></button></div>
-      <article class="card mail-detail"><h2>{{ selected.subject }}</h2><p>{{ selected.from }} · {{ selected.dept }} · {{ selected.date }}</p><pre>{{ selected.body }}</pre></article></div>
+    <section v-if="!open" class="page mail-page-full">
+      <header class="page-header rooms-header"><div><h1>내부 메일</h1><p>사내 내부 사용자 및 부서 간 메일 시스템</p></div><button class="primary-button" @click="compose = true">새 메일 작성</button></header>
+      <div class="mail-tabs">
+        <button v-for="item in tabs" :key="item.id" :class="{ active: tab === item.id }" @click="changeTab(item.id)">{{ item.label }}</button>
+        <select v-model="sort"><option value="latest">최신순</option><option value="oldest">오래된 순</option></select>
+        <input v-model="q" placeholder="메일 검색">
+      </div>
+      <div class="mail-bulkbar">
+        <label><input type="checkbox" :checked="allChecked" @change="toggleAll"> 전체 선택</label>
+        <template v-if="selected.size > 0">
+          <span>{{ selected.size }}개 선택</span>
+          <button @click="backupSelected">백업하기</button>
+          <button class="danger-text" @click="deleteSelected">{{ tab === 'trash' ? '영구 삭제' : '삭제' }}</button>
+        </template>
+        <em>총 {{ filtered.length }}건</em>
+      </div>
+      <div class="card mail-row-list">
+        <button v-for="mail in pageItems" :key="mail.id" class="mail-row-button" @click="open = mail">
+          <input type="checkbox" :checked="selected.has(mail.id)" @click.stop @change="toggleOne(mail.id)">
+          <span class="mail-from" :class="{ unread: mail.unread }">{{ mail.from }} <small>/ {{ mail.dept }}</small></span>
+          <i :class="{ unread: mail.unread }"></i>
+          <strong :class="{ unread: mail.unread }">{{ mail.subject }} <small v-if="mail.hasAttachment">첨부</small></strong>
+          <time>{{ mail.date }}</time>
+        </button>
+        <p v-if="!pageItems.length" class="empty-text">메일이 없습니다.</p>
+      </div>
+      <div v-if="totalPages > 1" class="pagination"><button :disabled="pageNo === 1" @click="pageNo--">이전</button><span>{{ pageNo }} / {{ totalPages }}</span><button :disabled="pageNo === totalPages" @click="pageNo++">다음</button></div>
+
+      <div v-if="compose" class="modal-backdrop" @click.self="compose = false">
+        <article class="card write-modal compose-modal">
+          <header><h2>새 메일</h2><div class="template-menu"><button type="button" class="secondary-button small" @click="templateOpen = !templateOpen">템플릿</button><div v-if="templateOpen" class="template-list"><button v-for="tpl in mailTemplates" :key="tpl.id" @click="applyTemplate(tpl)">{{ tpl.label }}</button></div><button @click="compose = false">닫기</button></div></header>
+          <div class="compose-body">
+            <label>받는 사람</label>
+            <div class="recipient-box">
+              <span v-for="member in recipients" :key="member.id">{{ member.name }} · {{ member.dept }}<button @click="removeRecipient(member.id)">×</button></span>
+              <input v-model="recipientQuery" placeholder="이름, 계열사, 부서/팀, 이메일로 검색">
+            </div>
+            <div v-if="recipientQuery || recipientMatches.length" class="recipient-results">
+              <button v-for="member in recipientMatches" :key="member.id" @click="addRecipient(member)"><strong>{{ member.name }}</strong><small>{{ member.company }} · {{ member.dept }} · {{ member.email }}</small></button>
+            </div>
+            <input v-model="composeDraft.subject" placeholder="제목">
+            <textarea v-model="composeDraft.body" rows="10" placeholder="내용을 입력하세요..."></textarea>
+            <button class="upload-zone-small" @click="addAttachment">파일 첨부 추가</button>
+            <div class="attachment-chips"><span v-for="name in composeDraft.attachments" :key="name">{{ name }}<button @click="composeDraft.attachments = composeDraft.attachments.filter((item) => item !== name)">×</button></span></div>
+          </div>
+          <footer><small>수신자 {{ recipients.length }}명</small><div><button class="secondary-button" @click="compose = false">취소</button><button class="primary-button" @click="sendMail">전송</button></div></footer>
+        </article>
+      </div>
+    </section>
+
+    <section v-else class="page mail-detail-page">
+      <div class="mail-detail-toolbar"><button @click="open = null">뒤로</button><button @click="backupMail(open.id)">백업</button><button>삭제</button><button>인쇄</button><button>더보기</button></div>
+      <article class="card mail-message-card">
+        <header><h1>{{ open.subject }}</h1><button @click="backupMail(open.id)">백업</button></header>
+        <div class="mail-sender-line"><span class="table-avatar">{{ open.from[0] }}</span><div><strong>{{ open.from }}</strong><small>{{ open.dept }} · 받는 사람: 나 · {{ open.date }}</small></div></div>
+        <pre>{{ open.body || open.preview }}</pre>
+        <div v-if="open.hasAttachment" class="mail-attachments"><strong>첨부파일 (2)</strong><button>회의록.pdf <small>240KB</small></button><button>녹음.mp3 <small>42.1MB</small></button></div>
+        <div class="modal-actions"><button class="secondary-button">답장</button><button class="secondary-button">전달</button></div>
+      </article>
     </section>
   `,
 })
 
 export const RecordingsPage = defineComponent({
-  setup: () => ({ recordings, reviewMeta }),
+  setup() {
+    const recs = ref(recordings.map((recording) => ({ ...recording })))
+    const selectedId = ref(recordings[0].id)
+    const q = ref('')
+    const shareOpen = ref(false)
+    const transcriptOpen = ref(false)
+    const editing = ref(false)
+    const favorites = ref({ rec1: true })
+    const draft = ref({ title: '', summary: '' })
+    const share = ref({ recipients: members.slice(4, 7), query: '', subject: '', body: '' })
+    const filtered = computed(() => recs.value.filter((recording) => recording.title.toLowerCase().includes(q.value.toLowerCase())))
+    const selected = computed(() => recs.value.find((recording) => recording.id === selectedId.value) || recs.value[0])
+    const shareMatches = computed(() => members.filter((member) => !share.value.recipients.some((item) => item.id === member.id)).filter((member) => !share.value.query || `${member.name} ${member.dept} ${member.company} ${member.email}`.toLowerCase().includes(share.value.query.toLowerCase())))
+    function selectRecording(id) {
+      selectedId.value = id
+      editing.value = false
+    }
+    function startEdit() {
+      draft.value = { title: selected.value.title, summary: selected.value.summary }
+      editing.value = true
+    }
+    function saveEdit() {
+      recs.value = recs.value.map((recording) => recording.id === selected.value.id ? { ...recording, title: draft.value.title || recording.title, summary: draft.value.summary } : recording)
+      editing.value = false
+    }
+    function toggleFavorite(id) {
+      favorites.value = { ...favorites.value, [id]: !favorites.value[id] }
+    }
+    function openShare() {
+      share.value.subject = `[회의록 공유] ${selected.value.title}`
+      share.value.body = `안녕하세요,\n\n${selected.value.title} 회의록을 공유드립니다.\n\n[AI 요약]\n${selected.value.summary}\n\n확인 부탁드립니다.`
+      shareOpen.value = true
+    }
+    return { draft, editing, favorites, filtered, mockTranscript, openShare, q, recs, reviewMeta, saveEdit, selectRecording, selected, selectedId, share, shareMatches, shareOpen, startEdit, transcriptOpen, toggleFavorite }
+  },
   template: `
-    <section class="page">
-      <header class="page-header"><h1>내 회의록</h1><p>AI 초안 생성, 검토, 공유 상태를 확인합니다.</p></header>
-      <div class="card-list"><article v-for="item in recordings" :key="item.id" class="card row-card"><div><h2>{{ item.title }}</h2><p>{{ item.date }} · {{ item.duration }} · 참석 {{ item.attendees }}명</p><p>{{ item.summary }}</p></div><div class="row-actions"><span :class="['badge', reviewMeta[item.reviewStatus].tone]">{{ reviewMeta[item.reviewStatus].label }}</span><small>검토자 {{ item.reviewer }}</small></div></article></div>
+    <section class="page recordings-page-full">
+      <header class="page-header"><h1>내 회의록</h1><p>AI가 자동 생성한 내 회의록을 확인·수정하고 내부 메일로 공유하세요.</p></header>
+      <div class="recording-layout">
+        <aside class="card recording-list-panel">
+          <input v-model="q" placeholder="내 회의록 검색">
+          <button v-for="recording in filtered" :key="recording.id" :class="{ active: selectedId === recording.id }" @click="selectRecording(recording.id)">
+            <strong><span v-if="favorites[recording.id]">★</span>{{ recording.title }}</strong>
+            <small>{{ recording.date }} · {{ recording.duration }} · 참석 {{ recording.attendees }}명</small>
+          </button>
+        </aside>
+        <article class="card recording-detail-panel">
+          <header>
+            <div>
+              <div class="recording-title-row">
+                <input v-if="editing" v-model="draft.title">
+                <h2 v-else>{{ selected.title }}</h2>
+                <button @click="toggleFavorite(selected.id)">{{ favorites[selected.id] ? '★' : '☆' }}</button>
+              </div>
+              <p>{{ selected.date }} · {{ selected.duration }} · 참석자 {{ selected.attendees }}명 · 검토자 {{ selected.reviewer }}</p>
+            </div>
+            <div class="recording-actions"><button class="secondary-button small">PDF 다운로드</button><button v-if="!editing" class="secondary-button small" @click="startEdit">수정</button><button class="primary-button small" @click="openShare">내부 메일 공유</button></div>
+          </header>
+          <section class="ai-minutes-box">
+            <strong>AI 요약 회의록 {{ editing ? '· 편집 중' : '' }}</strong>
+            <template v-if="editing"><textarea v-model="draft.summary" rows="10"></textarea><div class="modal-actions"><button class="secondary-button" @click="editing = false">취소</button><button class="primary-button" @click="saveEdit">수정 저장</button></div></template>
+            <template v-else><p>{{ selected.summary }}</p><div class="key-summary"><strong>핵심 요약</strong><ul><li>Q2 우선순위를 캠페인 일정 조정과 신규 제품 라인 PoC로 재정렬했습니다.</li><li>예산은 보수적으로 산정하되 디자인 리소스 영향 분석을 선행하기로 했습니다.</li><li>박서연 책임이 리소스 영향 분석 결과를 공유합니다.</li></ul></div></template>
+          </section>
+          <button class="secondary-button" @click="transcriptOpen = !transcriptOpen">회의 원문 STT {{ transcriptOpen ? '닫기' : '보기' }}</button>
+          <section v-if="transcriptOpen" class="transcript-box"><div class="watermark">Generated by Meetbowl</div><p v-for="line in mockTranscript" :key="line.t"><time>{{ line.t }}</time><strong>{{ line.who }}</strong><span>{{ line.text }}</span></p></section>
+        </article>
+      </div>
+      <div v-if="shareOpen" class="modal-backdrop" @click.self="shareOpen = false">
+        <article class="card write-modal share-mail-modal">
+          <header><h2>새 메일 · 회의록 공유</h2><button @click="shareOpen = false">닫기</button></header>
+          <div class="compose-body">
+            <label>받는 사람</label>
+            <div class="recipient-box"><span v-for="member in share.recipients" :key="member.id">{{ member.name }} · {{ member.dept }}<button @click="share.recipients = share.recipients.filter((item) => item.id !== member.id)">×</button></span><input v-model="share.query" placeholder="이름, 부서/팀으로 검색"></div>
+            <div v-if="share.query" class="recipient-results"><button v-for="member in shareMatches" :key="member.id" @click="share.recipients.push(member); share.query = ''"><strong>{{ member.name }}</strong><small>{{ member.company }} · {{ member.dept }} · {{ member.email }}</small></button></div>
+            <input v-model="share.subject" placeholder="제목">
+            <textarea v-model="share.body" rows="10"></textarea>
+          </div>
+          <footer><small>받는 사람 {{ share.recipients.length }}명</small><div><button class="secondary-button" @click="shareOpen = false">취소</button><button class="primary-button" @click="shareOpen = false">보내기</button></div></footer>
+        </article>
+      </div>
     </section>
   `,
 })
