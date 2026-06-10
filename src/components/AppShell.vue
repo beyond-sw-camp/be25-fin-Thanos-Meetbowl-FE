@@ -100,6 +100,7 @@ const navSections = [
       { to: '/app/rooms', label: '회의실 예약', icon: '□' },
       { to: '/app/my-reservations', label: '내 예약', icon: '◷' },
       { to: '/app/meetings', label: '회의', icon: '▶' },
+      { to: '/app/livekit-test', label: 'LiveKit 테스트', icon: '◉' },
       { to: '/app/minutes', label: '내 회의록', icon: '≡' },
       { to: '/app/mail', label: '메일', icon: '✉' },
       { to: '/app/workspace', label: '개인 워크스페이스', icon: '▣' },
