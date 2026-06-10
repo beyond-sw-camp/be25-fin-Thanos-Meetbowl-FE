@@ -148,14 +148,62 @@ input:focus { border-color: var(--primary); box-shadow: 0 0 0 3px rgba(243,115,3
 .demo-grid button { display: grid; gap: 4px; border: 1px solid var(--border); border-radius: 8px; background: white; padding: 10px; text-align: left; }
 .demo-grid small { color: var(--muted-foreground); }
 
-.lobby-grid { display: grid; gap: 20px; }
-.camera-preview { aspect-ratio: 16 / 10; display: grid; place-items: center; position: relative; border-radius: 12px; background: var(--navy); color: white; }
-.camera-preview > span { width: 80px; height: 80px; display: grid; place-items: center; border-radius: 50%; background: var(--primary); font-size: 28px; font-weight: 800; }
-.camera-preview > div { position: absolute; bottom: 14px; display: flex; gap: 8px; }
+.meeting-lobby { min-height: 100vh; background: #f4f6fa; }
+.meeting-lobby-header { height: 66px; display: flex; align-items: center; justify-content: space-between; gap: 16px; border-bottom: 1px solid var(--border); background: white; padding: 0 clamp(18px, 4vw, 52px); }
+.meeting-lobby-brand { height: auto; border: 0; padding: 0; color: var(--foreground); }
+.meeting-lobby-close { min-height: 38px; border: 1px solid var(--border); border-radius: 8px; background: white; padding: 0 13px; color: var(--muted-foreground); font-weight: 700; }
+.meeting-lobby-close:hover { background: var(--muted); color: var(--foreground); }
+.meeting-lobby-main { width: min(1180px, 100%); margin: 0 auto; padding: clamp(32px, 6vh, 70px) 24px 40px; }
+.meeting-lobby-intro { margin-bottom: 24px; }
+.meeting-lobby-intro h1 { margin: 12px 0 6px; font-size: clamp(26px, 4vw, 36px); }
+.meeting-lobby-intro p { margin: 0; color: var(--muted-foreground); }
+.meeting-lobby-grid { display: grid; gap: 22px; align-items: start; }
+.meeting-preview-panel, .meeting-device-panel { border: 1px solid var(--border); border-radius: 14px; background: white; padding: 18px; box-shadow: 0 10px 30px rgba(15,23,42,.05); }
+.camera-preview { aspect-ratio: 16 / 10; display: grid; place-items: center; position: relative; overflow: hidden; border-radius: 12px; background: #151923; color: white; }
+.meeting-camera-preview video { width: 100%; height: 100%; object-fit: cover; transform: scaleX(-1); }
+.camera-placeholder { display: grid; justify-items: center; gap: 12px; color: rgba(255,255,255,.65); }
+.camera-placeholder span { width: 80px; height: 80px; display: grid; place-items: center; border-radius: 50%; background: var(--primary); color: white; font-size: 28px; font-weight: 800; }
+.camera-placeholder p { margin: 0; color: inherit; font-size: 13px; }
+.preview-participant-name { position: absolute; left: 14px; bottom: 14px; max-width: 40%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; border-radius: 999px; background: rgba(0,0,0,.58); padding: 6px 10px; color: white; font-size: 12px; font-weight: 800; }
+.preview-controls { position: absolute; bottom: 16px; left: 50%; display: flex; gap: 8px; transform: translateX(-50%); }
+.media-control { min-height: 38px; border: 1px solid rgba(255,255,255,.18); border-radius: 999px; padding: 0 14px; background: rgba(17,24,39,.72); color: white; white-space: nowrap; backdrop-filter: blur(8px); }
+.media-control.off { background: rgba(220,38,38,.86); }
+.device-status { min-height: 20px; margin: 12px 2px 0; color: var(--success); font-size: 12px; }
+.device-status.error { color: var(--danger); }
+.device-panel-heading { display: flex; align-items: start; justify-content: space-between; gap: 14px; margin-bottom: 22px; }
+.device-panel-heading h2 { margin: 0; font-size: 20px; }
+.device-panel-heading p { margin: 6px 0 0; color: var(--muted-foreground); font-size: 13px; }
+.device-fields { display: grid; gap: 17px; }
+.device-fields select { width: 100%; height: 42px; border: 1px solid var(--border); border-radius: 8px; background: white; padding: 0 11px; color: var(--foreground); }
+.device-fields input { width: 100%; height: 42px; border: 1px solid var(--border); border-radius: 8px; background: white; padding: 0 11px; color: var(--foreground); }
+.device-fields input:focus,
+.device-fields select:focus { border-color: var(--primary); outline: 0; box-shadow: 0 0 0 3px rgba(243,115,33,.15); }
+.device-fields select:disabled { background: var(--muted); color: var(--muted-foreground); cursor: not-allowed; }
+.device-fields small { color: var(--warning); font-weight: 500; line-height: 1.5; }
+.microphone-test { display: grid; gap: 10px; border: 1px solid var(--border); border-radius: 9px; background: var(--muted); padding: 12px; }
+.microphone-test-heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.microphone-test-heading div { min-width: 0; display: grid; gap: 3px; }
+.microphone-test-heading small { color: var(--muted-foreground); font-weight: 500; }
+.microphone-level { height: 8px; overflow: hidden; border-radius: 999px; background: #dbe2ea; }
+.microphone-level span { display: block; height: 100%; border-radius: inherit; background: linear-gradient(90deg, var(--success), #84cc16, var(--warning)); transition: width .08s linear; }
+.audio-test-tip { margin: 0; color: var(--muted-foreground); font-size: 12px; line-height: 1.5; }
+.selected-device-summary { display: flex; flex-wrap: wrap; gap: 8px; margin: 22px 0 14px; }
+.selected-device-summary span { border-radius: 999px; background: var(--muted); padding: 6px 10px; color: var(--muted-foreground); font-size: 12px; font-weight: 700; }
+.meeting-enter-button { width: 100%; min-height: 46px; }
+.meeting-enter-button:disabled, .secondary-button:disabled { opacity: .55; cursor: not-allowed; }
+.sr-only-audio { position: absolute; width: 0; height: 0; opacity: 0; pointer-events: none; }
+.guest-join-page { min-height: 100vh; display: grid; place-items: center; background: #f4f6fa; padding: 24px; }
+.guest-join-card { width: min(460px, 100%); display: grid; gap: 26px; border: 1px solid var(--border); border-radius: 14px; background: white; padding: clamp(24px, 5vw, 38px); box-shadow: 0 18px 50px rgba(15,23,42,.08); }
+.guest-join-brand { height: auto; border: 0; padding: 0; color: var(--foreground); }
+.guest-join-card h1 { margin: 12px 0 8px; font-size: 28px; }
+.guest-join-card p { margin: 0; color: var(--muted-foreground); }
+.guest-meeting-info { display: flex; align-items: center; justify-content: space-between; gap: 12px; border: 1px solid var(--border); border-radius: 9px; background: var(--muted); padding: 13px 14px; font-size: 13px; }
+.guest-meeting-info span { color: var(--muted-foreground); }
+.guest-join-form { display: grid; gap: 14px; }
+.guest-join-form .error-box { color: var(--danger); }
+.guest-join-note { font-size: 12px; line-height: 1.5; }
+.guest-join-button { width: 100%; min-height: 46px; }
 .control { min-height: 36px; border: 0; border-radius: 8px; padding: 0 12px; background: rgba(255,255,255,.12); color: white; }
-.toggle-row { display: flex; align-items: center; justify-content: space-between; border: 1px solid var(--border); border-radius: 8px; padding: 12px; }
-.toggle-row input { width: 18px; height: 18px; }
-.copy-box { overflow: auto; border: 1px solid var(--border); border-radius: 8px; padding: 12px; color: var(--muted-foreground); background: white; font-size: 12px; }
 .meeting-room { position: fixed; inset: 0; z-index: 30; display: grid; grid-template-columns: 1fr; background: #09090b; color: white; }
 .meeting-main { min-width: 0; display: grid; grid-template-rows: 52px 1fr 66px; }
 .meeting-main header, .meeting-main footer { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 0 16px; background: #18181b; border-bottom: 1px solid rgba(255,255,255,.1); }
@@ -649,7 +697,7 @@ input:focus { border-color: var(--primary); box-shadow: 0 0 0 3px rgba(243,115,3
   .mail-layout { grid-template-columns: 180px minmax(260px, 360px) 1fr; }
   .login-page { grid-template-columns: 1fr 1fr; }
   .login-brand { display: flex; flex-direction: column; justify-content: space-between; }
-  .lobby-grid { grid-template-columns: 1.2fr .8fr; }
+  .meeting-lobby-grid { grid-template-columns: minmax(0, 1.6fr) minmax(320px, .8fr); }
   .meeting-room { grid-template-columns: 1fr 380px; }
   .meeting-side { display: grid; grid-template-rows: auto 1fr; }
   .video-grid { grid-template-columns: repeat(3,minmax(0,1fr)); }

@@ -28,6 +28,7 @@ const routes = [
   { path: '/', redirect: '/app/dashboard' },
   { path: '/login', component: LoginPage, meta: { public: true } },
   { path: '/join/:code', component: JoinPage, meta: { public: true } },
+  { path: '/app/meeting', component: MeetingPage, meta: { role: 'user' } },
   {
     path: '/',
     component: AppShell,
@@ -37,7 +38,6 @@ const routes = [
       { path: 'app/rooms', component: RoomsPage, meta: { role: 'user' } },
       { path: 'app/my-reservations', component: MyReservationsPage, meta: { role: 'user' } },
       { path: 'app/meetings', component: MeetingsPage, meta: { role: 'user' } },
-      { path: 'app/meeting', component: MeetingPage, meta: { role: 'user' } },
       { path: 'app/mail', component: MailPage, meta: { role: 'user' } },
       { path: 'app/minutes', component: MinutesPage, meta: { role: 'user' } },
       { path: 'app/recordings', redirect: '/app/minutes', meta: { role: 'user' } },
