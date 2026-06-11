@@ -151,6 +151,36 @@ function pushLog(message) {
   })
 }
 
+function clearActiveAudioTrack() {
+  if (activeAudioTrack.value instanceof LocalAudioTrack) {
+    activeAudioTrack.value.stop()
+  }
+  activeAudioTrack.value = null
+  micPublished.value = false
+}
+
+function isRemoveTrackError(error) {
+  const message = error?.message || String(error || '')
+  return error?.name === 'InvalidAccessError' || message.includes('removeTrack')
+}
+
+async function tryUnpublishActiveAudioTrack() {
+  if (!(room.value && activeAudioTrack.value instanceof LocalAudioTrack && micPublished.value)) {
+    return false
+  }
+
+  try {
+    await room.value.localParticipant.unpublishTrack(activeAudioTrack.value)
+    return true
+  } catch (error) {
+    if (!isRemoveTrackError(error)) {
+      throw error
+    }
+    pushLog(`Unpublish skipped: ${error?.message || error}`)
+    return false
+  }
+}
+
 async function refreshDevices() {
   if (!navigator.mediaDevices?.enumerateDevices) return
   const devices = await navigator.mediaDevices.enumerateDevices()
@@ -163,6 +193,21 @@ async function refreshDevices() {
 }
 
 function bindRoomEvents(currentRoom) {
+  currentRoom.on(RoomEvent.Reconnecting, () => {
+    pushLog('Room reconnecting')
+  })
+  currentRoom.on(RoomEvent.Reconnected, () => {
+    pushLog('Room reconnected')
+  })
+  currentRoom.on(RoomEvent.ConnectionStateChanged, (state) => {
+    pushLog(`ConnectionStateChanged state=${state}`)
+  })
+  currentRoom.on(RoomEvent.LocalTrackPublished, (publication) => {
+    pushLog(`LocalTrackPublished sid=${publication.trackSid || publication.sid || '-'}`)
+  })
+  currentRoom.on(RoomEvent.LocalTrackUnpublished, (publication) => {
+    pushLog(`LocalTrackUnpublished sid=${publication.trackSid || publication.sid || '-'}`)
+  })
   currentRoom.on(RoomEvent.TrackSubscribed, (_track, publication, participant) => {
     pushLog(`TrackSubscribed participant=${participant.identity} kind=${publication.kind}`)
   })
@@ -184,7 +229,7 @@ function bindRoomEvents(currentRoom) {
   currentRoom.on(RoomEvent.Disconnected, () => {
     pushLog('Room disconnected')
     connected.value = false
-    micPublished.value = false
+    clearActiveAudioTrack()
     dataChannelStatus.value = 'DISCONNECTED'
   })
 }
@@ -220,12 +265,8 @@ async function publishMic() {
   if (!room.value || publishing.value) return
   publishing.value = true
   try {
-    if (activeAudioTrack.value instanceof LocalAudioTrack) {
-      await room.value.localParticipant.unpublishTrack(activeAudioTrack.value)
-      activeAudioTrack.value.stop()
-      activeAudioTrack.value = null
-      micPublished.value = false
-    }
+    await tryUnpublishActiveAudioTrack()
+    clearActiveAudioTrack()
 
     const track = await createLocalAudioTrack(
       form.value.deviceId ? { deviceId: form.value.deviceId } : undefined,
@@ -237,6 +278,7 @@ async function publishMic() {
     micPublished.value = true
     pushLog('Microphone track published')
   } catch (error) {
+    clearActiveAudioTrack()
     pushLog(`Publish failed: ${error?.message || error}`)
   } finally {
     publishing.value = false
@@ -246,16 +288,12 @@ async function publishMic() {
 async function disconnect() {
   if (!room.value) return
   try {
-    if (activeAudioTrack.value instanceof LocalAudioTrack) {
-      await room.value.localParticipant.unpublishTrack(activeAudioTrack.value)
-      activeAudioTrack.value.stop()
-      activeAudioTrack.value = null
-    }
+    clearActiveAudioTrack()
     room.value.disconnect()
   } finally {
     room.value = null
     connected.value = false
-    micPublished.value = false
+    clearActiveAudioTrack()
     identity.value = ''
     roomName.value = ''
   }
