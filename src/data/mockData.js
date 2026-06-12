@@ -22,6 +22,12 @@ export const todayReservations = [
   { id: 'b9', roomId: 'r9', title: '한유진 단지 회의', owner: '한유진', start: '08:00', end: '10:00', status: 'mine', attendees: ['이지연', '박서연'] },
 ]
 
+import { createMinutesDocument, serializeMinutesDocument } from '../utils/minutesContent'
+
+function minuteContent(summary, agendas, decisions, actionItems) {
+  return serializeMinutesDocument(createMinutesDocument({ summary, agendas, decisions, actionItems }))
+}
+
 export const mails = [
   { id: 'm1', from: '김지연', dept: '프로덕트팀', subject: '[회의록 공유] 5월 제품 전략 회의', preview: '5월 제품 전략 회의 회의록과 결정 사항을 공유드립니다.', date: '2026-05-22', unread: true, hasAttachment: true, category: 'inbox', body: '5월 제품 전략 회의 회의록을 공유드립니다.\n\n주요 결정 사항\n- Q2 캠페인 일정을 한 주 앞당기기로 합의\n- 신규 제품 라인 PoC 즉시 시작\n- 리소스 영향 분석은 5/24까지 정리' },
   { id: 'm2', from: '현재진', dept: '운영팀', subject: '보안 정책 변경 안내', preview: '5월 25일부터 적용되는 보안 정책 변경 사항을 안내드립니다.', date: '2026-05-21', unread: true, hasAttachment: false, category: 'inbox', body: '사내 시스템 비밀번호 90일 주기 변경, 외부 메일 첨부파일 자동 암호화, VPN 2차 인증이 적용됩니다.' },
@@ -32,18 +38,97 @@ export const mails = [
 ]
 
 export const minutes = [
-  { id: 'min1', title: '주간 전략 회의', date: '2026-05-20', duration: '58분', attendees: 5, summary: 'OKR 진행률 점검 및 Q2 우선순위 재정렬. 신규 제품 라인 PoC 시작 결정.', expireDays: 30, reviewer: '박서연', reviewStatus: 'accepted' },
-  { id: 'min2', title: 'Q2 캠페인 킥오프', date: '2026-05-19', duration: '1시간 24분', attendees: 8, summary: '타겟 세그먼트 확정, 6월 1일 런칭 일정 합의.', expireDays: 21, reviewer: '이지연', reviewStatus: 'reviewing' },
-  { id: 'min3', title: '제품 디자인 리뷰', date: '2026-05-15', duration: '42분', attendees: 4, summary: '메인 대시보드 IA 변경안 승인. 컴포넌트 토큰화 진행.', expireDays: 7, reviewer: '이지연', reviewStatus: 'draft' },
-  { id: 'min4', title: '월간 전사 공유', date: '2026-05-02', duration: '1시간 12분', attendees: 47, summary: '전사 매출 현황 공유 및 분기 전략 발표.', expireDays: 60, reviewer: '정도현', reviewStatus: 'sent' },
+  {
+    id: 'min1',
+    meetingId: '00000000-0000-0000-0000-000000000101',
+    title: '주간 전략 회의',
+    date: '2026-05-20',
+    duration: '58분',
+    attendees: 5,
+    summary: 'OKR 진행률 점검 및 Q2 우선순위 재정렬. 신규 제품 라인 PoC 시작 결정.',
+    content: minuteContent(
+      'OKR 진행률 점검 및 Q2 우선순위 재정렬. 신규 제품 라인 PoC 시작 결정.',
+      [
+        { title: 'OKR 점검', discussion: '프로덕트팀 KR-1은 78%까지 도달했고 6월 첫 주 완료가 가능하다고 공유했다.', decision: '핵심 KR은 기존 일정대로 유지한다.' },
+        { title: 'Q2 우선순위 재정렬', discussion: '캠페인 일정 조정과 신규 제품 라인 PoC 착수 여부를 함께 검토했다.', decision: '신규 제품 라인 PoC를 즉시 시작한다.' },
+      ],
+      ['핵심 KR 일정은 유지한다.', '신규 제품 라인 PoC를 즉시 시작한다.'],
+      ['리소스 영향 분석 결과를 5/24까지 공유한다.', '캠페인 일정 변경안을 다음 회의 안건으로 올린다.'],
+    ),
+    expireDays: 30,
+    reviewer: '박서연',
+    reviewStatus: 'accepted',
+  },
+  {
+    id: 'min2',
+    meetingId: '00000000-0000-0000-0000-000000000102',
+    title: 'Q2 캠페인 킥오프',
+    date: '2026-05-19',
+    duration: '1시간 24분',
+    attendees: 8,
+    summary: '타겟 세그먼트 확정, 6월 1일 런칭 일정 합의.',
+    content: minuteContent(
+      '타겟 세그먼트 확정, 6월 1일 런칭 일정 합의.',
+      [
+        { title: '타겟 세그먼트', discussion: '기존 고객 리텐션보다 신규 유입에 집중하는 방향으로 정리했다.', decision: '스타트업 실무자와 팀 리드를 1차 타겟으로 확정했다.' },
+      ],
+      ['6월 1일 런칭 일정으로 진행한다.'],
+      ['캠페인 랜딩 페이지 초안을 목요일까지 작성한다.'],
+    ),
+    expireDays: 21,
+    reviewer: '이지연',
+    reviewStatus: 'reviewing',
+  },
+  {
+    id: 'min3',
+    meetingId: '00000000-0000-0000-0000-000000000103',
+    title: '제품 디자인 리뷰',
+    date: '2026-05-15',
+    duration: '42분',
+    attendees: 4,
+    summary: '메인 대시보드 IA 변경안 승인. 컴포넌트 토큰화 진행.',
+    content: minuteContent(
+      '메인 대시보드 IA 변경안 승인. 컴포넌트 토큰화 진행.',
+      [
+        { title: '대시보드 IA', discussion: '카드 간 우선순위를 다시 정리하고 KPI를 상단에 고정하는 안을 검토했다.', decision: '메인 KPI를 1행에 고정한다.' },
+      ],
+      ['대시보드 IA 변경안을 승인한다.'],
+      ['버튼, 배지, 입력 필드 토큰화를 다음 스프린트에 시작한다.'],
+    ),
+    expireDays: 7,
+    reviewer: '이지연',
+    reviewStatus: 'draft',
+  },
+  {
+    id: 'min4',
+    meetingId: '00000000-0000-0000-0000-000000000104',
+    title: '월간 전사 공유',
+    date: '2026-05-02',
+    duration: '1시간 12분',
+    attendees: 47,
+    summary: '전사 매출 현황 공유 및 분기 전략 발표.',
+    content: minuteContent(
+      '전사 매출 현황 공유 및 분기 전략 발표.',
+      [
+        { title: '분기 전략', discussion: '각 조직별 KPI와 채용 계획, 예산 집행 현황을 공유했다.', decision: '채용 우선순위를 프로덕트와 세일즈에 둔다.' },
+      ],
+      ['채용 우선순위를 프로덕트와 세일즈에 둔다.'],
+      ['각 조직이 다음 주까지 신규 분기 KPI를 업데이트한다.'],
+    ),
+    expireDays: 60,
+    reviewer: '정도현',
+    reviewStatus: 'sent',
+  },
 ]
 
 export const reviewMeta = {
   draft: { label: '초안', tone: 'muted' },
   reviewing: { label: '검토중', tone: 'warning' },
   edited: { label: '수정됨', tone: 'navy' },
+  approved: { label: '승인완료', tone: 'primary' },
   accepted: { label: '공유 수락', tone: 'primary' },
   sent: { label: '발송완료', tone: 'success' },
+  scheduled: { label: '삭제 예정', tone: 'danger' },
 }
 
 export const myMeetings = [
