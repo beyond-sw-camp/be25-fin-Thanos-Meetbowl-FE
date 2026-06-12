@@ -60,11 +60,29 @@
         <p v-if="!logs.length" class="empty-text">아직 수신된 이벤트가 없습니다.</p>
       </div>
     </section>
+
+    <section class="card">
+      <header class="section-header">
+        <h2>원문 자막</h2>
+        <button class="secondary-button small" type="button" @click="captionMap = new Map()">지우기</button>
+      </header>
+      <div class="log-box">
+        <p
+          v-for="caption in orderedCaptions"
+          :key="caption.segmentId"
+          class="log-line"
+        >
+          <small>{{ caption.status }}</small>
+          <code>{{ caption.text }}</code>
+        </p>
+        <p v-if="!orderedCaptions.length" class="empty-text">아직 수신된 자막이 없습니다.</p>
+      </div>
+    </section>
   </section>
 </template>
 
 <script setup>
-import { onBeforeUnmount, ref } from 'vue'
+import { computed, onBeforeUnmount, ref } from 'vue'
 import {
   LocalAudioTrack,
   Room,
@@ -72,6 +90,7 @@ import {
   Track,
   createLocalAudioTrack,
 } from 'livekit-client'
+import { sortedCaptions, upsertCaption } from '../../lib/caption-store'
 
 const form = ref({
   url: 'http://localhost:7880',
@@ -94,8 +113,10 @@ const identity = ref('')
 const roomName = ref('')
 const dataChannelStatus = ref('IDLE')
 const logs = ref([])
+const captionMap = ref(new Map())
 
 const activeAudioTrack = ref(null)
+const orderedCaptions = computed(() => sortedCaptions(captionMap.value))
 
 const timestamp = () => new Date().toLocaleTimeString('ko-KR', { hour12: false })
 
@@ -219,7 +240,10 @@ function bindRoomEvents(currentRoom) {
     pushLog(`DataReceived from=${participant?.identity || 'unknown'} payload=${text}`)
     try {
       const parsed = JSON.parse(text)
-      if (parsed?.eventType === 'caption.updated' || parsed?.eventType === 'feedback.generated') {
+      if (parsed?.eventType === 'caption.updated') {
+        captionMap.value = upsertCaption(captionMap.value, parsed)
+        dataChannelStatus.value = parsed.eventType
+      } else if (parsed?.eventType === 'feedback.generated') {
         dataChannelStatus.value = parsed.eventType
       }
     } catch {
