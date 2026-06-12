@@ -1,5 +1,6 @@
 <script>
 import { computed, defineComponent, ref } from 'vue'
+import { meetingRoute } from '../../lib/meeting-route'
 import { useAuthStore } from '../../stores/auth'
 import { mails, myMeetings, minutes, todayReservations } from '../../data/mockData'
 
@@ -17,13 +18,14 @@ export default defineComponent({
     const todays = myMeetings.filter((meeting) => meeting.start.startsWith('2026-05-22'))
     const selectedId = ref(todays[0]?.id || myMeetings[0].id)
     const selected = computed(() => myMeetings.find((meeting) => meeting.id === selectedId.value) || myMeetings[0])
+    const liveMeetingPath = computed(() => meetingRoute(myMeetings.find((meeting) => meeting.status === 'live')?.id))
     const kpis = [
       { label: '읽지 않은 메일', value: mails.filter((mail) => mail.unread).length, to: '/app/mail' },
       { label: '오늘 예정된 회의', value: todays.length, to: '/app/meetings' },
       { label: '최근 내 회의록', value: minutes.length, to: '/app/minutes' },
-      { label: '현재 진행 중', value: myMeetings.filter((meeting) => meeting.status === 'live').length, to: '/app/meeting' },
+      { label: '현재 진행 중', value: myMeetings.filter((meeting) => meeting.status === 'live').length, to: liveMeetingPath.value },
     ]
-    return { user: auth.user, todays, selectedId, selected, kpis, myMeetings, todayReservations, statusLabel }
+    return { user: auth.user, todays, selectedId, selected, kpis, myMeetings, todayReservations, statusLabel, meetingRoute }
   },
   template: `
     <section class="page">
@@ -52,7 +54,7 @@ export default defineComponent({
               <div><dt>장소</dt><dd>{{ selected.room }}</dd></div>
               <div><dt>참여자</dt><dd>{{ selected.attendees.join(', ') }} ({{ selected.attendees.length }}명)</dd></div>
             </dl>
-            <RouterLink v-if="selected.status === 'live'" to="/app/meeting" class="primary-button small">회의 입장</RouterLink>
+            <RouterLink v-if="selected.status === 'live'" :to="meetingRoute(selected.id)" class="primary-button small">회의 입장</RouterLink>
           </article>
           <article class="card"><div class="card-head"><h2>개인 일정</h2></div>
             <ul class="compact-list"><li v-for="meeting in myMeetings.slice(0, 5)" :key="meeting.id"><strong>{{ meeting.title }}</strong><span>{{ meeting.start }}</span></li></ul>

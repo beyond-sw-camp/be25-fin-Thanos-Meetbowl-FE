@@ -13,8 +13,10 @@ import LoginPage from '../pages/auth/LoginPage.vue'
 import CommunityPage from '../pages/community/CommunityPage.vue'
 import DashboardPage from '../pages/dashboard/DashboardPage.vue'
 import SimpleDocsPage from '../pages/docs/SimpleDocsPage.vue'
+import { meetingRoute } from '../lib/meeting-route'
 import MailPage from '../pages/mail/MailPage.vue'
 import MeetingPage from '../pages/meeting/MeetingPage.vue'
+import LiveKitTestPage from '../pages/livekit/LiveKitTestPage.vue'
 import MeetingsPage from '../pages/meetings/MeetingsPage.vue'
 import MinutesPage from '../pages/minutes/MinutesPage.vue'
 import BackupDetailPage from '../pages/backup/BackupDetailPage.vue'
@@ -28,7 +30,8 @@ const routes = [
   { path: '/', redirect: '/app/dashboard' },
   { path: '/login', component: LoginPage, meta: { public: true } },
   { path: '/join/:code', component: JoinPage, meta: { public: true } },
-  { path: '/app/meeting', component: MeetingPage, meta: { role: 'user' } },
+  { path: '/app/meeting', redirect: meetingRoute(), meta: { role: 'user' } },
+  { path: '/app/meeting/:meetingId', component: MeetingPage, meta: { role: 'user' } },
   {
     path: '/',
     component: AppShell,
@@ -38,6 +41,7 @@ const routes = [
       { path: 'app/rooms', component: RoomsPage, meta: { role: 'user' } },
       { path: 'app/my-reservations', component: MyReservationsPage, meta: { role: 'user' } },
       { path: 'app/meetings', component: MeetingsPage, meta: { role: 'user' } },
+      { path: 'app/livekit-test', component: LiveKitTestPage, meta: { role: 'user' } },
       { path: 'app/mail', component: MailPage, meta: { role: 'user' } },
       { path: 'app/minutes', component: MinutesPage, meta: { role: 'user' } },
       { path: 'app/recordings', redirect: '/app/minutes', meta: { role: 'user' } },

@@ -212,14 +212,49 @@ input:focus { border-color: var(--primary); box-shadow: 0 0 0 3px rgba(243,115,3
 .video-tile { position: relative; display: grid; place-items: center; border-radius: 10px; background: #27272a; }
 .video-tile span { width: 62px; height: 62px; display: grid; place-items: center; border-radius: 50%; background: rgba(243,115,33,.85); font-size: 24px; font-weight: 800; }
 .video-tile em { position: absolute; left: 10px; bottom: 10px; border-radius: 999px; background: rgba(0,0,0,.55); padding: 5px 9px; font-style: normal; font-size: 12px; }
-.meeting-side { display: none; background: #18181b; border-left: 1px solid rgba(255,255,255,.1); }
+.meeting-side { display: none; min-height: 0; background: #18181b; border-left: 1px solid rgba(255,255,255,.1); }
 .meeting-side nav { display: grid; grid-template-columns: repeat(3,1fr); border-bottom: 1px solid rgba(255,255,255,.1); }
 .meeting-side nav button { height: 45px; border: 0; border-bottom: 2px solid transparent; background: transparent; color: rgba(255,255,255,.55); }
 .meeting-side nav button.active { border-color: var(--primary); color: white; }
 .side-body { padding: 16px; overflow: auto; }
+.meeting-caption-panel {
+  min-height: 0;
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  overflow: hidden;
+}
+.meeting-caption-scroll {
+  min-height: 0;
+  overflow-y: auto;
+  padding: 2px 5px 12px 0;
+  scrollbar-gutter: stable;
+}
 .transcript { border-bottom: 1px solid rgba(255,255,255,.1); padding-bottom: 12px; color: rgba(255,255,255,.82); }
 .transcript small { display: block; margin-bottom: 5px; color: rgba(255,255,255,.38); }
+.transcript.streaming {
+  padding-left: 10px;
+  border-left: 2px dashed rgba(255,255,255,.2);
+  color: rgba(255,255,255,.5);
+  font-weight: 400;
+}
+.transcript.finalized {
+  padding: 10px 10px 12px;
+  border-left: 3px solid var(--primary);
+  border-radius: 6px;
+  background: rgba(255,255,255,.07);
+  color: #fff;
+  font-weight: 600;
+}
+.meeting-caption-toolbar { align-items: center; justify-content: space-between; margin-bottom: 8px; }
+.meeting-caption-status { color: rgba(255,255,255,.45); font-size: 11px; }
+.meeting-caption-empty { border: 1px dashed rgba(255,255,255,.14); border-radius: 9px; padding: 14px; color: rgba(255,255,255,.45); font-size: 13px; line-height: 1.6; }
 .ai-box { margin-top: 16px; border: 1px solid rgba(243,115,33,.35); border-radius: 10px; padding: 14px; background: rgba(243,115,33,.1); }
+.meeting-caption-panel .ai-box {
+  max-height: 180px;
+  margin-top: 12px;
+  overflow-y: auto;
+  box-shadow: 0 -14px 26px rgba(9,9,11,.5);
+}
 .people-row, .chat-line { display: flex; justify-content: space-between; gap: 10px; border-bottom: 1px solid rgba(255,255,255,.1); padding: 12px 0; }
 .people-row span { color: rgba(255,255,255,.5); }
 .chat-body { display: grid; grid-template-rows: 1fr auto; }

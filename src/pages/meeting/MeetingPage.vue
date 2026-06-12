@@ -172,10 +172,10 @@
           <button
             class="primary-button meeting-enter-button"
             type="button"
-            :disabled="loadingDevices"
+            :disabled="loadingDevices || connectingMeeting"
             @click="enterMeeting"
           >
-            회의 입장
+            {{ connectingMeeting ? '회의 연결 중' : '회의 입장' }}
           </button>
         </aside>
       </div>
@@ -191,10 +191,10 @@
         </div>
       </div>
       <footer>
-        <button class="control" @click="mic = !mic">{{ mic ? '마이크' : '음소거' }}</button>
-        <button class="control" @click="cam = !cam">{{ cam ? '카메라' : '카메라 꺼짐' }}</button>
+        <button class="control" @click="toggleMicrophone">{{ mic ? '마이크' : '음소거' }}</button>
+        <button class="control" @click="toggleCamera">{{ cam ? '카메라' : '카메라 꺼짐' }}</button>
         <button class="control">화면 공유</button>
-        <button class="danger-button" @click="router.push('/app/minutes')">회의 종료</button>
+        <button class="danger-button" @click="endMeeting">회의 종료</button>
       </footer>
     </div>
     <aside class="meeting-side">
@@ -203,14 +203,28 @@
         <button :class="{ active: tab === 'people' }" @click="tab = 'people'">참석자</button>
         <button :class="{ active: tab === 'chat' }" @click="tab = 'chat'">채팅</button>
       </nav>
-      <div v-if="tab === 'stt'" class="side-body">
-        <div class="toolbar">
-          <button class="chip" :class="{ active: lang === 'kor' }" @click="lang = 'kor'">Kor</button>
-          <button class="chip" :class="{ active: lang === 'eng' }" @click="lang = 'eng'">Eng</button>
+      <div v-if="tab === 'stt'" class="side-body meeting-caption-panel">
+        <div class="toolbar meeting-caption-toolbar">
+          <span class="chip active">원문 자막</span>
+          <span class="meeting-caption-status">{{ meetingConnectionStatus }}</span>
         </div>
-        <p v-for="(line, index) in transcripts[lang]" :key="line" class="transcript">
-          <small>13:4{{ index }}:0{{ index }}</small>{{ line }}
-        </p>
+        <div class="meeting-caption-scroll">
+          <p
+            v-for="caption in orderedCaptions"
+            :key="caption.segmentId"
+            class="transcript"
+            :class="{ streaming: caption.status === 'STREAMING', finalized: caption.status === 'FINALIZED' }"
+          >
+            <small>
+              {{ formatCaptionTime(caption.startedAtMs) }}
+              · {{ caption.status === 'FINALIZED' ? '확정' : '말하는 중' }}
+            </small>
+            {{ caption.text }}
+          </p>
+          <p v-if="!orderedCaptions.length" class="meeting-caption-empty">
+            {{ meetingConnectionError || '말을 시작하면 원문 자막이 여기에 표시됩니다.' }}
+          </p>
+        </div>
         <div class="ai-box">
           <strong>AI 실시간 피드백</strong>
           <p>이전 결정과 충돌 가능성이 있습니다. 예산 증액 논의는 리스크 근거 확인 후 결정하는 편이 좋습니다.</p>
@@ -229,16 +243,19 @@
 
 <script setup>
 import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue'
-import { useRouter } from 'vue-router'
+import { Room, RoomEvent, Track } from 'livekit-client'
+import { useRoute, useRouter } from 'vue-router'
+import { sortedCaptions, upsertCaption } from '../../lib/caption-store'
+import { resolveLiveKitConnection } from '../../lib/livekit-meeting'
 import { useAuthStore } from '../../stores/auth'
 
+const route = useRoute()
 const router = useRouter()
 const auth = useAuthStore()
 const inLobby = ref(true)
 const mic = ref(true)
 const cam = ref(true)
 const tab = ref('stt')
-const lang = ref('kor')
 const chatInput = ref('')
 const displayName = ref(auth.user?.name || '')
 const previewVideo = ref(null)
@@ -255,6 +272,11 @@ const deviceStatus = ref('')
 const deviceError = ref(false)
 const testingAudio = ref(false)
 const microphoneLevel = ref(0)
+const connectingMeeting = ref(false)
+const meetingRoom = ref(null)
+const meetingConnectionStatus = ref('연결 대기')
+const meetingConnectionError = ref('')
+const captionMap = ref(new Map())
 let audioContext = null
 let microphoneAnalyser = null
 let microphoneSource = null
@@ -266,16 +288,13 @@ const chat = ref([
   { who: '박서연', text: '회의록 공유 부탁드려요!' },
   { who: '정도현', text: '안건 자료 채팅에 올렸습니다.' },
 ])
-const transcripts = {
-  kor: ['오늘 안건은 Q2 캠페인 일정 확정과 예산 재분배입니다.', '디자인 리소스 일정은 5월 마지막 주에 마무리될 것 같습니다.', '광고 채널별 분배안은 두 가지로 압축했고, A안을 추천합니다.', '좋습니다. A안으로 진행하되 예산은 10% 보수적으로 잡죠.'],
-  eng: ['Today agenda is to confirm the Q2 campaign schedule and redistribute the budget.', 'The design resource schedule should wrap up in the last week of May.', 'We narrowed the media allocation plan down to two options and recommend option A.', 'Let us proceed with option A, but keep the budget 10% conservative.'],
-}
 
 const hasVideoTrack = computed(() => Boolean(previewStream.value?.getVideoTracks().length))
 const hasAudioTrack = computed(() => Boolean(previewStream.value?.getAudioTracks().length))
 const currentParticipantName = computed(() => displayName.value.trim() || auth.user?.name || '참석자')
 const currentParticipantInitial = computed(() => currentParticipantName.value[0] || '참')
 const participants = computed(() => [currentParticipantName.value, ...otherParticipants])
+const orderedCaptions = computed(() => sortedCaptions(captionMap.value))
 const supportsSpeakerSelection = computed(() =>
   typeof HTMLMediaElement !== 'undefined' && 'setSinkId' in HTMLMediaElement.prototype,
 )
@@ -502,20 +521,125 @@ async function toggleAudioTest() {
   updateLevel()
 }
 
-function toggleMicrophone() {
+async function toggleMicrophone() {
   mic.value = !mic.value
   previewStream.value?.getAudioTracks().forEach((track) => { track.enabled = mic.value })
+  if (meetingRoom.value?.localParticipant) {
+    await meetingRoom.value.localParticipant.setMicrophoneEnabled(
+      mic.value,
+      selectedAudioInput.value ? { deviceId: selectedAudioInput.value } : undefined,
+    ).catch((error) => {
+      meetingConnectionError.value = error?.message || '마이크 상태를 변경하지 못했습니다.'
+    })
+  }
   if (!mic.value) stopAudioTest()
 }
 
-function toggleCamera() {
+async function toggleCamera() {
   cam.value = !cam.value
   previewStream.value?.getVideoTracks().forEach((track) => { track.enabled = cam.value })
+  if (meetingRoom.value?.localParticipant) {
+    await meetingRoom.value.localParticipant.setCameraEnabled(
+      cam.value,
+      selectedVideoInput.value ? { deviceId: selectedVideoInput.value } : undefined,
+    ).catch((error) => {
+      meetingConnectionError.value = error?.message || '카메라 상태를 변경하지 못했습니다.'
+    })
+  }
 }
 
-function enterMeeting() {
+async function enterMeeting() {
+  if (connectingMeeting.value) return
+  connectingMeeting.value = true
+  meetingConnectionError.value = ''
   stopPreview()
   inLobby.value = false
+  try {
+    await connectMeetingRoom()
+  } catch (error) {
+    meetingConnectionStatus.value = '연결 실패'
+    meetingConnectionError.value = error?.message || '회의 연결에 실패했습니다.'
+  } finally {
+    connectingMeeting.value = false
+  }
+}
+
+async function connectMeetingRoom() {
+  await disconnectMeetingRoom()
+  const connection = await resolveLiveKitConnection({
+    meetingId: String(route.params.meetingId || ''),
+    participantIdentity: auth.user?.id || '',
+    displayName: currentParticipantName.value,
+  })
+  const room = new Room({
+    adaptiveStream: true,
+    dynacast: true,
+  })
+  bindMeetingRoomEvents(room)
+  meetingConnectionStatus.value = '연결 중'
+  await room.connect(connection.url, connection.token, {
+    autoSubscribe: true,
+  })
+  meetingRoom.value = room
+  meetingConnectionStatus.value = '자막 연결됨'
+
+  if (mic.value) {
+    await room.localParticipant.setMicrophoneEnabled(
+      true,
+      selectedAudioInput.value ? { deviceId: selectedAudioInput.value } : undefined,
+      { source: Track.Source.Microphone },
+    )
+  }
+  if (cam.value) {
+    await room.localParticipant.setCameraEnabled(
+      true,
+      selectedVideoInput.value ? { deviceId: selectedVideoInput.value } : undefined,
+      { source: Track.Source.Camera },
+    )
+  }
+}
+
+function bindMeetingRoomEvents(room) {
+  room.on(RoomEvent.DataReceived, (payload) => {
+    try {
+      const event = JSON.parse(new TextDecoder().decode(payload))
+      if (event?.eventType === 'caption.updated') {
+        captionMap.value = upsertCaption(captionMap.value, event)
+      }
+    } catch {
+      // Ignore non-JSON DataChannel packets.
+    }
+  })
+  room.on(RoomEvent.Reconnecting, () => {
+    meetingConnectionStatus.value = '재연결 중'
+  })
+  room.on(RoomEvent.Reconnected, () => {
+    meetingConnectionStatus.value = '자막 연결됨'
+  })
+  room.on(RoomEvent.Disconnected, () => {
+    meetingConnectionStatus.value = '연결 종료'
+  })
+}
+
+async function disconnectMeetingRoom() {
+  const room = meetingRoom.value
+  meetingRoom.value = null
+  if (!room) return
+  await room.localParticipant.setMicrophoneEnabled(false).catch(() => {})
+  await room.localParticipant.setCameraEnabled(false).catch(() => {})
+  room.disconnect()
+}
+
+async function endMeeting() {
+  await disconnectMeetingRoom()
+  router.push('/app/minutes')
+}
+
+function formatCaptionTime(startedAtMs) {
+  const totalSeconds = Math.max(0, Math.floor((startedAtMs || 0) / 1000))
+  const minutes = String(Math.floor(totalSeconds / 60)).padStart(2, '0')
+  const seconds = String(totalSeconds % 60).padStart(2, '0')
+  return `${minutes}:${seconds}`
 }
 
 function handleDeviceChange() {
@@ -539,5 +663,6 @@ onMounted(() => {
 onBeforeUnmount(() => {
   navigator.mediaDevices?.removeEventListener?.('devicechange', handleDeviceChange)
   stopPreview()
+  void disconnectMeetingRoom()
 })
 </script>
