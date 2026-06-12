@@ -92,7 +92,7 @@
         <div><dt>검토자</dt><dd>{{ detail.reviewer || '-' }}</dd></div>
       </dl>
       <p v-if="detail.content">{{ detail.content }}</p>
-      <div class="modal-actions"><button v-if="detail.status === 'mine'" class="danger-button" @click="cancelReservation(detail.id)">예약 취소</button><RouterLink to="/app/meeting" class="primary-button">회의 입장</RouterLink></div>
+      <div class="modal-actions"><button v-if="detail.status === 'mine'" class="danger-button" @click="cancelReservation(detail.id)">예약 취소</button><RouterLink :to="meetingRoute()" class="primary-button">회의 입장</RouterLink></div>
     </ModalShell>
   </section>
 </template>
@@ -103,6 +103,7 @@ import ModalShell from '../../components/common/ModalShell.vue'
 import MemberPicker from '../../components/common/MemberPicker.vue'
 import RoomSchedulePanel from '../../components/rooms/RoomSchedulePanel.vue'
 import { members, rooms, todayReservations } from '../../data/mockData'
+import { meetingRoute } from '../../lib/meeting-route'
 import { addMinutes, minutesToTime, overlaps, timeToMinutes } from '../../utils/dateTime'
 
 const statusLabel = { mine: '내 예약', booked: '예약됨' }

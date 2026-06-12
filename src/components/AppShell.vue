@@ -79,6 +79,8 @@
 <script setup>
 import { computed, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
+import { myMeetings } from '../data/mockData'
+import { meetingRoute } from '../lib/meeting-route'
 import { useAuthStore } from '../stores/auth'
 
 const route = useRoute()
@@ -90,6 +92,7 @@ const profileOpen = ref(false)
 
 const user = computed(() => auth.user)
 const homePath = computed(() => auth.homePath)
+const liveMeetingPath = meetingRoute(myMeetings.find((meeting) => meeting.status === 'live')?.id)
 
 const navSections = [
   {
@@ -125,7 +128,7 @@ const navSections = [
 
 const notifications = [
   { title: '새 메일 3건', desc: '김지연 외 2명에게 메일이 도착했습니다.', time: '5분 전', to: '/app/mail' },
-  { title: '회의 시작 임박', desc: 'Q2 캠페인 킥오프가 10분 후 시작됩니다.', time: '10분 전', to: '/app/meeting' },
+  { title: '회의 시작 임박', desc: 'Q2 캠페인 킥오프가 10분 후 시작됩니다.', time: '10분 전', to: liveMeetingPath },
   { title: '회의실 예약 승인', desc: '테헤란로 대회의실 예약이 승인되었습니다.', time: '1시간 전', to: '/app/my-reservations' },
   { title: '회의록 공유 완료', desc: '주간 전략 회의 회의록이 공유되었습니다.', time: '3시간 전', to: '/app/minutes' },
 ]

@@ -69,6 +69,7 @@ import ModalShell from '../../components/common/ModalShell.vue'
 import Pagination from '../../components/common/Pagination.vue'
 import RoomSchedulePanel from '../../components/rooms/RoomSchedulePanel.vue'
 import { members, myMeetings, rooms, todayReservations } from '../../data/mockData'
+import { meetingRoute } from '../../lib/meeting-route'
 import { fromDateTimeInput, meetingEnd, toDateTimeInput } from '../../utils/dateTime'
 
 const router = useRouter()
@@ -129,12 +130,12 @@ function saveMeeting() {
   const payload = { title: form.value.title.trim(), start: fromDateTimeInput(form.value.start), end: fromDateTimeInput(form.value.end), room: form.value.room, attendees: [...form.value.attendees], reviewer: form.value.reviewer, content: form.value.content }
   if (!payload.title) return
   if (mode.value === 'edit') items.value = items.value.map((item) => item.id === form.value.id ? { ...item, ...payload } : item)
-  else items.value.unshift({ id: `mt-${Date.now()}`, role: 'host', status: 'upcoming', ...payload })
+  else items.value.unshift({ id: crypto.randomUUID?.() || `mt-${Date.now()}`, role: 'host', status: 'upcoming', ...payload })
   modal.value = false
 }
 
 function enterMeeting(meeting) {
   if (meeting.status === 'ended') router.push('/app/minutes')
-  else router.push('/app/meeting')
+  else router.push(meetingRoute(meeting.id))
 }
 </script>

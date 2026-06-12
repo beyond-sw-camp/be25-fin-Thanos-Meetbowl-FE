@@ -47,11 +47,11 @@ export const reviewMeta = {
 }
 
 export const myMeetings = [
-  { id: 'mt1', title: '주간 전략 회의', role: 'host', start: '2026-05-22 10:00', status: 'live', attendees: ['박서연', '정도현', '김민수'], room: '테헤란로(대 회의실)', reviewer: '박서연' },
-  { id: 'mt2', title: '디자인 리뷰', role: 'attendee', start: '2026-05-22 14:00', status: 'upcoming', attendees: ['윤정윤', '김민수'], room: '원격' },
-  { id: 'mt3', title: 'Q2 캠페인 킥오프 후속', role: 'host', start: '2026-05-23 11:00', status: 'upcoming', attendees: ['정도현', '박서연'], room: '봉은사로(회의실 1)', reviewer: '정도현' },
-  { id: 'mt4', title: '신규 입사자 OJT', role: 'attendee', start: '2026-05-20 14:00', status: 'ended', attendees: ['HR팀'], room: '테헤란로(중 회의실)' },
-  { id: 'mt5', title: '월간 전사 공유', role: 'attendee', start: '2026-05-02 16:00', status: 'ended', attendees: ['전사'], room: '원격' },
+  { id: '3ef5f58f-50b2-4f0b-97bf-42e79d91ac39', title: '주간 전략 회의', role: 'host', start: '2026-05-22 10:00', status: 'live', attendees: ['박서연', '정도현', '김민수'], room: '테헤란로(대 회의실)', reviewer: '박서연' },
+  { id: 'd2741a92-a1fd-47c8-988b-2d3b564ecf16', title: '디자인 리뷰', role: 'attendee', start: '2026-05-22 14:00', status: 'upcoming', attendees: ['윤정윤', '김민수'], room: '원격' },
+  { id: '9e27ea09-aa15-4029-a360-4f8e17db2275', title: 'Q2 캠페인 킥오프 후속', role: 'host', start: '2026-05-23 11:00', status: 'upcoming', attendees: ['정도현', '박서연'], room: '봉은사로(회의실 1)', reviewer: '정도현' },
+  { id: 'f825c24a-d3c9-4d10-b552-a6e5357a3696', title: '신규 입사자 OJT', role: 'attendee', start: '2026-05-20 14:00', status: 'ended', attendees: ['HR팀'], room: '테헤란로(중 회의실)' },
+  { id: '651e10fb-1d58-49d8-acd0-fddcb5ee7daf', title: '월간 전사 공유', role: 'attendee', start: '2026-05-02 16:00', status: 'ended', attendees: ['전사'], room: '원격' },
 ]
 
 export const companies = ['Meetbowl 본사', 'R&D 센터', 'Japan Office', 'US Branch', 'Shanghai Office']

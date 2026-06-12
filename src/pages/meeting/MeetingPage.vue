@@ -244,11 +244,12 @@
 <script setup>
 import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue'
 import { Room, RoomEvent, Track } from 'livekit-client'
-import { useRouter } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import { sortedCaptions, upsertCaption } from '../../lib/caption-store'
 import { resolveLiveKitConnection } from '../../lib/livekit-meeting'
 import { useAuthStore } from '../../stores/auth'
 
+const route = useRoute()
 const router = useRouter()
 const auth = useAuthStore()
 const inLobby = ref(true)
@@ -565,8 +566,11 @@ async function enterMeeting() {
 
 async function connectMeetingRoom() {
   await disconnectMeetingRoom()
-  const identity = auth.user?.id || `meeting-user-${Date.now()}`
-  const connection = await resolveLiveKitConnection(identity, currentParticipantName.value)
+  const connection = await resolveLiveKitConnection({
+    meetingId: String(route.params.meetingId || ''),
+    participantIdentity: auth.user?.id || '',
+    displayName: currentParticipantName.value,
+  })
   const room = new Room({
     adaptiveStream: true,
     dynacast: true,

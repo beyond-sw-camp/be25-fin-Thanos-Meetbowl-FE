@@ -1,39 +1,38 @@
+import { postJson } from './api-client'
+
 const CONNECTION_STORAGE_KEY = 'meetbowl.livekit.connection'
 
-export async function resolveLiveKitConnection(identity, displayName) {
-  const params = new URLSearchParams(window.location.search)
+/**
+ * 회의 입장에 필요한 LiveKit 접속 정보는 항상 meetbowl-be에서 발급받는다.
+ *
+ * 브라우저는 더 이상 API secret을 알지 못하며, 이전처럼 query/env 값으로 JWT를 합성하지 않는다.
+ */
+export async function resolveLiveKitConnection({ meetingId, participantIdentity, displayName }) {
+  if (!meetingId) {
+    throw new Error('회의 ID가 없어 접속 정보를 발급받을 수 없습니다.')
+  }
+
   const stored = readStoredConnection()
-  const url = params.get('livekitUrl')
-    || stored.url
-    || import.meta.env.VITE_LIVEKIT_URL
-    || 'http://localhost:7880'
-  const roomName = params.get('roomName')
-    || stored.roomName
-    || import.meta.env.VITE_LIVEKIT_ROOM
-    || 'stt-test-room'
-  let token = params.get('livekitToken')
-    || stored.token
-    || import.meta.env.VITE_LIVEKIT_TOKEN
-
-  if (!token && import.meta.env.DEV) {
-    token = await createDevelopmentToken({
-      apiKey: import.meta.env.VITE_LIVEKIT_DEV_API_KEY || 'devkey',
-      apiSecret: import.meta.env.VITE_LIVEKIT_DEV_API_SECRET
-        || 'local-livekit-secret-change-me-123456',
-      roomName,
-      identity,
-      displayName,
-    })
-  }
-  if (!token) {
-    throw new Error('LiveKit 접속 토큰이 없습니다. 회의 접속 정보를 다시 발급받아 주세요.')
+  if (stored.meetingId === meetingId && stored.token && stored.url) {
+    return stored
   }
 
-  sessionStorage.setItem(
-    CONNECTION_STORAGE_KEY,
-    JSON.stringify({ url, roomName, token }),
-  )
-  return { url, roomName, token }
+  const connection = await postJson(`/meetings/${meetingId}/join`, {
+    displayName,
+    participantIdentity,
+  })
+
+  const resolved = {
+    meetingId,
+    roomName: connection.roomName,
+    url: connection.livekitUrl,
+    token: connection.token,
+    participantIdentity: connection.participantIdentity,
+    participantName: connection.participantName,
+  }
+
+  sessionStorage.setItem(CONNECTION_STORAGE_KEY, JSON.stringify(resolved))
+  return resolved
 }
 
 function readStoredConnection() {
@@ -42,52 +41,4 @@ function readStoredConnection() {
   } catch {
     return {}
   }
-}
-
-async function createDevelopmentToken({
-  apiKey,
-  apiSecret,
-  roomName,
-  identity,
-  displayName,
-}) {
-  const now = Math.floor(Date.now() / 1000)
-  const header = { alg: 'HS256', typ: 'JWT' }
-  const payload = {
-    iss: apiKey,
-    sub: identity,
-    name: displayName,
-    nbf: now - 30,
-    exp: now + 60 * 60,
-    video: {
-      room: roomName,
-      roomJoin: true,
-      canPublish: true,
-      canSubscribe: true,
-      canPublishData: true,
-    },
-  }
-  const encodedHeader = base64UrlEncode(JSON.stringify(header))
-  const encodedPayload = base64UrlEncode(JSON.stringify(payload))
-  const unsignedToken = `${encodedHeader}.${encodedPayload}`
-  const key = await crypto.subtle.importKey(
-    'raw',
-    new TextEncoder().encode(apiSecret),
-    { name: 'HMAC', hash: 'SHA-256' },
-    false,
-    ['sign'],
-  )
-  const signature = new Uint8Array(
-    await crypto.subtle.sign('HMAC', key, new TextEncoder().encode(unsignedToken)),
-  )
-  return `${unsignedToken}.${base64UrlEncode(signature)}`
-}
-
-function base64UrlEncode(input) {
-  const bytes = input instanceof Uint8Array ? input : new TextEncoder().encode(String(input))
-  let binary = ''
-  bytes.forEach((byte) => {
-    binary += String.fromCharCode(byte)
-  })
-  return btoa(binary).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/g, '')
 }
