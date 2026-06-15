@@ -5,15 +5,20 @@
         <span class="brand-mark">M</span>
         <span>Meetbowl</span>
       </RouterLink>
-      <button class="meeting-lobby-close" type="button" @click="router.push('/app/meetings')">
-        대기실 나가기
-      </button>
+      <div class="meeting-lobby-actions">
+        <button class="secondary-button small" type="button" @click="openGuestLinkDialog">
+          공유
+        </button>
+        <button class="meeting-lobby-close" type="button" @click="router.push('/app/meetings')">
+          대기실 나가기
+        </button>
+      </div>
     </header>
 
     <main class="meeting-lobby-main">
       <div class="meeting-lobby-intro">
         <span class="badge danger">진행 중</span>
-        <h1>Q2 캠페인 킥오프</h1>
+        <h1>{{ meetingTitle }}</h1>
         <p>카메라와 오디오를 확인한 뒤 회의에 입장하세요.</p>
       </div>
 
@@ -184,30 +189,83 @@
 
   <section v-else class="meeting-room">
     <div class="meeting-main">
-      <header><strong>Q2 캠페인 킥오프</strong><span>01:24:08</span></header>
-      <div class="video-grid">
-        <div v-for="name in participants" :key="name" class="video-tile">
-          <span>{{ name[0] }}</span><em>{{ name }}</em>
+      <header class="meeting-room-header">
+        <div class="meeting-room-title">
+          <strong>{{ meetingTitle }}</strong>
+          <small>{{ meetingConnectionStatus }}</small>
         </div>
+        <div class="meeting-room-actions">
+          <div class="meeting-room-meta">
+            <span>{{ participantCount }}명 참여</span>
+            <span>{{ elapsedTimeLabel }}</span>
+          </div>
+          <button class="secondary-button small" type="button" @click="openGuestLinkDialog">
+            공유
+          </button>
+        </div>
+      </header>
+
+      <div class="video-grid" :class="{ 'video-grid-screening': hasScreenShareTile }">
+        <article
+          v-for="tile in participantMediaTiles"
+          :key="tile.key"
+          class="video-tile"
+          :class="{
+            'video-tile-screen': tile.type === 'screen',
+            'video-tile-local': tile.isLocal,
+            'video-tile-placeholder': !tile.track,
+          }"
+        >
+          <video
+            v-if="tile.track"
+            :ref="setTileMediaRef(tile.key)"
+            autoplay
+            playsinline
+            :muted="tile.isLocal"
+          />
+          <div v-else class="video-placeholder">
+            <span>{{ tile.initials }}</span>
+            <p>{{ tile.placeholder }}</p>
+          </div>
+
+          <div class="video-tile-badge-row">
+            <span v-if="tile.type === 'screen'" class="video-badge accent">화면 공유</span>
+            <span v-if="tile.isLocal" class="video-badge">나</span>
+            <span v-if="tile.muted" class="video-badge muted">음소거</span>
+          </div>
+          <em>{{ tile.label }}</em>
+        </article>
       </div>
-      <footer>
-        <button class="control" @click="toggleMicrophone">{{ mic ? '마이크' : '음소거' }}</button>
-        <button class="control" @click="toggleCamera">{{ cam ? '카메라' : '카메라 꺼짐' }}</button>
-        <button class="control">화면 공유</button>
+
+      <footer class="meeting-controls">
+        <button class="control" :class="{ off: !mic }" @click="toggleMicrophone">
+          {{ mic ? '마이크 켜짐' : '음소거' }}
+        </button>
+        <button class="control" :class="{ off: !cam }" @click="toggleCamera">
+          {{ cam ? '카메라 켜짐' : '카메라 꺼짐' }}
+        </button>
+        <button class="control" :class="{ active: screenShareEnabled }" @click="toggleScreenShare">
+          {{ screenShareEnabled ? '공유 중지' : '화면 공유' }}
+        </button>
         <button class="danger-button" @click="endMeeting">회의 종료</button>
       </footer>
     </div>
+
     <aside class="meeting-side">
       <nav>
         <button :class="{ active: tab === 'stt' }" @click="tab = 'stt'">회의 원문</button>
         <button :class="{ active: tab === 'people' }" @click="tab = 'people'">참석자</button>
         <button :class="{ active: tab === 'chat' }" @click="tab = 'chat'">채팅</button>
       </nav>
+
       <div v-if="tab === 'stt'" class="side-body meeting-caption-panel">
         <div class="toolbar meeting-caption-toolbar">
           <span class="chip active">원문 자막</span>
           <span class="meeting-caption-status">{{ meetingConnectionStatus }}</span>
         </div>
+        <p v-if="sttStatusHint" class="meeting-caption-hint">
+          {{ sttStatusHint }}
+        </p>
         <div class="meeting-caption-scroll">
           <p
             v-for="caption in orderedCaptions"
@@ -222,23 +280,95 @@
             {{ caption.text }}
           </p>
           <p v-if="!orderedCaptions.length" class="meeting-caption-empty">
-            {{ meetingConnectionError || '말을 시작하면 원문 자막이 여기에 표시됩니다.' }}
+            {{ sttEmptyStateMessage }}
           </p>
         </div>
         <div class="ai-box">
           <strong>AI 실시간 피드백</strong>
-          <p>이전 결정과 충돌 가능성이 있습니다. 예산 증액 논의는 리스크 근거 확인 후 결정하는 편이 좋습니다.</p>
+          <p>{{ feedbackMessage }}</p>
         </div>
       </div>
-      <div v-else-if="tab === 'people'" class="side-body">
-        <p v-for="name in participants" :key="name" class="people-row">{{ name }}<span>참석 중</span></p>
+
+      <div v-else-if="tab === 'people'" class="side-body meeting-people-body">
+        <p v-for="participant in participantList" :key="participant.key" class="people-row">
+          <span class="people-row-name">
+            {{ participant.name }}
+            <small v-if="participant.isLocal">나</small>
+          </span>
+          <span class="people-row-status">
+            {{ participantStatusLabel(participant) }}
+          </span>
+        </p>
       </div>
+
       <div v-else class="side-body chat-body">
-        <p v-for="item in chat" :key="item.text" class="chat-line"><strong>{{ item.who }}</strong>{{ item.text }}</p>
-        <div class="chat-input"><input v-model="chatInput" @keydown.enter="sendChat"><button @click="sendChat">전송</button></div>
+        <div ref="chatLog" class="chat-log">
+          <article
+            v-for="item in chatMessages"
+            :key="item.id"
+            class="chat-message"
+            :class="{ self: item.isSelf, system: item.isSystem }"
+          >
+            <header>
+              <strong>{{ item.senderName }}</strong>
+              <small>{{ formatChatTime(item.sentAt) }}</small>
+            </header>
+            <p>{{ item.content }}</p>
+          </article>
+          <p v-if="!chatMessages.length" class="meeting-caption-empty">
+            아직 채팅이 없습니다. 회의 참여자에게 첫 메시지를 보내보세요.
+          </p>
+        </div>
+        <div class="chat-input">
+          <input
+            v-model="chatInput"
+            placeholder="메시지를 입력하고 Enter로 전송하세요"
+            maxlength="300"
+            :disabled="!meetingRoom || sendingChat"
+            @compositionstart="chatInputComposing = true"
+            @compositionend="chatInputComposing = false"
+            @keydown.enter="handleChatEnter"
+          >
+          <button :disabled="!meetingRoom || !chatInput.trim() || sendingChat" @click="sendChat">
+            {{ sendingChat ? '전송 중' : '전송' }}
+          </button>
+        </div>
       </div>
     </aside>
   </section>
+
+  <div v-if="guestLinkDialogOpen" class="modal-backdrop" @click.self="closeGuestLinkDialog">
+    <section class="write-modal guest-link-modal" aria-label="게스트 링크">
+      <header>
+        <div>
+          <h2>게스트 링크</h2>
+          <p class="guest-link-note">
+            로그인하지 않은 사용자가 회의에 들어올 수 있는 공개 링크를 복사합니다.
+          </p>
+        </div>
+        <button type="button" @click="closeGuestLinkDialog">닫기</button>
+      </header>
+
+      <label class="guest-link-field">
+        공유 링크
+        <input ref="guestLinkInput" :value="guestMeetingLink" readonly @focus="$event.target.select()">
+      </label>
+
+      <p class="guest-link-note">
+        이 링크는 현재 회의 ID를 기준으로 생성되며, 대기실과 회의실에서 같은 주소를 복사합니다.
+      </p>
+
+      <footer class="guest-link-footer">
+        <span class="share-copy-status">{{ guestLinkCopyStatus }}</span>
+        <div class="guest-link-actions">
+          <button class="secondary-button" type="button" @click="closeGuestLinkDialog">취소</button>
+          <button class="primary-button" type="button" @click="copyGuestMeetingLink">
+            링크 복사
+          </button>
+        </div>
+      </footer>
+    </section>
+  </div>
 </template>
 
 <script setup>
@@ -246,12 +376,14 @@ import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue'
 import { Room, RoomEvent, Track } from 'livekit-client'
 import { useRoute, useRouter } from 'vue-router'
 import { sortedCaptions, upsertCaption } from '../../lib/caption-store'
+import { guestMeetingRoute } from '../../lib/meeting-route'
 import { resolveLiveKitConnection } from '../../lib/livekit-meeting'
 import { useAuthStore } from '../../stores/auth'
 
 const route = useRoute()
 const router = useRouter()
 const auth = useAuthStore()
+
 const inLobby = ref(true)
 const mic = ref(true)
 const cam = ref(true)
@@ -260,6 +392,11 @@ const chatInput = ref('')
 const displayName = ref(auth.user?.name || '')
 const previewVideo = ref(null)
 const speakerTestAudio = ref(null)
+const chatLog = ref(null)
+const chatInputComposing = ref(false)
+const guestLinkDialogOpen = ref(false)
+const guestLinkCopyStatus = ref('게스트 링크를 공유할 수 있습니다.')
+const guestLinkInput = ref(null)
 const previewStream = ref(null)
 const audioInputs = ref([])
 const audioOutputs = ref([])
@@ -276,24 +413,47 @@ const connectingMeeting = ref(false)
 const meetingRoom = ref(null)
 const meetingConnectionStatus = ref('연결 대기')
 const meetingConnectionError = ref('')
+const feedbackMessage = ref('실시간 피드백이 도착하면 여기에 표시됩니다.')
+const lastCaptionReceivedAt = ref(null)
+const lastCaptionText = ref('')
 const captionMap = ref(new Map())
+const participantStateMap = ref(new Map())
+const chatMessages = ref([])
+const sendingChat = ref(false)
+const connectedAt = ref(null)
+const screenShareEnabled = ref(false)
+const meetingConnection = ref(null)
+
+const textEncoder = new TextEncoder()
+const textDecoder = new TextDecoder()
+const tileMediaElements = new Map()
+const tileTrackBindings = new Map()
+const remoteAudioBindings = new Map()
+let mediaSyncQueued = false
 let audioContext = null
 let microphoneAnalyser = null
 let microphoneSource = null
 let microphoneAnimationFrame = null
 let speakerTestStream = null
 let speakerTestTrack = null
-const otherParticipants = ['박서연', '정도현', '김민수', '최정훈']
-const chat = ref([
-  { who: '박서연', text: '회의록 공유 부탁드려요!' },
-  { who: '정도현', text: '안건 자료 채팅에 올렸습니다.' },
-])
+let elapsedTimer = null
+const elapsedSeconds = ref(0)
 
+const meetingTitle = computed(() => {
+  const titleFromRoute = typeof route.query.title === 'string' ? route.query.title.trim() : ''
+  return titleFromRoute || 'Q2 캠페인 킥오프'
+})
+const meetingId = computed(() => String(route.params.meetingId || '').trim())
+const guestMeetingLink = computed(() => {
+  if (!meetingId.value) return ''
+  const path = guestMeetingRoute(meetingId.value)
+  if (typeof window === 'undefined') return path
+  return new URL(path, window.location.origin).toString()
+})
 const hasVideoTrack = computed(() => Boolean(previewStream.value?.getVideoTracks().length))
 const hasAudioTrack = computed(() => Boolean(previewStream.value?.getAudioTracks().length))
 const currentParticipantName = computed(() => displayName.value.trim() || auth.user?.name || '참석자')
-const currentParticipantInitial = computed(() => currentParticipantName.value[0] || '참')
-const participants = computed(() => [currentParticipantName.value, ...otherParticipants])
+const currentParticipantInitial = computed(() => initialsFromName(currentParticipantName.value))
 const orderedCaptions = computed(() => sortedCaptions(captionMap.value))
 const supportsSpeakerSelection = computed(() =>
   typeof HTMLMediaElement !== 'undefined' && 'setSinkId' in HTMLMediaElement.prototype,
@@ -309,6 +469,128 @@ const audioTestMessage = computed(() => {
   if (testingAudio.value) return '말하면 입력 레벨이 움직이고 선택한 스피커로 들립니다.'
   return '선택한 마이크 입력과 스피커 재생을 함께 확인합니다.'
 })
+const participantList = computed(() =>
+  Array.from(participantStateMap.value.values()).sort((left, right) => {
+    if (left.isLocal !== right.isLocal) return left.isLocal ? -1 : 1
+    return left.name.localeCompare(right.name, 'ko')
+  }),
+)
+const participantCount = computed(() => participantList.value.length)
+const participantMediaTiles = computed(() => {
+  const tiles = []
+
+  participantList.value.forEach((participant) => {
+    const base = {
+      isLocal: participant.isLocal,
+      initials: initialsFromName(participant.name),
+      muted: !participant.micEnabled,
+    }
+
+    if (participant.screenTrack || participant.screenShareEnabled) {
+      tiles.push({
+        ...base,
+        key: `${participant.key}:screen`,
+        type: 'screen',
+        track: participant.screenTrack,
+        label: `${participant.name} 화면`,
+        placeholder: '화면을 공유하는 중입니다.',
+      })
+    }
+
+    if (participant.cameraTrack || participant.cameraEnabled) {
+      tiles.push({
+        ...base,
+        key: `${participant.key}:camera`,
+        type: 'camera',
+        track: participant.cameraTrack,
+        label: participant.name,
+        placeholder: '카메라를 준비하는 중입니다.',
+      })
+    }
+
+    if (!participant.screenTrack && !participant.screenShareEnabled && !participant.cameraTrack && !participant.cameraEnabled) {
+      tiles.push({
+        ...base,
+        key: `${participant.key}:placeholder`,
+        type: 'placeholder',
+        track: null,
+        label: participant.name,
+        placeholder: '카메라가 꺼져 있습니다.',
+      })
+    }
+  })
+
+  return tiles
+})
+const hasScreenShareTile = computed(() => participantMediaTiles.value.some((tile) => tile.type === 'screen'))
+const elapsedTimeLabel = computed(() => {
+  const hours = String(Math.floor(elapsedSeconds.value / 3600)).padStart(2, '0')
+  const minutes = String(Math.floor((elapsedSeconds.value % 3600) / 60)).padStart(2, '0')
+  const seconds = String(elapsedSeconds.value % 60).padStart(2, '0')
+  return `${hours}:${minutes}:${seconds}`
+})
+const sttEmptyStateMessage = computed(() => {
+  if (meetingConnectionError.value) return meetingConnectionError.value
+  if (!meetingRoom.value) return '회의 연결이 완료되면 원문 자막이 여기에 표시됩니다.'
+  if (orderedCaptions.value.length > 0) return ''
+  if (!mic.value) return '마이크가 꺼져 있어서 자막이 생성되지 않습니다.'
+  if (lastCaptionReceivedAt.value) {
+    return `마지막 자막 수신: ${formatCaptionReceivedTime(lastCaptionReceivedAt.value)}`
+  }
+  return 'STT 세션은 준비되었습니다. 아직 음성이 감지되지 않았거나 자막이 도착하지 않았습니다.'
+})
+const sttStatusHint = computed(() => {
+  if (!meetingRoom.value) return ''
+  if (orderedCaptions.value.length > 0) {
+    return lastCaptionText.value ? `마지막 수신 문장: ${lastCaptionText.value}` : ''
+  }
+  if (!mic.value) return '마이크가 꺼져 있으면 STT가 문장을 만들 수 없습니다.'
+  if (lastCaptionReceivedAt.value) return '자막은 수신됐지만 아직 화면에 고정된 문장이 없습니다.'
+  return '마이크 입력을 기다리는 중입니다. 발화가 들어오면 자막이 표시됩니다.'
+})
+
+function initialsFromName(name) {
+  return (name || '참석자').trim().slice(0, 1) || '참'
+}
+
+function normalizeParticipantIdentity(identity) {
+  return String(identity || '').trim()
+}
+
+function currentParticipantIdentity() {
+  return normalizeParticipantIdentity(meetingConnection.value?.participantIdentity || '')
+}
+
+function openGuestLinkDialog() {
+  guestLinkCopyStatus.value = '게스트 링크를 확인하고 복사할 수 있습니다.'
+  guestLinkDialogOpen.value = true
+}
+
+function closeGuestLinkDialog() {
+  guestLinkDialogOpen.value = false
+}
+
+async function copyGuestMeetingLink() {
+  if (!guestMeetingLink.value) {
+    guestLinkCopyStatus.value = '회의 링크를 만들 수 없습니다.'
+    return
+  }
+
+  try {
+    if (navigator.clipboard?.writeText) {
+      await navigator.clipboard.writeText(guestMeetingLink.value)
+    } else if (guestLinkInput.value) {
+      guestLinkInput.value.focus()
+      guestLinkInput.value.select()
+      document.execCommand('copy')
+    } else {
+      throw new Error('clipboard unavailable')
+    }
+    guestLinkCopyStatus.value = '게스트 링크를 복사했습니다.'
+  } catch {
+    guestLinkCopyStatus.value = '복사에 실패했습니다. 링크를 직접 선택해 복사하세요.'
+  }
+}
 
 function stopAudioTest() {
   if (microphoneAnimationFrame) cancelAnimationFrame(microphoneAnimationFrame)
@@ -328,6 +610,15 @@ function stopAudioTest() {
   audioContext = null
   microphoneLevel.value = 0
   testingAudio.value = false
+}
+
+function formatCaptionReceivedTime(timestampMs) {
+  return new Date(timestampMs).toLocaleTimeString('ko-KR', {
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+    hour12: false,
+  })
 }
 
 function stopPreview() {
@@ -395,8 +686,12 @@ async function restartPreview() {
 
   try {
     const stream = await navigator.mediaDevices.getUserMedia(constraints)
-    stream.getAudioTracks().forEach((track) => { track.enabled = mic.value })
-    stream.getVideoTracks().forEach((track) => { track.enabled = cam.value })
+    stream.getAudioTracks().forEach((track) => {
+      track.enabled = mic.value
+    })
+    stream.getVideoTracks().forEach((track) => {
+      track.enabled = cam.value
+    })
     previewStream.value = stream
     await nextTick()
     if (previewVideo.value) {
@@ -462,6 +757,10 @@ async function applyOutputDevice(element) {
 async function applySpeaker() {
   await applyOutputDevice(previewVideo.value)
   await applyOutputDevice(speakerTestAudio.value)
+
+  await Promise.all(
+    Array.from(remoteAudioBindings.values()).map(({ element }) => applyOutputDevice(element)),
+  )
 }
 
 async function toggleAudioTest() {
@@ -521,31 +820,225 @@ async function toggleAudioTest() {
   updateLevel()
 }
 
+function createParticipantState(participant, isLocal, previousState) {
+  const videoPublications = Array.from(participant.videoTrackPublications.values())
+  const audioPublications = Array.from(participant.audioTrackPublications.values())
+  const cameraPublication = videoPublications.find((publication) => publication.source === Track.Source.Camera)
+  const screenPublication = videoPublications.find((publication) => publication.source === Track.Source.ScreenShare)
+  const microphonePublication = audioPublications.find((publication) => publication.source === Track.Source.Microphone)
+
+  return {
+    key: participant.identity || (isLocal ? 'local-participant' : crypto.randomUUID()),
+    identity: participant.identity || previousState?.identity || '',
+    name: participant.name || previousState?.name || '참석자',
+    isLocal,
+    joinedAt: previousState?.joinedAt || Date.now(),
+    micEnabled: microphonePublication ? !microphonePublication.isMuted : (isLocal ? mic.value : false),
+    cameraEnabled: cameraPublication ? !cameraPublication.isMuted : (isLocal ? cam.value : false),
+    screenShareEnabled: screenPublication ? !screenPublication.isMuted : (isLocal ? screenShareEnabled.value : false),
+    cameraTrack: cameraPublication?.videoTrack || null,
+    screenTrack: screenPublication?.videoTrack || null,
+  }
+}
+
+function syncParticipantsFromRoom(room = meetingRoom.value) {
+  if (!room) {
+    participantStateMap.value = new Map()
+    screenShareEnabled.value = false
+    queueMediaSync()
+    return
+  }
+
+  const nextStateMap = new Map()
+  const previousStateMap = participantStateMap.value
+
+  const localIdentity = room.localParticipant.identity || meetingConnection.value?.participantIdentity || 'local-participant'
+  const localPrevious = previousStateMap.get(localIdentity)
+  nextStateMap.set(localIdentity, createParticipantState(room.localParticipant, true, localPrevious))
+
+  Array.from(room.remoteParticipants.values()).forEach((participant) => {
+    const previousState = previousStateMap.get(participant.identity)
+    nextStateMap.set(participant.identity, createParticipantState(participant, false, previousState))
+  })
+
+  participantStateMap.value = nextStateMap
+  screenShareEnabled.value = nextStateMap.get(localIdentity)?.screenShareEnabled || false
+  queueMediaSync()
+}
+
+function cleanupTileBinding(tileKey) {
+  const binding = tileTrackBindings.get(tileKey)
+  const element = tileMediaElements.get(tileKey)
+  if (binding?.track && element) {
+    binding.track.detach(element)
+  }
+  tileTrackBindings.delete(tileKey)
+}
+
+function queueMediaSync() {
+  if (mediaSyncQueued) return
+  mediaSyncQueued = true
+  nextTick(() => {
+    mediaSyncQueued = false
+    syncTileMediaElements()
+  })
+}
+
+function syncTileMediaElements() {
+  const currentTiles = new Map(participantMediaTiles.value.map((tile) => [tile.key, tile]))
+
+  Array.from(tileTrackBindings.keys()).forEach((tileKey) => {
+    if (!currentTiles.has(tileKey)) cleanupTileBinding(tileKey)
+  })
+
+  currentTiles.forEach((tile, tileKey) => {
+    const element = tileMediaElements.get(tileKey)
+    if (!element) return
+
+    const previousBinding = tileTrackBindings.get(tileKey)
+    if (!tile.track) {
+      if (previousBinding?.track) previousBinding.track.detach(element)
+      tileTrackBindings.delete(tileKey)
+      element.srcObject = null
+      return
+    }
+
+    const nextTrackId = tile.track.sid || tile.track.mediaStreamTrack.id
+    if (previousBinding?.trackId === nextTrackId) return
+
+    if (previousBinding?.track) previousBinding.track.detach(element)
+    tile.track.attach(element)
+    element.autoplay = true
+    element.playsInline = true
+    element.muted = tile.isLocal
+    tileTrackBindings.set(tileKey, { track: tile.track, trackId: nextTrackId })
+  })
+}
+
+function setTileMediaRef(tileKey) {
+  return (element) => {
+    if (!element) {
+      cleanupTileBinding(tileKey)
+      tileMediaElements.delete(tileKey)
+      return
+    }
+
+    tileMediaElements.set(tileKey, element)
+    queueMediaSync()
+  }
+}
+
+async function attachRemoteAudioTrack(track) {
+  const bindingKey = track.sid || track.mediaStreamTrack.id
+  if (remoteAudioBindings.has(bindingKey)) return
+
+  const element = track.attach()
+  element.autoplay = true
+  element.playsInline = true
+  element.className = 'sr-only-audio'
+  await applyOutputDevice(element)
+  document.body.appendChild(element)
+  remoteAudioBindings.set(bindingKey, { track, element })
+}
+
+function detachRemoteAudioTrack(track) {
+  const bindingKey = track.sid || track.mediaStreamTrack.id
+  const binding = remoteAudioBindings.get(bindingKey)
+  if (!binding) return
+
+  binding.track.detach(binding.element)
+  binding.element.remove()
+  remoteAudioBindings.delete(bindingKey)
+}
+
+function clearRemoteAudioBindings() {
+  Array.from(remoteAudioBindings.values()).forEach(({ track, element }) => {
+    track.detach(element)
+    element.remove()
+  })
+  remoteAudioBindings.clear()
+}
+
+function resetMeetingSessionState() {
+  captionMap.value = new Map()
+  participantStateMap.value = new Map()
+  chatMessages.value = []
+  feedbackMessage.value = '실시간 피드백이 도착하면 여기에 표시됩니다.'
+  lastCaptionReceivedAt.value = null
+  lastCaptionText.value = ''
+  meetingConnectionError.value = ''
+  screenShareEnabled.value = false
+  meetingConnection.value = null
+  connectedAt.value = null
+  elapsedSeconds.value = 0
+  clearInterval(elapsedTimer)
+  elapsedTimer = null
+  Array.from(tileTrackBindings.keys()).forEach((tileKey) => cleanupTileBinding(tileKey))
+  tileMediaElements.clear()
+  clearRemoteAudioBindings()
+}
+
+function startElapsedTimer() {
+  clearInterval(elapsedTimer)
+  elapsedTimer = setInterval(() => {
+    if (!connectedAt.value) return
+    elapsedSeconds.value = Math.max(0, Math.floor((Date.now() - connectedAt.value) / 1000))
+  }, 1000)
+}
+
 async function toggleMicrophone() {
   mic.value = !mic.value
-  previewStream.value?.getAudioTracks().forEach((track) => { track.enabled = mic.value })
-  if (meetingRoom.value?.localParticipant) {
-    await meetingRoom.value.localParticipant.setMicrophoneEnabled(
-      mic.value,
-      selectedAudioInput.value ? { deviceId: selectedAudioInput.value } : undefined,
-    ).catch((error) => {
-      meetingConnectionError.value = error?.message || '마이크 상태를 변경하지 못했습니다.'
-    })
+  previewStream.value?.getAudioTracks().forEach((track) => {
+    track.enabled = mic.value
+  })
+
+  if (!meetingRoom.value?.localParticipant) {
+    if (!mic.value) stopAudioTest()
+    return
   }
+
+  await meetingRoom.value.localParticipant.setMicrophoneEnabled(
+    mic.value,
+    selectedAudioInput.value ? { deviceId: selectedAudioInput.value } : undefined,
+  ).catch((error) => {
+    meetingConnectionError.value = error?.message || '마이크 상태를 변경하지 못했습니다.'
+  })
+  syncParticipantsFromRoom()
+
   if (!mic.value) stopAudioTest()
 }
 
 async function toggleCamera() {
   cam.value = !cam.value
-  previewStream.value?.getVideoTracks().forEach((track) => { track.enabled = cam.value })
-  if (meetingRoom.value?.localParticipant) {
-    await meetingRoom.value.localParticipant.setCameraEnabled(
-      cam.value,
-      selectedVideoInput.value ? { deviceId: selectedVideoInput.value } : undefined,
-    ).catch((error) => {
-      meetingConnectionError.value = error?.message || '카메라 상태를 변경하지 못했습니다.'
-    })
-  }
+  previewStream.value?.getVideoTracks().forEach((track) => {
+    track.enabled = cam.value
+  })
+
+  if (!meetingRoom.value?.localParticipant) return
+
+  await meetingRoom.value.localParticipant.setCameraEnabled(
+    cam.value,
+    selectedVideoInput.value ? { deviceId: selectedVideoInput.value } : undefined,
+    { source: Track.Source.Camera },
+  ).catch((error) => {
+    meetingConnectionError.value = error?.message || '카메라 상태를 변경하지 못했습니다.'
+  })
+  syncParticipantsFromRoom()
+}
+
+async function toggleScreenShare() {
+  if (!meetingRoom.value?.localParticipant) return
+
+  meetingConnectionError.value = ''
+  const nextEnabled = !screenShareEnabled.value
+  await meetingRoom.value.localParticipant.setScreenShareEnabled(
+    nextEnabled,
+    { audio: false },
+    { source: Track.Source.ScreenShare },
+  ).catch((error) => {
+    meetingConnectionError.value = error?.message || '화면 공유를 변경하지 못했습니다.'
+  })
+  syncParticipantsFromRoom()
 }
 
 async function enterMeeting() {
@@ -554,11 +1047,14 @@ async function enterMeeting() {
   meetingConnectionError.value = ''
   stopPreview()
   inLobby.value = false
+
   try {
     await connectMeetingRoom()
   } catch (error) {
     meetingConnectionStatus.value = '연결 실패'
     meetingConnectionError.value = error?.message || '회의 연결에 실패했습니다.'
+    inLobby.value = true
+    await restartPreview().catch(() => {})
   } finally {
     connectingMeeting.value = false
   }
@@ -567,10 +1063,12 @@ async function enterMeeting() {
 async function connectMeetingRoom() {
   await disconnectMeetingRoom()
   const connection = await resolveLiveKitConnection({
-    meetingId: String(route.params.meetingId || ''),
+    meetingId: meetingId.value,
     participantIdentity: auth.user?.id || '',
     displayName: currentParticipantName.value,
   })
+
+  meetingConnection.value = connection
   const room = new Room({
     adaptiveStream: true,
     dynacast: true,
@@ -580,8 +1078,10 @@ async function connectMeetingRoom() {
   await room.connect(connection.url, connection.token, {
     autoSubscribe: true,
   })
+
   meetingRoom.value = room
-  meetingConnectionStatus.value = '자막 연결됨'
+  connectedAt.value = Date.now()
+  startElapsedTimer()
 
   if (mic.value) {
     await room.localParticipant.setMicrophoneEnabled(
@@ -590,6 +1090,7 @@ async function connectMeetingRoom() {
       { source: Track.Source.Microphone },
     )
   }
+
   if (cam.value) {
     await room.localParticipant.setCameraEnabled(
       true,
@@ -597,37 +1098,189 @@ async function connectMeetingRoom() {
       { source: Track.Source.Camera },
     )
   }
+
+  syncParticipantsFromRoom(room)
+  meetingConnectionStatus.value = '회의 연결됨'
+  pushSystemChat('회의에 입장했습니다.')
 }
 
 function bindMeetingRoomEvents(room) {
-  room.on(RoomEvent.DataReceived, (payload) => {
-    try {
-      const event = JSON.parse(new TextDecoder().decode(payload))
-      if (event?.eventType === 'caption.updated') {
-        captionMap.value = upsertCaption(captionMap.value, event)
-      }
-    } catch {
-      // Ignore non-JSON DataChannel packets.
+  room.on(RoomEvent.ParticipantConnected, () => {
+    syncParticipantsFromRoom(room)
+  })
+  room.on(RoomEvent.ParticipantDisconnected, () => {
+    syncParticipantsFromRoom(room)
+  })
+  room.on(RoomEvent.LocalTrackPublished, () => {
+    syncParticipantsFromRoom(room)
+  })
+  room.on(RoomEvent.LocalTrackUnpublished, () => {
+    syncParticipantsFromRoom(room)
+  })
+  room.on(RoomEvent.TrackSubscribed, async (track) => {
+    if (track.kind === Track.Kind.Audio) {
+      await attachRemoteAudioTrack(track).catch(() => {})
     }
+    syncParticipantsFromRoom(room)
+  })
+  room.on(RoomEvent.TrackUnsubscribed, (track) => {
+    if (track.kind === Track.Kind.Audio) {
+      detachRemoteAudioTrack(track)
+    }
+    syncParticipantsFromRoom(room)
+  })
+  room.on(RoomEvent.TrackMuted, () => {
+    syncParticipantsFromRoom(room)
+  })
+  room.on(RoomEvent.TrackUnmuted, () => {
+    syncParticipantsFromRoom(room)
+  })
+  room.on(RoomEvent.DataReceived, (payload, participant) => {
+    handleDataChannelMessage(payload, participant)
   })
   room.on(RoomEvent.Reconnecting, () => {
     meetingConnectionStatus.value = '재연결 중'
   })
   room.on(RoomEvent.Reconnected, () => {
-    meetingConnectionStatus.value = '자막 연결됨'
+    meetingConnectionStatus.value = '회의 연결됨'
+    syncParticipantsFromRoom(room)
   })
   room.on(RoomEvent.Disconnected, () => {
     meetingConnectionStatus.value = '연결 종료'
+    resetMeetingSessionState()
   })
+}
+
+function handleDataChannelMessage(payload, participant) {
+  try {
+    const event = JSON.parse(textDecoder.decode(payload))
+
+    if (event?.eventType === 'caption.updated') {
+      captionMap.value = upsertCaption(captionMap.value, event)
+      lastCaptionReceivedAt.value = Date.now()
+      lastCaptionText.value = event.text || event.sourceText || event.sourceTranscript || ''
+      return
+    }
+
+    if (event?.eventType === 'chat.message.sent') {
+      // DataChannel sender identity와 payload 값이 다를 수 있어 현재 room participant identity를 기준으로 자기 메시지를 판별한다.
+      const senderIdentity = normalizeParticipantIdentity(
+        participant?.identity || event.senderParticipantIdentity || event.senderUserId,
+      )
+      const isSelf = senderIdentity === currentParticipantIdentity()
+      pushChatMessage({
+        id: event.messageId,
+        senderName: event.senderName || '참석자',
+        senderUserId: event.senderUserId || senderIdentity,
+        content: event.content || '',
+        sentAt: event.sentAt || new Date().toISOString(),
+        isSelf,
+        isSystem: false,
+      })
+      return
+    }
+
+    if (event?.eventType === 'feedback.generated' || event?.eventType === 'meeting.feedback.generated') {
+      feedbackMessage.value = event.payload?.message || event.message || feedbackMessage.value
+      return
+    }
+
+    if (event?.eventType === 'stt.status.changed') {
+      const nextStatus = event.payload?.status || event.status
+      if (nextStatus) {
+        meetingConnectionStatus.value = `STT ${nextStatus}`
+      }
+    }
+  } catch {
+    // Ignore non-JSON DataChannel packets.
+  }
+}
+
+function pushChatMessage(message) {
+  if (!message.content?.trim()) return
+
+  if (chatMessages.value.some((item) => item.id === message.id)) return
+
+  chatMessages.value.push(message)
+  nextTick(() => {
+    if (!chatLog.value) return
+    chatLog.value.scrollTop = chatLog.value.scrollHeight
+  })
+}
+
+function pushSystemChat(content) {
+  pushChatMessage({
+    id: `system-${Date.now()}`,
+    senderName: '시스템',
+    senderUserId: 'system',
+    content,
+    sentAt: new Date().toISOString(),
+    isSelf: false,
+    isSystem: true,
+  })
+}
+
+async function sendChat() {
+  const content = chatInput.value.trim()
+  if (!content || !meetingRoom.value?.localParticipant || sendingChat.value) return
+
+  sendingChat.value = true
+  const message = {
+    eventType: 'chat.message.sent',
+    messageId: crypto.randomUUID(),
+    meetingId: meetingId.value,
+    senderUserId: auth.user?.id || meetingConnection.value?.participantIdentity || 'guest',
+    senderParticipantIdentity: currentParticipantIdentity(),
+    senderName: currentParticipantName.value,
+    content,
+    sentAt: new Date().toISOString(),
+  }
+
+  // 같은 입력이 enter/click으로 거의 동시에 두 번 들어오는 상황을 막기 위해 입력창은 전송 전에 비운다.
+  chatInput.value = ''
+  await meetingRoom.value.localParticipant.publishData(
+    textEncoder.encode(JSON.stringify(message)),
+    { reliable: true },
+  ).then(() => {
+    pushChatMessage({
+      id: message.messageId,
+      senderName: message.senderName,
+      senderUserId: message.senderUserId,
+      content: message.content,
+      sentAt: message.sentAt,
+      isSelf: true,
+      isSystem: false,
+    })
+  }).catch((error) => {
+    chatInput.value = content
+    meetingConnectionError.value = error?.message || '채팅을 전송하지 못했습니다.'
+  }).finally(() => {
+    sendingChat.value = false
+  })
+}
+
+function handleChatEnter(event) {
+  // 한글 IME 조합 중 Enter는 입력 확정이므로 전송으로 해석하지 않는다.
+  if (chatInputComposing.value || event.isComposing || event.keyCode === 229) {
+    return
+  }
+  event.preventDefault()
+  void sendChat()
 }
 
 async function disconnectMeetingRoom() {
   const room = meetingRoom.value
   meetingRoom.value = null
-  if (!room) return
+  if (!room) {
+    resetMeetingSessionState()
+    return
+  }
+
+  await room.localParticipant.setScreenShareEnabled(false).catch(() => {})
   await room.localParticipant.setMicrophoneEnabled(false).catch(() => {})
   await room.localParticipant.setCameraEnabled(false).catch(() => {})
   room.disconnect()
+  resetMeetingSessionState()
 }
 
 async function endMeeting() {
@@ -642,17 +1295,33 @@ function formatCaptionTime(startedAtMs) {
   return `${minutes}:${seconds}`
 }
 
-function handleDeviceChange() {
-  loadDeviceList().then(restartPreview).catch(() => {
-    deviceError.value = true
-    deviceStatus.value = '장치 목록을 갱신하지 못했습니다.'
+function formatChatTime(timestamp) {
+  if (!timestamp) return ''
+  return new Date(timestamp).toLocaleTimeString('ko-KR', {
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false,
   })
 }
 
-function sendChat() {
-  if (!chatInput.value.trim()) return
-  chat.value.push({ who: '나', text: chatInput.value.trim() })
-  chatInput.value = ''
+function participantStatusLabel(participant) {
+  const statuses = []
+  statuses.push(participant.micEnabled ? '마이크 켜짐' : '음소거')
+  statuses.push(participant.cameraEnabled ? '카메라 켜짐' : '카메라 꺼짐')
+  if (participant.screenShareEnabled) statuses.push('화면 공유')
+  return statuses.join(' · ')
+}
+
+function handleDeviceChange() {
+  loadDeviceList().then(() => {
+    if (inLobby.value) {
+      return restartPreview()
+    }
+    return undefined
+  }).catch(() => {
+    deviceError.value = true
+    deviceStatus.value = '장치 목록을 갱신하지 못했습니다.'
+  })
 }
 
 onMounted(() => {
@@ -662,6 +1331,7 @@ onMounted(() => {
 
 onBeforeUnmount(() => {
   navigator.mediaDevices?.removeEventListener?.('devicechange', handleDeviceChange)
+  clearInterval(elapsedTimer)
   stopPreview()
   void disconnectMeetingRoom()
 })
