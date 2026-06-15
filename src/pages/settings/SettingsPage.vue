@@ -6,7 +6,7 @@ export default defineComponent({
   setup() {
     const auth = useAuthStore()
     const user = computed(() => auth.user)
-    const isAdmin = computed(() => user.value?.role === 'admin')
+    const isAdmin = computed(() => user.value?.role === 'ADMIN')
     const form = ref({
       name: user.value?.name || '',
       email: user.value?.email || '',
@@ -31,7 +31,7 @@ export default defineComponent({
         passwordVerified.value = false
         return
       }
-      if (password.value.current === user.value?.username) {
+      if (password.value.current === user.value?.loginId) {
         passwordVerified.value = true
         passwordMessage.value = '현재 비밀번호가 확인되었습니다.'
       } else {
