@@ -1,4 +1,4 @@
-import { getJson, patchJson, postJson } from './api-client'
+import { getJson, patchJson, postJson } from './api-client.js'
 
 const adminRequestOptions = {
   skipForbiddenHandler: true,
@@ -17,6 +17,35 @@ export function getAdminUsers(params = {}) {
   const query = searchParams.toString()
   const path = query ? `/admin/users?${query}` : '/admin/users'
   return getJson(path, adminRequestOptions)
+}
+
+export async function getAllAdminUsers(params = {}) {
+  const size = Number(params.size) > 0 ? Number(params.size) : 100
+  const firstPage = await getAdminUsers({
+    ...params,
+    page: 1,
+    size,
+  })
+
+  // 조직도 화면은 부서/팀별 사용자 집계를 위해 전체 목록이 필요해서 마지막 페이지까지 순차적으로 모은다.
+  const totalPages = Math.max(1, Number(firstPage?.totalPages || 1))
+  const items = [...(firstPage?.items || [])]
+
+  for (let page = 2; page <= totalPages; page += 1) {
+    const pageData = await getAdminUsers({
+      ...params,
+      page,
+      size,
+    })
+    items.push(...(pageData?.items || []))
+  }
+
+  return {
+    ...firstPage,
+    items,
+    totalPages,
+    totalElements: Number(firstPage?.totalElements || items.length),
+  }
 }
 
 export function getAdminUser(userId) {
