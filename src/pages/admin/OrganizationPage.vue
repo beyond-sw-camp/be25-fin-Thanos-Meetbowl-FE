@@ -547,6 +547,10 @@ function createButtonLabel() {
   if (activeTab.value === 'position') return '직급 추가'
   return '부서 추가'
 }
+
+function canCreateInCurrentTab() {
+  return activeTab.value === 'department' || activeTab.value === 'team' || activeTab.value === 'position'
+}
 </script>
 
 <template>
@@ -581,15 +585,26 @@ function createButtonLabel() {
         <div class="error-box">{{ actionError }}</div>
       </div>
 
-      <div class="admin-tabs">
+      <div class="tab-actions">
+        <div class="admin-tabs">
+          <button
+            v-for="tab in TAB_OPTIONS"
+            :key="tab.key"
+            :class="{ active: activeTab === tab.key }"
+            type="button"
+            @click="switchTab(tab.key)"
+          >
+            {{ tab.label }}
+          </button>
+        </div>
+
         <button
-          v-for="tab in TAB_OPTIONS"
-          :key="tab.key"
-          :class="{ active: activeTab === tab.key }"
+          v-if="canCreateInCurrentTab()"
+          class="primary-button"
           type="button"
-          @click="switchTab(tab.key)"
+          @click="openCreateModal"
         >
-          {{ tab.label }}
+          {{ createButtonLabel() }}
         </button>
       </div>
 
@@ -877,6 +892,13 @@ function createButtonLabel() {
   margin-top: 12px;
 }
 
+.tab-actions {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+}
+
 .organization-summary-grid {
   display: grid;
   gap: 16px;
@@ -985,6 +1007,13 @@ function createButtonLabel() {
 @media (min-width: 960px) {
   .organization-summary-grid {
     grid-template-columns: 360px minmax(0, 1fr);
+  }
+}
+
+@media (max-width: 959px) {
+  .tab-actions {
+    flex-direction: column;
+    align-items: stretch;
   }
 }
 </style>
