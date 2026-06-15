@@ -10,3 +10,12 @@ const defaultMeetingId = myMeetings.find((meeting) => meeting.status === 'live')
 export function meetingRoute(meetingId = defaultMeetingId) {
   return meetingId ? `/app/meeting/${meetingId}` : '/app/meetings'
 }
+
+/**
+ * 게스트가 로그인 없이 회의 화면으로 들어갈 수 있는 공개 링크다.
+ *
+ * 내부 사용자용 `/app/meeting/:meetingId`와 분리해, 공유 버튼에서 바로 복사할 수 있게 한다.
+ */
+export function guestMeetingRoute(meetingId) {
+  return meetingId ? `/guest/meeting/${meetingId}` : '/join'
+}
