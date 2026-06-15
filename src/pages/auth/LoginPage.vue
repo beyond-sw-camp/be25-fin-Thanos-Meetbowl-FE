@@ -7,7 +7,7 @@ export default defineComponent({
   setup() {
     const auth = useAuthStore()
     const router = useRouter()
-    const username = ref('')
+    const loginId = ref('')
     const password = ref('')
     const error = ref('')
     const loading = ref(false)
@@ -15,9 +15,10 @@ export default defineComponent({
     async function submit() {
       error.value = ''
       loading.value = true
+
       try {
-        const user = auth.login(username.value, password.value)
-        router.push(user.role === 'admin' ? '/admin/dashboard' : '/app/dashboard')
+        await auth.login(loginId.value, password.value)
+        router.push(auth.homePath)
       } catch (err) {
         error.value = err.message
       } finally {
@@ -25,12 +26,7 @@ export default defineComponent({
       }
     }
 
-    function quick(value) {
-      username.value = value
-      password.value = value
-    }
-
-    return { username, password, error, loading, submit, quick }
+    return { loginId, password, error, loading, submit }
   },
   template: `
     <main class="login-page">
@@ -47,18 +43,10 @@ export default defineComponent({
         <form class="login-card" @submit.prevent="submit">
           <h2>로그인</h2>
           <p>사내 업무 플랫폼에 접속하세요.</p>
-          <label>아이디<input v-model="username" autofocus></label>
+          <label>아이디<input v-model="loginId" autofocus></label>
           <label>비밀번호<input v-model="password" type="password"></label>
           <div v-if="error" class="error-box">{{ error }}</div>
           <button class="primary-button" :disabled="loading">{{ loading ? '로그인 중...' : '로그인' }}</button>
-          <div class="demo-box">
-            <strong>데모 계정</strong>
-            <div class="demo-grid">
-              <button type="button" @click="quick('admin')"><small>Admin</small><span>admin / admin</span></button>
-              <button type="button" @click="quick('user')"><small>User</small><span>user / user</span></button>
-            </div>
-            <p>Admin 계정은 인사팀 공유 계정으로, 데모에서는 관리자 화면 확인용으로만 사용합니다.</p>
-          </div>
         </form>
       </section>
     </main>

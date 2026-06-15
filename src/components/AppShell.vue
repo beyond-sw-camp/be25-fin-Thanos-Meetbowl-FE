@@ -59,7 +59,7 @@
               <span>{{ user?.department }} · {{ user?.position }}</span>
               <span>{{ user?.email }}</span>
               <RouterLink
-                v-if="user?.role === 'user'"
+                v-if="user?.role === 'USER'"
                 to="/app/settings"
                 class="profile-menu-link"
                 @click="profileOpen = false"
@@ -97,7 +97,7 @@ const liveMeetingPath = meetingRoute(myMeetings.find((meeting) => meeting.status
 const navSections = [
   {
     title: '개인 워크스페이스',
-    roles: ['user'],
+    roles: ['USER'],
     items: [
       { to: '/app/dashboard', label: '대시보드', icon: '▦' },
       { to: '/app/rooms', label: '회의실 예약', icon: '□' },
@@ -112,7 +112,7 @@ const navSections = [
   },
   {
     title: '관리자',
-    roles: ['admin'],
+    roles: ['ADMIN'],
     items: [
       { to: '/admin/dashboard', label: '관리자 대시보드', icon: '▦' },
       { to: '/admin/members', label: '회원 관리', icon: '◎' },
@@ -138,7 +138,7 @@ const visibleSections = computed(() =>
     .filter((section) => section.roles.includes(user.value?.role))
     .map((section) => ({
       ...section,
-      items: section.items.filter((item) => item.to.startsWith(user.value?.role === 'admin' ? '/admin' : '/app')),
+      items: section.items.filter((item) => item.to.startsWith(user.value?.role === 'ADMIN' ? '/admin' : '/app')),
     })),
 )
 
@@ -146,8 +146,9 @@ function isActive(to) {
   return route.path === to || route.path.startsWith(`${to}/`)
 }
 
-function handleLogout() {
-  auth.logout()
+async function handleLogout() {
+  profileOpen.value = false
+  await auth.logout()
   router.push('/login')
 }
 </script>
