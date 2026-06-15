@@ -18,15 +18,14 @@ const profileForm = ref({
 })
 const settingsForm = ref({
   meetingStartReminderMinutes: 10,
-  autoBackupEnabled: false,
-  autoBackupTime: '',
+  minutesReviewReminderMinutes: 60,
 })
 
 const profileMessage = ref('')
 const profileError = ref('')
 const settingsMessage = ref('')
 const settingsError = ref('')
-const passwordMessage = ref('비밀번호 변경은 별도 인증 흐름에서 제공되며, 현재 화면에는 연결되지 않았습니다.')
+const passwordMessage = ref('비밀번호 변경은 별도 인증 흐름에서 제공하고, 현재 화면에서는 연결하지 않습니다.')
 
 const roleLabelMap = {
   USER: '사용자',
@@ -39,11 +38,18 @@ const statusLabelMap = {
 }
 
 const reminderOptions = [
-  { value: 0, label: '알림 안 함' },
+  { value: 0, label: '알림 없음' },
   { value: 10, label: '10분 전' },
   { value: 15, label: '15분 전' },
   { value: 20, label: '20분 전' },
   { value: 30, label: '30분 전' },
+]
+
+const minutesReviewReminderOptions = [
+  { value: 60, label: '1시간마다' },
+  { value: 120, label: '2시간마다' },
+  { value: 180, label: '3시간마다' },
+  { value: 240, label: '4시간마다' },
 ]
 
 const canEditProfile = computed(() => Boolean(auth.user))
@@ -71,10 +77,11 @@ async function loadPage() {
       name: profileData?.name || '',
       email: profileData?.email || '',
     }
+
+    // 응답값을 셀렉트에 바로 바인딩할 수 있도록 숫자형으로 정규화한다.
     settingsForm.value = {
       meetingStartReminderMinutes: Number(settingsData?.meetingStartReminderMinutes ?? 10),
-      autoBackupEnabled: Boolean(settingsData?.autoBackupEnabled),
-      autoBackupTime: toTimeInputValue(settingsData?.autoBackupTime),
+      minutesReviewReminderMinutes: Number(settingsData?.minutesReviewReminderMinutes ?? 60),
     }
   } catch (error) {
     if (error?.status === 403) {
@@ -97,7 +104,7 @@ async function saveProfile() {
   profileError.value = ''
 
   try {
-    // BE에서 허용한 수정 필드(name, email)만 전송한다.
+    // BE에서 허용하는 수정 필드인 name, email만 전송한다.
     const savedProfile = await updateMyProfile({
       name: profileForm.value.name.trim(),
       email: profileForm.value.email.trim(),
@@ -128,24 +135,16 @@ async function saveSettings() {
   settingsError.value = ''
 
   try {
-    if (settingsForm.value.autoBackupEnabled && !settingsForm.value.autoBackupTime) {
-      settingsError.value = '자동 백업을 사용할 때는 백업 시각을 선택해야 합니다.'
-      return
-    }
-
-    // time input은 HH:mm 형식이므로 API 요청 시 HH:mm:ss로 맞춘다.
+    // BE 개인 설정 PATCH DTO와 동일한 필드명으로 저장 요청을 보낸다.
     const savedSettings = await updateMySettings({
       meetingStartReminderMinutes: Number(settingsForm.value.meetingStartReminderMinutes),
-      autoBackupEnabled: settingsForm.value.autoBackupEnabled,
-      autoBackupTime: settingsForm.value.autoBackupEnabled
-        ? toApiTimeValue(settingsForm.value.autoBackupTime)
-        : null,
+      minutesReviewReminderMinutes: Number(settingsForm.value.minutesReviewReminderMinutes),
     })
 
+    // 저장 후에는 BE 응답값으로 다시 맞춰 화면 상태를 동기화한다.
     settingsForm.value = {
       meetingStartReminderMinutes: Number(savedSettings?.meetingStartReminderMinutes ?? 10),
-      autoBackupEnabled: Boolean(savedSettings?.autoBackupEnabled),
-      autoBackupTime: toTimeInputValue(savedSettings?.autoBackupTime),
+      minutesReviewReminderMinutes: Number(savedSettings?.minutesReviewReminderMinutes ?? 60),
     }
     settingsMessage.value = '개인 설정을 저장했습니다.'
   } catch (error) {
@@ -166,16 +165,6 @@ function roleLabel(role) {
 function statusLabel(status) {
   const normalizedStatus = `${status || ''}`.toUpperCase()
   return statusLabelMap[normalizedStatus] || normalizedStatus || '-'
-}
-
-function toTimeInputValue(value) {
-  if (!value) return ''
-  return `${value}`.slice(0, 5)
-}
-
-function toApiTimeValue(value) {
-  if (!value) return null
-  return value.length === 5 ? `${value}:00` : value
 }
 </script>
 
@@ -231,7 +220,7 @@ function toApiTimeValue(value) {
 
       <article class="card settings-card">
         <h2>비밀번호 변경</h2>
-        <p>비밀번호 변경은 별도 인증 흐름에서 제공됩니다.</p>
+        <p>비밀번호 변경은 별도 인증 흐름에서 제공합니다.</p>
         <div class="settings-alert">{{ passwordMessage }}</div>
       </article>
 
@@ -259,17 +248,17 @@ function toApiTimeValue(value) {
             </option>
           </select>
         </div>
-        <label class="settings-toggle-row">
-          <span>자동 백업 사용</span>
-          <input v-model="settingsForm.autoBackupEnabled" type="checkbox">
-        </label>
         <div class="settings-notification-row">
-          <span>자동 백업 시각</span>
-          <input
-            v-model="settingsForm.autoBackupTime"
-            type="time"
-            :disabled="!settingsForm.autoBackupEnabled"
-          >
+          <span>회의록 미검토 알림</span>
+          <select v-model.number="settingsForm.minutesReviewReminderMinutes">
+            <option
+              v-for="option in minutesReviewReminderOptions"
+              :key="option.value"
+              :value="option.value"
+            >
+              {{ option.label }}
+            </option>
+          </select>
         </div>
         <p v-if="settingsMessage" class="settings-success">{{ settingsMessage }}</p>
         <div v-if="settingsError" class="error-box" style="margin-top: 12px;">{{ settingsError }}</div>
