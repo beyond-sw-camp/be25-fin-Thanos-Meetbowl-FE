@@ -103,6 +103,7 @@ router.beforeEach((to) => {
   }
   if (!auth.isAuthenticated) return '/login'
   const requiredRole = to.meta.role
+  if (to.path === '/admin/dashboard' && requiredRole === 'ADMIN') return true
   if (requiredRole && auth.user?.role !== requiredRole) return auth.homePath
   return true
 })

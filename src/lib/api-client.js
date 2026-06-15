@@ -1,6 +1,6 @@
-import { clearStoredAuthSession, readStoredAuthSession } from './auth-session'
+import { clearStoredAuthSession, readStoredAuthSession } from './auth-session.js'
 
-const DEFAULT_API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8080/api/v1'
+const DEFAULT_API_BASE_URL = import.meta.env?.VITE_API_BASE_URL || '/api/v1'
 
 let onUnauthorized = null
 let onForbidden = null
@@ -46,7 +46,7 @@ export async function requestJson(path, options = {}) {
     if (response.status === 401) {
       clearStoredAuthSession()
       await onUnauthorized?.(error)
-    } else if (response.status === 403) {
+    } else if (response.status === 403 && !options.skipForbiddenHandler) {
       await onForbidden?.(error)
     }
 

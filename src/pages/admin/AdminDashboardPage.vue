@@ -1,70 +1,328 @@
-<script>
-import { defineComponent } from 'vue'
-import { adminLogs, members, minutes, rooms } from '../../data/mockData'
-import { adminHourlyUsage, adminRoomUsage, adminSites } from '../../data/adminData'
+<script setup>
+import { computed, onMounted, ref } from 'vue'
+import { getAdminDashboardSummary } from '../../lib/admin-dashboard'
+import { useAuthStore } from '../../stores/auth'
 
-export default defineComponent({
-  setup() {
-    const activeMembers = members.filter((member) => member.status === '활성').length
-    const inactiveMembers = members.length - activeMembers
-    const totalUsage = adminHourlyUsage.reduce((sum, item) => sum + item.count, 0)
-    const peak = adminHourlyUsage.reduce((top, item) => item.count > top.count ? item : top, adminHourlyUsage[0])
-    const maxUsage = Math.max(...adminHourlyUsage.map((item) => item.count))
-    const siteRates = adminSites.map((site) => ({
-      ...site,
-      rooms: rooms.filter((room) => room.site === site.name).length,
-      rate: site.name === '테헤란로' ? 82 : site.name === '봉은사로' ? 64 : 47,
-    }))
-    const kpis = [
-      { label: '전체 사용자', value: members.length, sub: `활성 ${activeMembers} · 비활성 ${inactiveMembers}` },
-      { label: '운영 회의실', value: rooms.length, sub: `사용 제한 ${rooms.filter((room) => room.restricted).length}` },
-      { label: '회의실 사용 30일', value: totalUsage, sub: `피크 ${peak.hour}시 · ${peak.count}건` },
-      { label: '보관 회의록', value: minutes.length, sub: '이번 달 생성 86' },
-    ]
-    return { adminHourlyUsage, adminLogs, adminRoomUsage, inactiveMembers, kpis, maxUsage, peak, rooms, siteRates }
-  },
-  template: `
-    <section class="page admin-page">
-      <div class="admin-eyebrow"><span></span>Admin Console</div>
-      <header class="page-header"><h1>관리자 대시보드</h1><p>플랫폼 운영 현황과 회의 활동을 한눈에 확인합니다.</p></header>
-      <article class="card admin-alert">
-        <div class="card-head"><h2>주의 항목</h2><span class="badge warning">점검 필요</span></div>
-        <div class="admin-alert-grid">
-          <p><strong>사용 제한 회의실 {{ rooms.filter((room) => room.restricted).length }}건</strong><span>{{ rooms.find((room) => room.restricted)?.name }} · {{ rooms.find((room) => room.restricted)?.restrictReason }}</span></p>
-          <p><strong>비활성 사용자 {{ inactiveMembers }}명</strong><span>30일 이상 미접속 계정 검토 필요</span></p>
+const auth = useAuthStore()
+
+const loading = ref(true)
+const errorMessage = ref('')
+const forbidden = ref(false)
+const summary = ref(null)
+
+const dateTimeFormatter = new Intl.DateTimeFormat('ko-KR', {
+  timeZone: 'Asia/Seoul',
+  year: 'numeric',
+  month: '2-digit',
+  day: '2-digit',
+  hour: '2-digit',
+  minute: '2-digit',
+  hour12: false,
+})
+
+const hourFormatter = new Intl.DateTimeFormat('ko-KR', {
+  timeZone: 'Asia/Seoul',
+  hour: '2-digit',
+  minute: '2-digit',
+  hour12: false,
+})
+
+const isAdmin = computed(() => auth.user?.role === 'ADMIN')
+const recentAuditLogs = computed(() => summary.value?.recentAuditLogs || [])
+const mailRetentionPolicy = computed(() => summary.value?.mailRetentionPolicy || null)
+const meetingRoomSummary = computed(() => summary.value?.meetingRoomSummary || null)
+const timeSlotUsage = computed(() => meetingRoomSummary.value?.timeSlotUsage || [])
+const siteBuildingUsage = computed(() => meetingRoomSummary.value?.siteBuildingUsage || [])
+const maxReservationCount = computed(() => {
+  const counts = timeSlotUsage.value.map((item) => item.reservationCount)
+  return counts.length ? Math.max(...counts, 1) : 1
+})
+const peakUsage = computed(() => {
+  if (!timeSlotUsage.value.length) return null
+
+  return timeSlotUsage.value.reduce((top, item) => {
+    if (!top || item.reservationCount > top.reservationCount) return item
+    return top
+  }, null)
+})
+const busiestSiteBuilding = computed(() => {
+  if (!siteBuildingUsage.value.length) return null
+
+  return siteBuildingUsage.value.reduce((top, item) => {
+    if (!top || toPercentNumber(item.usageRate) > toPercentNumber(top.usageRate)) return item
+    return top
+  }, null)
+})
+const kpis = computed(() => {
+  if (!meetingRoomSummary.value || !mailRetentionPolicy.value) return []
+
+  return [
+    {
+      label: '오늘 예약 수',
+      value: meetingRoomSummary.value.todayReservationCount,
+      sub: `시간대 집계 ${timeSlotUsage.value.length}건`,
+    },
+    {
+      label: '현재 사용 중 회의실 수',
+      value: meetingRoomSummary.value.inUseMeetingRoomCount,
+      sub: `전체 분석 ${siteBuildingUsage.value.length}개 건물`,
+    },
+    {
+      label: '현재 사용 가능한 회의실 수',
+      value: meetingRoomSummary.value.availableMeetingRoomCount,
+      sub: `사용률 최고 ${formatPeakLocation(busiestSiteBuilding.value)}`,
+    },
+    {
+      label: '메일 보관 기간',
+      value: `${mailRetentionPolicy.value.retentionDays}일`,
+      sub: mailRetentionPolicy.value.autoDeleteEnabled ? '자동 삭제 사용' : '자동 삭제 미사용',
+    },
+    {
+      label: '최근 관리자 작업',
+      value: recentAuditLogs.value.length,
+      sub: recentAuditLogs.value[0] ? `${recentAuditLogs.value[0].actorName} · ${recentAuditLogs.value[0].actionType}` : '최근 이력 없음',
+    },
+  ]
+})
+
+onMounted(() => {
+  loadSummary()
+})
+
+async function loadSummary() {
+  if (!isAdmin.value) {
+    forbidden.value = true
+    loading.value = false
+    return
+  }
+
+  loading.value = true
+  errorMessage.value = ''
+  forbidden.value = false
+
+  try {
+    summary.value = await getAdminDashboardSummary()
+  } catch (error) {
+    if (error?.status === 403) {
+      forbidden.value = true
+      return
+    }
+
+    errorMessage.value = error?.message || '관리자 대시보드 요약 정보를 불러오지 못했습니다.'
+  } finally {
+    loading.value = false
+  }
+}
+
+function formatDateTime(value) {
+  if (!value) return '-'
+
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) return '-'
+
+  return dateTimeFormatter.format(date)
+}
+
+function formatHour(value) {
+  if (!value) return '-'
+
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) return '-'
+
+  return hourFormatter.format(date)
+}
+
+function formatPercent(value) {
+  const percent = toPercentNumber(value)
+  return `${percent % 1 === 0 ? percent.toFixed(0) : percent.toFixed(1)}%`
+}
+
+function toPercentNumber(value) {
+  const numericValue = Number(value)
+  if (!Number.isFinite(numericValue)) return 0
+  return numericValue <= 1 ? numericValue * 100 : numericValue
+}
+
+function formatPeakLocation(item) {
+  if (!item) return '-'
+  return `${item.siteName} ${item.buildingName}`
+}
+
+function resultBadgeClass(result) {
+  return `${result}`.toUpperCase() === 'SUCCESS' ? 'success' : 'warning'
+}
+</script>
+
+<template>
+  <section class="page admin-page">
+    <div class="admin-eyebrow"><span></span>Admin Console</div>
+    <header class="page-header">
+      <h1>관리자 대시보드</h1>
+      <p>운영 현황, 메일 정책, 회의실 사용 현황을 한 번에 확인합니다.</p>
+    </header>
+
+    <article v-if="loading" class="card empty-state">
+      관리자 대시보드 요약 정보를 불러오는 중입니다.
+    </article>
+
+    <article v-else-if="forbidden" class="card empty-state">
+      <h2>접근 권한 없음</h2>
+      <p>이 화면은 관리자 계정만 확인할 수 있습니다.</p>
+    </article>
+
+    <article v-else-if="errorMessage" class="card">
+      <div class="error-box">{{ errorMessage }}</div>
+      <div class="admin-actions" style="margin-top: 12px;">
+        <button class="secondary-button" @click="loadSummary">다시 시도</button>
+      </div>
+    </article>
+
+    <template v-else>
+      <article class="card">
+        <div class="card-head">
+          <div>
+            <h2>메일 보관 정책 요약</h2>
+            <p>현재 적용 중인 보관 및 자동 삭제 설정입니다.</p>
+          </div>
+          <span :class="['badge', mailRetentionPolicy?.autoDeleteEnabled ? 'warning' : 'navy']">
+            {{ mailRetentionPolicy?.autoDeleteEnabled ? '자동 삭제 사용' : '자동 삭제 미사용' }}
+          </span>
         </div>
+        <dl class="detail-list">
+          <div>
+            <dt>보관 기간</dt>
+            <dd>{{ mailRetentionPolicy?.retentionDays ?? 0 }}일</dd>
+          </div>
+          <div>
+            <dt>자동 삭제</dt>
+            <dd>{{ mailRetentionPolicy?.autoDeleteEnabled ? '사용' : '미사용' }}</dd>
+          </div>
+          <div>
+            <dt>수정 시각</dt>
+            <dd>{{ formatDateTime(mailRetentionPolicy?.updatedAt) }}</dd>
+          </div>
+          <div>
+            <dt>수정자</dt>
+            <dd>{{ mailRetentionPolicy?.updatedBy || '-' }}</dd>
+          </div>
+        </dl>
       </article>
-      <div class="metric-grid"><article v-for="kpi in kpis" :key="kpi.label" class="metric-card"><span>{{ kpi.label }}</span><strong>{{ kpi.value }}</strong><em>{{ kpi.sub }}</em></article></div>
+
+      <div class="metric-grid">
+        <article v-for="kpi in kpis" :key="kpi.label" class="metric-card">
+          <span>{{ kpi.label }}</span>
+          <strong>{{ kpi.value }}</strong>
+          <em>{{ kpi.sub }}</em>
+        </article>
+      </div>
+
       <div class="admin-dashboard-grid">
         <article class="card admin-chart-card">
-          <div class="card-head"><div><h2>시간대별 회의실 사용 빈도</h2><p>최근 30일 기준 회의실 점유 횟수</p></div><span class="badge">30일</span></div>
-          <div class="admin-bar-chart">
-            <div v-for="item in adminHourlyUsage" :key="item.hour" class="admin-bar-item">
-              <div class="admin-bar-track"><i :style="{ height: (item.count / maxUsage * 100) + '%' }"></i></div>
-              <span>{{ item.hour }}시</span>
-              <small>{{ item.count }}</small>
+          <div class="card-head">
+            <div>
+              <h2>시간대별 회의실 사용 빈도</h2>
+              <p>오늘 예약된 회의실의 시간대별 예약 수입니다.</p>
+            </div>
+            <span class="badge">{{ timeSlotUsage.length }}개 시간대</span>
+          </div>
+          <p v-if="!timeSlotUsage.length" class="empty-text">집계된 시간대 사용 정보가 없습니다.</p>
+          <div v-else class="admin-bar-chart">
+            <div v-for="item in timeSlotUsage" :key="item.slotStartAt" class="admin-bar-item">
+              <div class="admin-bar-track">
+                <i :style="{ height: `${(item.reservationCount / maxReservationCount) * 100}%` }"></i>
+              </div>
+              <span>{{ formatHour(item.slotStartAt) }}</span>
+              <small>{{ item.reservationCount }}</small>
             </div>
           </div>
         </article>
+
         <article class="card admin-site-card">
-          <div class="card-head"><h2>사이트/건물별 사용률</h2><span class="badge">이번 달</span></div>
-          <ul class="admin-progress-list">
-            <li v-for="site in siteRates" :key="site.name"><div><strong>{{ site.name }}</strong><span>{{ site.building }} · {{ site.rooms }}실 · {{ site.rate }}%</span></div><b><i :style="{ width: site.rate + '%' }"></i></b></li>
+          <div class="card-head">
+            <div>
+              <h2>사이트·건물별 회의실 사용률</h2>
+              <p>현재 사용 중인 회의실 수를 기준으로 계산한 사용률입니다.</p>
+            </div>
+            <span class="badge">{{ siteBuildingUsage.length }}개 건물</span>
+          </div>
+          <ul v-if="siteBuildingUsage.length" class="admin-progress-list">
+            <li v-for="site in siteBuildingUsage" :key="`${site.siteId}-${site.buildingId}`">
+              <div>
+                <strong>{{ site.siteName }}</strong>
+                <span>{{ site.buildingName }} · 사용 {{ site.usedRooms }}/{{ site.totalRooms }} · {{ formatPercent(site.usageRate) }}</span>
+              </div>
+              <b><i :style="{ width: formatPercent(site.usageRate) }"></i></b>
+            </li>
           </ul>
-          <p>가장 붐비는 시간대는 <strong>{{ peak.hour }}시</strong>입니다.</p>
+          <p v-else class="empty-text">집계된 사이트·건물 사용률 정보가 없습니다.</p>
+          <p v-if="peakUsage">
+            가장 예약이 많은 시간대는 <strong>{{ formatHour(peakUsage.slotStartAt) }}</strong> 입니다.
+          </p>
         </article>
       </div>
+
       <div class="admin-dashboard-grid">
         <article class="card admin-table-card wide">
-          <div class="card-head"><h2>회의실별 사용률 상세</h2><span class="badge">최근 30일</span></div>
-          <div class="table-card embedded-table"><table><thead><tr><th>회의실</th><th>사이트/건물</th><th>층</th><th>사용률</th><th>사용 시간</th><th>피크</th></tr></thead><tbody><tr v-for="room in adminRoomUsage" :key="room.room"><td>{{ room.room }}</td><td>{{ room.site }} · {{ room.building }}</td><td>{{ room.floor }}</td><td><span class="progress-cell"><i :style="{ width: room.rate + '%' }"></i></span>{{ room.rate }}%</td><td>{{ room.hours }}h</td><td>{{ room.peak }}</td></tr></tbody></table></div>
+          <div class="card-head">
+            <div>
+              <h2>사이트·건물별 상세 사용 현황</h2>
+              <p>회의실 총 개수와 현재 사용 중인 개수를 함께 표시합니다.</p>
+            </div>
+            <span class="badge">실시간 요약</span>
+          </div>
+          <div class="table-card embedded-table">
+            <table>
+              <thead>
+                <tr>
+                  <th>사이트</th>
+                  <th>건물</th>
+                  <th>총 회의실 수</th>
+                  <th>사용 중</th>
+                  <th>사용 가능</th>
+                  <th>사용률</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr v-if="!siteBuildingUsage.length">
+                  <td colspan="6"><div class="empty-state">표시할 회의실 사용 현황이 없습니다.</div></td>
+                </tr>
+                <tr v-for="site in siteBuildingUsage" :key="`${site.siteId}-${site.buildingId}-table`">
+                  <td>{{ site.siteName }}</td>
+                  <td>{{ site.buildingName }}</td>
+                  <td>{{ site.totalRooms }}</td>
+                  <td>{{ site.usedRooms }}</td>
+                  <td>{{ Math.max(site.totalRooms - site.usedRooms, 0) }}</td>
+                  <td>
+                    <span class="progress-cell"><i :style="{ width: formatPercent(site.usageRate) }"></i></span>
+                    {{ formatPercent(site.usageRate) }}
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
         </article>
+
         <article class="card admin-table-card">
-          <div class="card-head"><h2>관리자 작업 로그</h2><span class="badge">최근</span></div>
-          <ul class="compact-list"><li v-for="log in adminLogs.slice(0, 5)" :key="log.id"><strong>{{ log.action }}</strong><span>{{ log.actor }} · {{ log.time }}</span></li></ul>
+          <div class="card-head">
+            <div>
+              <h2>최근 관리자 작업 이력</h2>
+              <p>가장 최근 감사 로그 5건을 표시합니다.</p>
+            </div>
+            <span class="badge">{{ recentAuditLogs.length }}건</span>
+          </div>
+          <ul v-if="recentAuditLogs.length" class="compact-list">
+            <li v-for="log in recentAuditLogs.slice(0, 5)" :key="log.auditLogId">
+              <div>
+                <strong>{{ log.actionType }}</strong>
+                <span>{{ log.actorName }} · {{ log.targetType }} · {{ formatDateTime(log.createdAt) }}</span>
+                <span>{{ log.targetId || '-' }}</span>
+              </div>
+              <span :class="['badge', resultBadgeClass(log.result)]">{{ log.result }}</span>
+            </li>
+          </ul>
+          <p v-else class="empty-text">최근 관리자 작업 이력이 없습니다.</p>
         </article>
       </div>
-    </section>
-  `,
-})
-</script>
+    </template>
+  </section>
+</template>
