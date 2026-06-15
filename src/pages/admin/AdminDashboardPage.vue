@@ -40,6 +40,7 @@ const maxReservationCount = computed(() => {
 const peakUsage = computed(() => {
   if (!timeSlotUsage.value.length) return null
 
+  // 막대 차트 보조 문구에 쓸 최고 예약 시간대를 계산한다.
   return timeSlotUsage.value.reduce((top, item) => {
     if (!top || item.reservationCount > top.reservationCount) return item
     return top
@@ -48,6 +49,7 @@ const peakUsage = computed(() => {
 const busiestSiteBuilding = computed(() => {
   if (!siteBuildingUsage.value.length) return null
 
+  // usageRate가 0~1 또는 0~100으로 와도 같은 기준으로 비교할 수 있게 맞춘다.
   return siteBuildingUsage.value.reduce((top, item) => {
     if (!top || toPercentNumber(item.usageRate) > toPercentNumber(top.usageRate)) return item
     return top
@@ -91,6 +93,7 @@ onMounted(() => {
 
 async function loadSummary() {
   if (!isAdmin.value) {
+    // USER가 직접 URL로 진입한 경우에도 화면에서 권한 없음 상태를 보여준다.
     forbidden.value = true
     loading.value = false
     return
@@ -140,6 +143,7 @@ function formatPercent(value) {
 function toPercentNumber(value) {
   const numericValue = Number(value)
   if (!Number.isFinite(numericValue)) return 0
+  // 백엔드가 0.5처럼 비율로 주는 경우와 50처럼 퍼센트로 주는 경우를 모두 흡수한다.
   return numericValue <= 1 ? numericValue * 100 : numericValue
 }
 

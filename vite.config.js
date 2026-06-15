@@ -8,6 +8,7 @@ export default defineConfig({
   server: {
     proxy: {
       '/api': {
+        // 개발 서버에서는 백엔드 API를 프록시해 브라우저 CORS를 피한다.
         target: 'http://localhost:8080',
         changeOrigin: true,
       },

@@ -1,5 +1,6 @@
 import { clearStoredAuthSession, readStoredAuthSession } from './auth-session.js'
 
+// 배포 환경은 환경변수를 우선하고, 로컬 개발은 Vite 프록시 경로를 기본값으로 쓴다.
 const DEFAULT_API_BASE_URL = import.meta.env?.VITE_API_BASE_URL || '/api/v1'
 
 let onUnauthorized = null
