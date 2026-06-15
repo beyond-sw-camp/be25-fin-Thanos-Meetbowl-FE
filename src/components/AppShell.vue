@@ -106,8 +106,9 @@ const navSections = [
       { to: '/app/minutes', label: '내 회의록', icon: '≡' },
       { to: '/app/mail', label: '메일', icon: '✉' },
       { to: '/app/workspace', label: '개인 워크스페이스', icon: '▣' },
+      { to: '/admin/members', label: '사용자 검색', icon: '⌕' },
       { to: '/app/shared-docs', label: '공유 워크스페이스', icon: '▤' },
-      { to: '/app/community', label: '도파민', icon: '◇' },
+      { to: '/app/community', label: '커뮤니티', icon: '◇' },
     ],
   },
   {
@@ -115,7 +116,7 @@ const navSections = [
     roles: ['ADMIN'],
     items: [
       { to: '/admin/dashboard', label: '관리자 대시보드', icon: '▦' },
-      { to: '/admin/members', label: '회원 관리', icon: '◎' },
+      { to: '/admin/members', label: '회원 관리', icon: '⌕' },
       { to: '/admin/organization', label: '조직/직급 관리', icon: '▧' },
       { to: '/admin/rooms', label: '회의실 관리', icon: '□' },
       { to: '/admin/reservations', label: '예약 현황', icon: '◷' },
@@ -134,12 +135,7 @@ const notifications = [
 ]
 
 const visibleSections = computed(() =>
-  navSections
-    .filter((section) => section.roles.includes(user.value?.role))
-    .map((section) => ({
-      ...section,
-      items: section.items.filter((item) => item.to.startsWith(user.value?.role === 'ADMIN' ? '/admin' : '/app')),
-    })),
+  navSections.filter((section) => section.roles.includes(user.value?.role)),
 )
 
 function isActive(to) {

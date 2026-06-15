@@ -1,6 +1,7 @@
 <script setup>
 import { computed, onMounted, ref, watch } from 'vue'
 import Pagination from '../../components/common/Pagination.vue'
+import UserDirectoryPanel from '../../components/common/UserDirectoryPanel.vue'
 import {
   getAdminAffiliates,
   getAdminDepartments,
@@ -91,10 +92,14 @@ onMounted(() => {
 })
 
 watch(pageNo, () => {
-  refreshUserList()
+  if (isAdmin.value) {
+    refreshUserList()
+  }
 })
 
 watch(q, () => {
+  if (!isAdmin.value) return
+
   if (pageNo.value !== 1) {
     pageNo.value = 1
     return
@@ -108,7 +113,6 @@ watch(
   (affiliateId, previousAffiliateId) => {
     if (affiliateId === previousAffiliateId) return
 
-    // 상위 조직이 바뀌면 현재 선택한 하위 부서가 더 이상 유효한지 다시 확인한다.
     const departmentStillValid = departments.value.some(
       (item) => item.departmentId === form.value.departmentId && item.affiliateId === affiliateId,
     )
@@ -121,7 +125,6 @@ watch(
   (departmentId, previousDepartmentId) => {
     if (departmentId === previousDepartmentId) return
 
-    // 부서 변경 시 팀도 같은 방식으로 연쇄 정리해 잘못된 조합 전송을 막는다.
     const teamStillValid = teams.value.some(
       (item) => item.teamId === form.value.teamId && item.departmentId === departmentId,
     )
@@ -131,8 +134,8 @@ watch(
 
 async function loadPage() {
   if (!isAdmin.value) {
-    forbidden.value = true
     loading.value = false
+    forbidden.value = false
     return
   }
 
@@ -142,7 +145,6 @@ async function loadPage() {
   actionError.value = ''
 
   try {
-    // 첫 진입에서는 조직 선택값과 사용자 목록을 함께 받아 화면이 한 번에 준비되게 한다.
     await Promise.all([loadOrganizationOptions(), loadUsers()])
   } catch (error) {
     if (error?.status === 403) {
@@ -160,7 +162,6 @@ async function loadOrganizationOptions() {
   organizationLoading.value = true
 
   try {
-    // 생성/수정 폼에서 쓰는 조직 마스터는 서로 독립적이어서 병렬 조회가 가장 빠르다.
     const [affiliateData, departmentData, teamData, positionData] = await Promise.all([
       getAdminAffiliates(),
       getAdminDepartments(),
@@ -237,7 +238,6 @@ async function saveMember() {
 
   try {
     if (form.value.userId) {
-      // 수정 API는 status를 받지 않으므로 BE DTO에 맞는 필드만 따로 만든다.
       const updated = await updateAdminUser(form.value.userId, buildUserUpdatePayload(form.value))
       const normalized = normalizeUserRow(updated)
 
@@ -247,7 +247,6 @@ async function saveMember() {
       }
       successMessage.value = '사용자 정보를 수정했습니다.'
     } else {
-      // 생성 성공 직후에는 응답 본문만으로 목록/안내를 즉시 갱신해 재조회 대기 시간을 줄인다.
       const created = await createAdminUser(buildUserCreatePayload(form.value))
       const normalized = normalizeUserRow(created?.user)
 
@@ -263,7 +262,7 @@ async function saveMember() {
       successMessage.value = '사용자 계정을 생성했습니다.'
       temporaryPasswordNotice.value = created?.temporaryPassword
         ? `임시 비밀번호: ${created.temporaryPassword}`
-        : '임시 비밀번호는 생성 응답에 포함되지 않았습니다.'
+        : '임시 비밀번호가 생성 응답에 포함되지 않았습니다.'
     }
 
     closeModal()
@@ -287,7 +286,6 @@ async function openDetail(user) {
   actionError.value = ''
 
   try {
-    // 목록 응답보다 상세 응답을 기준으로 모달을 채워 최신 값을 보장한다.
     const data = await getAdminUser(user.userId)
     selectedUser.value = normalizeUserRow(data)
   } catch (error) {
@@ -306,7 +304,7 @@ async function openDetail(user) {
 
 async function changeStatus(user) {
   const nextStatus = user.status === 'ACTIVE' ? 'INACTIVE' : 'ACTIVE'
-  const actionLabel = nextStatus === 'ACTIVE' ? '활성화' : '비활성화'
+  const actionLabelText = nextStatus === 'ACTIVE' ? '활성화' : '비활성화'
 
   actionError.value = ''
   successMessage.value = ''
@@ -319,14 +317,14 @@ async function changeStatus(user) {
     if (selectedUser.value?.userId === normalized.userId) {
       selectedUser.value = normalized
     }
-    successMessage.value = `사용자를 ${actionLabel}했습니다.`
+    successMessage.value = `사용자를 ${actionLabelText}했습니다.`
   } catch (error) {
     if (error?.status === 403) {
       forbidden.value = true
       return
     }
 
-    actionError.value = error?.message || `사용자 ${actionLabel}에 실패했습니다.`
+    actionError.value = error?.message || `사용자 ${actionLabelText}에 실패했습니다.`
   }
 }
 
@@ -437,7 +435,6 @@ function buildSharedUserPayload(targetForm) {
 
 function buildUserCreatePayload(targetForm) {
   return {
-    // loginId와 status는 생성 DTO 전용 필드라서 create payload에서만 포함한다.
     loginId: targetForm.loginId.trim(),
     ...buildSharedUserPayload(targetForm),
     status: targetForm.status,
@@ -468,14 +465,12 @@ function normalizeUserRow(user) {
     activeFrom: user?.activeFrom || null,
     activeUntil: user?.activeUntil || null,
     createdAt: user?.createdAt || null,
-    // 현재 AdminUserResponse DTO에는 updatedAt이 없어도 화면 구조는 같은 키로 다루도록 맞춘다.
     updatedAt: user?.updatedAt || null,
     initialPasswordChangeRequired: Boolean(user?.initialPasswordChangeRequired),
   }
 }
 
 function filterActiveOrSelected(items, selectedId, idField) {
-  // 비활성 조직 항목이라도 이미 사용자에게 매핑돼 있으면 수정 화면에서 끊기지 않게 유지한다.
   return items.filter((item) => item.status === 'ACTIVE' || item[idField] === selectedId)
 }
 </script>
@@ -485,9 +480,10 @@ function filterActiveOrSelected(items, selectedId, idField) {
     <header class="page-header rooms-header">
       <div>
         <h1>회원 관리</h1>
-        <p>사용자 계정과 조직, 권한, 활성 상태를 관리합니다.</p>
+        <p v-if="isAdmin">사용자 계정과 조직, 권한, 활성 상태를 관리합니다.</p>
+        <p v-else>이름, 이메일, 로그인 ID로 사용자를 검색하고 회원 요약 정보를 확인합니다.</p>
       </div>
-      <div class="admin-actions">
+      <div v-if="isAdmin" class="admin-actions">
         <button class="primary-button" @click="openModal()">회원 추가</button>
       </div>
     </header>
@@ -509,233 +505,238 @@ function filterActiveOrSelected(items, selectedId, idField) {
     </article>
 
     <template v-else>
-      <div v-if="successMessage" class="card" style="margin-bottom: 16px;">
-        <p class="settings-success">{{ successMessage }}</p>
-        <div v-if="temporaryPasswordNotice" class="settings-alert" style="margin-top: 12px;">
-          {{ temporaryPasswordNotice }}
+      <UserDirectoryPanel />
+
+      <template v-if="isAdmin">
+        <div v-if="successMessage" class="card" style="margin-top: 16px; margin-bottom: 16px;">
+          <p class="settings-success">{{ successMessage }}</p>
+          <div v-if="temporaryPasswordNotice" class="settings-alert" style="margin-top: 12px;">
+            {{ temporaryPasswordNotice }}
+          </div>
         </div>
-      </div>
 
-      <div v-if="actionError" class="card" style="margin-bottom: 16px;">
-        <div class="error-box">{{ actionError }}</div>
-      </div>
-
-      <div class="card admin-toolbar">
-        <input v-model="q" placeholder="이름, 로그인 ID, 이메일, 계열사, 부서 검색" />
-        <div class="toolbar">
-          <button
-            v-for="item in statusFilterOptions"
-            :key="item"
-            class="chip"
-            :class="{ active: filter === item }"
-            @click="filter = item"
-          >
-            {{ item === '전체' ? '전체 상태' : statusLabel(item) }}
-          </button>
+        <div v-if="actionError" class="card" style="margin-bottom: 16px;">
+          <div class="error-box">{{ actionError }}</div>
         </div>
-        <span>총 {{ totalElements }}명</span>
-      </div>
 
-      <div class="table-card admin-data-table">
-        <table>
-          <thead>
-            <tr>
-              <th>이름</th>
-              <th>로그인 ID</th>
-              <th>이메일</th>
-              <th>계열사</th>
-              <th>부서</th>
-              <th>팀</th>
-              <th>직급</th>
-              <th>권한</th>
-              <th>상태</th>
-              <th>활성 시작</th>
-              <th>활성 종료</th>
-              <th>액션</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr v-if="!filteredUsers.length">
-              <td colspan="12"><div class="empty-state">조건에 맞는 사용자가 없습니다.</div></td>
-            </tr>
-            <tr v-for="member in filteredUsers" :key="member.userId" @click="openDetail(member)">
-              <td><span class="table-avatar">{{ member.name?.[0] || '?' }}</span>{{ member.name }}</td>
-              <td>{{ member.loginId }}</td>
-              <td>{{ member.email }}</td>
-              <td>{{ member.affiliate }}</td>
-              <td>{{ member.department }}</td>
-              <td>{{ member.team }}</td>
-              <td>{{ member.position }}</td>
-              <td>{{ roleLabel(member.role) }}</td>
-              <td><span :class="['badge', member.status === 'ACTIVE' ? 'success' : 'warning']">{{ statusLabel(member.status) }}</span></td>
-              <td>{{ formatDate(member.activeFrom) }}</td>
-              <td>{{ formatDate(member.activeUntil) }}</td>
-              <td>
-                <button class="icon-text" @click.stop="openModal(member)">수정</button>
-                <button class="icon-text danger-text" @click.stop="changeStatus(member)">
-                  {{ member.status === 'ACTIVE' ? '비활성화' : '활성화' }}
-                </button>
-              </td>
-            </tr>
-          </tbody>
-        </table>
-      </div>
+        <div class="card admin-toolbar">
+          <input v-model="q" placeholder="이름, 로그인 ID, 이메일, 계열사, 부서 검색" />
+          <div class="toolbar">
+            <button
+              v-for="item in statusFilterOptions"
+              :key="item"
+              class="chip"
+              :class="{ active: filter === item }"
+              @click="filter = item"
+            >
+              {{ item === '전체' ? '전체 상태' : statusLabel(item) }}
+            </button>
+          </div>
+          <span>총 {{ totalElements }}명</span>
+        </div>
 
-      <Pagination v-model="pageNo" :total-pages="totalPages" />
+        <div class="table-card admin-data-table">
+          <table>
+            <thead>
+              <tr>
+                <th>이름</th>
+                <th>로그인 ID</th>
+                <th>이메일</th>
+                <th>계열사</th>
+                <th>부서</th>
+                <th>팀</th>
+                <th>직급</th>
+                <th>권한</th>
+                <th>상태</th>
+                <th>활성 시작</th>
+                <th>활성 종료</th>
+                <th>액션</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr v-if="!filteredUsers.length">
+                <td colspan="12"><div class="empty-state">조건에 맞는 사용자가 없습니다.</div></td>
+              </tr>
+              <tr v-for="member in filteredUsers" :key="member.userId" @click="openDetail(member)">
+                <td><span class="table-avatar">{{ member.name?.[0] || '?' }}</span>{{ member.name }}</td>
+                <td>{{ member.loginId }}</td>
+                <td>{{ member.email }}</td>
+                <td>{{ member.affiliate }}</td>
+                <td>{{ member.department }}</td>
+                <td>{{ member.team }}</td>
+                <td>{{ member.position }}</td>
+                <td>{{ roleLabel(member.role) }}</td>
+                <td>
+                  <span :class="['badge', member.status === 'ACTIVE' ? 'success' : 'warning']">
+                    {{ statusLabel(member.status) }}
+                  </span>
+                </td>
+                <td>{{ formatDate(member.activeFrom) }}</td>
+                <td>{{ formatDate(member.activeUntil) }}</td>
+                <td>
+                  <button class="icon-text" @click.stop="openModal(member)">수정</button>
+                  <button class="icon-text danger-text" @click.stop="changeStatus(member)">
+                    {{ member.status === 'ACTIVE' ? '비활성화' : '활성화' }}
+                  </button>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
 
-      <div v-if="modal" class="modal-backdrop" @click.self="closeModal">
-        <article class="card write-modal admin-modal">
-          <header>
-            <h2>{{ form.userId ? '회원 정보 수정' : '회원 추가' }}</h2>
-            <button @click="closeModal">닫기</button>
-          </header>
+        <Pagination v-model="pageNo" :total-pages="totalPages" />
 
-          <form class="form-grid" @submit.prevent="saveMember">
-            <label>
-              로그인 ID
-              <input v-model="form.loginId" :readonly="Boolean(form.userId)" :disabled="Boolean(form.userId)" required />
-            </label>
-            <label>
-              이름
-              <input v-model="form.name" required />
-            </label>
-            <label>
-              이메일
-              <input v-model="form.email" type="email" required />
-            </label>
-            <div class="form-row two">
-              <label>
-                권한
-                <select v-model="form.role">
-                  <option v-for="option in roleOptions" :key="option.value" :value="option.value">
-                    {{ option.label }}
-                  </option>
-                </select>
-              </label>
-              <label>
-                상태
-                <select v-model="form.status">
-                  <option v-for="option in statusOptions" :key="option.value" :value="option.value">
-                    {{ option.label }}
-                  </option>
-                </select>
-              </label>
-            </div>
-            <div class="form-row two">
-              <label>
-                계열사
-                <select v-model="form.affiliateId" :disabled="organizationLoading">
-                  <option value="">선택 안 함</option>
-                  <option
-                    v-for="affiliate in availableAffiliates"
-                    :key="affiliate.affiliateId"
-                    :value="affiliate.affiliateId"
-                  >
-                    {{ affiliate.name }}
-                  </option>
-                </select>
-              </label>
-              <label>
-                부서
-                <select v-model="form.departmentId" :disabled="organizationLoading">
-                  <option value="">선택 안 함</option>
-                  <option
-                    v-for="department in availableDepartments"
-                    :key="department.departmentId"
-                    :value="department.departmentId"
-                  >
-                    {{ department.name }}
-                  </option>
-                </select>
-              </label>
-            </div>
-            <div class="form-row two">
-              <label>
-                팀
-                <select v-model="form.teamId" :disabled="organizationLoading">
-                  <option value="">선택 안 함</option>
-                  <option v-for="team in availableTeams" :key="team.teamId" :value="team.teamId">
-                    {{ team.name }}
-                  </option>
-                </select>
-              </label>
-              <label>
-                직급
-                <select v-model="form.positionId" :disabled="organizationLoading">
-                  <option value="">선택 안 함</option>
-                  <option
-                    v-for="position in availablePositions"
-                    :key="position.positionId"
-                    :value="position.positionId"
-                  >
-                    {{ position.name }}
-                  </option>
-                </select>
-              </label>
-            </div>
-            <div class="form-row two">
-              <label>
-                활성 시작일
-                <input v-model="form.activeFrom" type="date" />
-              </label>
-              <label>
-                활성 종료일
-                <input v-model="form.activeUntil" type="date" />
-              </label>
-            </div>
-            <div class="modal-actions">
-              <button type="button" class="secondary-button" @click="closeModal">취소</button>
-              <button class="primary-button" :disabled="saving">
-                {{ saving ? '저장 중...' : '저장' }}
-              </button>
-            </div>
-          </form>
-        </article>
-      </div>
+        <div v-if="modal" class="modal-backdrop" @click.self="closeModal">
+          <article class="card write-modal admin-modal">
+            <header>
+              <h2>{{ form.userId ? '회원 정보 수정' : '회원 추가' }}</h2>
+              <button @click="closeModal">닫기</button>
+            </header>
 
-      <div v-if="detailOpen" class="modal-backdrop" @click.self="detailOpen = false">
-        <article class="card write-modal detail-modal">
-          <header>
-            <div>
-              <h2>{{ detailLoading ? '사용자 상세 조회 중' : selectedUser?.name || '-' }}</h2>
-              <p v-if="!detailLoading">{{ selectedUser?.department || '-' }} · {{ selectedUser?.position || '-' }}</p>
-            </div>
-            <button @click="detailOpen = false">닫기</button>
-          </header>
-
-          <div v-if="detailLoading" class="empty-state">사용자 상세 정보를 불러오는 중입니다.</div>
-          <template v-else-if="selectedUser">
-            <dl class="detail-list">
-              <div><dt>userId</dt><dd>{{ selectedUser.userId }}</dd></div>
-              <div><dt>loginId</dt><dd>{{ selectedUser.loginId }}</dd></div>
-              <div><dt>이름</dt><dd>{{ selectedUser.name }}</dd></div>
-              <div><dt>이메일</dt><dd>{{ selectedUser.email }}</dd></div>
-              <div><dt>계열사</dt><dd>{{ selectedUser.affiliate }}</dd></div>
-              <div><dt>부서</dt><dd>{{ selectedUser.department }}</dd></div>
-              <div><dt>팀</dt><dd>{{ selectedUser.team }}</dd></div>
-              <div><dt>직급</dt><dd>{{ selectedUser.position }}</dd></div>
-              <div><dt>권한</dt><dd>{{ roleLabel(selectedUser.role) }}</dd></div>
-              <div><dt>상태</dt><dd>{{ statusLabel(selectedUser.status) }}</dd></div>
-              <div><dt>activeFrom</dt><dd>{{ formatDateTime(selectedUser.activeFrom) }}</dd></div>
-              <div><dt>activeUntil</dt><dd>{{ formatDateTime(selectedUser.activeUntil) }}</dd></div>
-              <div><dt>createdAt</dt><dd>{{ formatDateTime(selectedUser.createdAt) }}</dd></div>
-              <div><dt>updatedAt</dt><dd>{{ formatDateTime(selectedUser.updatedAt) }}</dd></div>
-              <div>
-                <dt>초기 비밀번호 변경 필요</dt>
-                <dd>{{ selectedUser.initialPasswordChangeRequired ? '예' : '아니오' }}</dd>
+            <form class="form-grid" @submit.prevent="saveMember">
+              <label>
+                로그인 ID
+                <input v-model="form.loginId" :readonly="Boolean(form.userId)" :disabled="Boolean(form.userId)" required />
+              </label>
+              <label>
+                이름
+                <input v-model="form.name" required />
+              </label>
+              <label>
+                이메일
+                <input v-model="form.email" type="email" required />
+              </label>
+              <div class="form-row two">
+                <label>
+                  권한
+                  <select v-model="form.role">
+                    <option v-for="option in roleOptions" :key="option.value" :value="option.value">
+                      {{ option.label }}
+                    </option>
+                  </select>
+                </label>
+                <label>
+                  상태
+                  <select v-model="form.status">
+                    <option v-for="option in statusOptions" :key="option.value" :value="option.value">
+                      {{ option.label }}
+                    </option>
+                  </select>
+                </label>
               </div>
-            </dl>
-            <div class="modal-actions">
-              <button
-                class="secondary-button"
-                @click="openModal(selectedUser); detailOpen = false"
-              >
-                정보 수정
-              </button>
-            </div>
-          </template>
-        </article>
-      </div>
+              <div class="form-row two">
+                <label>
+                  계열사
+                  <select v-model="form.affiliateId" :disabled="organizationLoading">
+                    <option value="">선택 안 함</option>
+                    <option
+                      v-for="affiliate in availableAffiliates"
+                      :key="affiliate.affiliateId"
+                      :value="affiliate.affiliateId"
+                    >
+                      {{ affiliate.name }}
+                    </option>
+                  </select>
+                </label>
+                <label>
+                  부서
+                  <select v-model="form.departmentId" :disabled="organizationLoading">
+                    <option value="">선택 안 함</option>
+                    <option
+                      v-for="department in availableDepartments"
+                      :key="department.departmentId"
+                      :value="department.departmentId"
+                    >
+                      {{ department.name }}
+                    </option>
+                  </select>
+                </label>
+              </div>
+              <div class="form-row two">
+                <label>
+                  팀
+                  <select v-model="form.teamId" :disabled="organizationLoading">
+                    <option value="">선택 안 함</option>
+                    <option v-for="team in availableTeams" :key="team.teamId" :value="team.teamId">
+                      {{ team.name }}
+                    </option>
+                  </select>
+                </label>
+                <label>
+                  직급
+                  <select v-model="form.positionId" :disabled="organizationLoading">
+                    <option value="">선택 안 함</option>
+                    <option
+                      v-for="position in availablePositions"
+                      :key="position.positionId"
+                      :value="position.positionId"
+                    >
+                      {{ position.name }}
+                    </option>
+                  </select>
+                </label>
+              </div>
+              <div class="form-row two">
+                <label>
+                  활성 시작일
+                  <input v-model="form.activeFrom" type="date" />
+                </label>
+                <label>
+                  활성 종료일
+                  <input v-model="form.activeUntil" type="date" />
+                </label>
+              </div>
+              <div class="modal-actions">
+                <button type="button" class="secondary-button" @click="closeModal">취소</button>
+                <button class="primary-button" :disabled="saving">
+                  {{ saving ? '저장 중..' : '저장' }}
+                </button>
+              </div>
+            </form>
+          </article>
+        </div>
+
+        <div v-if="detailOpen" class="modal-backdrop" @click.self="detailOpen = false">
+          <article class="card write-modal detail-modal">
+            <header>
+              <div>
+                <h2>{{ detailLoading ? '사용자 상세 조회 중' : selectedUser?.name || '-' }}</h2>
+                <p v-if="!detailLoading">{{ selectedUser?.department || '-' }} · {{ selectedUser?.position || '-' }}</p>
+              </div>
+              <button @click="detailOpen = false">닫기</button>
+            </header>
+
+            <div v-if="detailLoading" class="empty-state">사용자 상세 정보를 불러오는 중입니다.</div>
+            <template v-else-if="selectedUser">
+              <dl class="detail-list">
+                <div><dt>userId</dt><dd>{{ selectedUser.userId }}</dd></div>
+                <div><dt>loginId</dt><dd>{{ selectedUser.loginId }}</dd></div>
+                <div><dt>이름</dt><dd>{{ selectedUser.name }}</dd></div>
+                <div><dt>이메일</dt><dd>{{ selectedUser.email }}</dd></div>
+                <div><dt>계열사</dt><dd>{{ selectedUser.affiliate }}</dd></div>
+                <div><dt>부서</dt><dd>{{ selectedUser.department }}</dd></div>
+                <div><dt>팀</dt><dd>{{ selectedUser.team }}</dd></div>
+                <div><dt>직급</dt><dd>{{ selectedUser.position }}</dd></div>
+                <div><dt>권한</dt><dd>{{ roleLabel(selectedUser.role) }}</dd></div>
+                <div><dt>상태</dt><dd>{{ statusLabel(selectedUser.status) }}</dd></div>
+                <div><dt>activeFrom</dt><dd>{{ formatDateTime(selectedUser.activeFrom) }}</dd></div>
+                <div><dt>activeUntil</dt><dd>{{ formatDateTime(selectedUser.activeUntil) }}</dd></div>
+                <div><dt>createdAt</dt><dd>{{ formatDateTime(selectedUser.createdAt) }}</dd></div>
+                <div><dt>updatedAt</dt><dd>{{ formatDateTime(selectedUser.updatedAt) }}</dd></div>
+                <div>
+                  <dt>초기 비밀번호 변경 필요</dt>
+                  <dd>{{ selectedUser.initialPasswordChangeRequired ? '예' : '아니오' }}</dd>
+                </div>
+              </dl>
+              <div class="modal-actions">
+                <button class="secondary-button" @click="openModal(selectedUser); detailOpen = false">
+                  정보 수정
+                </button>
+              </div>
+            </template>
+          </article>
+        </div>
+      </template>
     </template>
   </section>
 </template>
