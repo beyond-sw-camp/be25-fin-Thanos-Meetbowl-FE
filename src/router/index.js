@@ -56,7 +56,7 @@ const routes = [
       {
         path: 'app/settings',
         component: SettingsPage,
-        meta: { role: 'USER' },
+        meta: { role: ['USER', 'ADMIN'] },
       },
       { path: 'admin/dashboard', component: AdminDashboardPage, meta: { role: 'ADMIN' } },
       { path: 'admin/members', component: MembersPage, meta: { role: 'ADMIN' } },
@@ -103,8 +103,9 @@ router.beforeEach((to) => {
   }
   if (!auth.isAuthenticated) return '/login'
   const requiredRole = to.meta.role
-  if (to.path === '/admin/dashboard' && requiredRole === 'ADMIN') return true
-  if (requiredRole && auth.user?.role !== requiredRole) return auth.homePath
+  const requiredRoles = Array.isArray(requiredRole) ? requiredRole : requiredRole ? [requiredRole] : []
+  if (to.path === '/admin/dashboard' && requiredRoles.length === 1 && requiredRoles[0] === 'ADMIN') return true
+  if (requiredRoles.length && !requiredRoles.includes(auth.user?.role)) return auth.homePath
   return true
 })
 
