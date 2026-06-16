@@ -783,9 +783,10 @@ const guestMeetingLink = computed(() => {
 })
 const hasVideoTrack = computed(() => Boolean(previewStream.value?.getVideoTracks().length))
 const hasAudioTrack = computed(() => Boolean(previewStream.value?.getAudioTracks().length))
+const pendingParticipantName = computed(() => displayName.value.trim() || auth.user?.name || '')
 const currentParticipantName = computed(() => {
   const resolvedParticipantName = String(meetingConnection.value?.participantName || '').trim()
-  return resolvedParticipantName || displayName.value.trim() || auth.user?.name || '참석자'
+  return resolvedParticipantName || pendingParticipantName.value || '이름 미입력'
 })
 const currentParticipantInitial = computed(() => initialsFromName(currentParticipantName.value))
 const currentUserId = computed(() => String(auth.user?.id || '').trim())
@@ -1376,7 +1377,7 @@ function createParticipantState(participant, isLocal, previousState) {
   return {
     key: participant.identity || (isLocal ? 'local-participant' : crypto.randomUUID()),
     identity: participant.identity || previousState?.identity || '',
-    name: participant.name || previousState?.name || '참석자',
+    name: participant.name || previousState?.name || '게스트',
     isLocal,
     joinedAt: previousState?.joinedAt || Date.now(),
     micEnabled: microphonePublication ? !microphonePublication.isMuted : (isLocal ? mic.value : false),
@@ -1877,7 +1878,7 @@ async function connectMeetingRoom() {
   const connection = await resolveLiveKitConnection({
     meetingId: meetingId.value,
     participantIdentity: auth.user?.id || '',
-    displayName: currentParticipantName.value,
+    displayName: pendingParticipantName.value,
   })
 
   meetingConnection.value = connection
@@ -2033,7 +2034,7 @@ function handleDataChannelMessage(payload, participant) {
       const isSelf = senderIdentity === currentParticipantIdentity()
       pushChatMessage({
         id: event.messageId,
-        senderName: event.senderName || '참석자',
+        senderName: event.senderName || '게스트',
         senderUserId: event.senderUserId || senderIdentity,
         content: event.content || '',
         sentAt: event.sentAt || new Date().toISOString(),
