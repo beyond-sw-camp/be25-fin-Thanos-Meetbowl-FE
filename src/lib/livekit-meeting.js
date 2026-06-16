@@ -23,6 +23,7 @@ export async function resolveLiveKitConnection({ meetingId, participantIdentity,
     roomName: connection.roomName,
     url: connection.livekitUrl,
     token: connection.token,
+    hostUserId: connection.hostUserId,
     participantIdentity: connection.participantIdentity,
     participantName: connection.participantName,
   }
