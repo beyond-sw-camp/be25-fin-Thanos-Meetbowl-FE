@@ -32,6 +32,10 @@ export function patchJson(path, body, options = {}) {
   return requestJson(path, { ...options, method: 'PATCH', body })
 }
 
+export function deleteJson(path, options = {}) {
+  return requestJson(path, { ...options, method: 'DELETE' })
+}
+
 export async function requestJson(path, options = {}) {
   const response = await fetch(buildApiUrl(path), {
     method: options.method || 'GET',
