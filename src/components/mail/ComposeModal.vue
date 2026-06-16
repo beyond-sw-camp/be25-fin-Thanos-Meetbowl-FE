@@ -14,30 +14,25 @@
       <label>받는 사람</label>
       <div class="recipient-box">
         <span v-for="member in recipients" :key="member.id">
-          {{ member.name }} · {{ member.dept }}
-          <button @click="removeRecipient(member.id)">×</button>
+          {{ member.name }} · {{ member.department || member.team || member.email }}
+          <button type="button" @click="removeRecipient(member.userId)">×</button>
         </span>
         <input v-model="recipientQuery" placeholder="이름, 계열사, 부서/팀, 이메일로 검색">
       </div>
       <div v-if="recipientQuery || recipientMatches.length" class="recipient-results">
-        <button v-for="member in recipientMatches" :key="member.id" @click="addRecipient(member)">
+        <button v-for="member in recipientMatches" :key="member.userId" type="button" @click="addRecipient(member)">
           <strong>{{ member.name }}</strong>
-          <small>{{ member.company }} · {{ member.dept }} · {{ member.email }}</small>
+          <small>{{ member.affiliate || '-' }} · {{ member.department || member.team || '-' }} · {{ member.email }}</small>
         </button>
+        <small v-if="recipientQuery && !recipientMatches.length">검색 결과가 없습니다.</small>
       </div>
       <input v-model="draft.subject" placeholder="제목">
       <textarea v-model="draft.body" rows="10" placeholder="내용을 입력하세요..."></textarea>
-      <button class="upload-zone-small" @click="addAttachment">파일 첨부 추가</button>
-      <div class="attachment-chips">
-        <span v-for="name in draft.attachments" :key="name">
-          {{ name }}
-          <button @click="draft.attachments = draft.attachments.filter((item) => item !== name)">×</button>
-        </span>
-      </div>
+      <small>첨부파일 발송은 Object Storage 계약 확정 후 제공됩니다.</small>
     </div>
     <footer>
       <small>수신자 {{ recipients.length }}명</small>
-      <div><button class="secondary-button" @click="$emit('close')">취소</button><button class="primary-button" @click="send">전송</button></div>
+      <div><button class="secondary-button" type="button" @click="$emit('close')">취소</button><button class="primary-button" type="button" :disabled="!canSend" @click="send">전송</button></div>
     </footer>
   </ModalShell>
 </template>
@@ -60,10 +55,11 @@ const templateOpen = ref(false)
 const recipientMatches = computed(() => {
   const query = recipientQuery.value.toLowerCase()
   return props.members
-    .filter((member) => !recipients.value.some((item) => item.id === member.id))
-    .filter((member) => !query || `${member.name} ${member.company} ${member.dept} ${member.position} ${member.email}`.toLowerCase().includes(query))
+    .filter((member) => !recipients.value.some((item) => item.userId === member.userId))
+    .filter((member) => !query || `${member.name} ${member.affiliate || ''} ${member.department || ''} ${member.team || ''} ${member.position || ''} ${member.email}`.toLowerCase().includes(query))
     .slice(0, 8)
 })
+const canSend = computed(() => recipients.value.length > 0 && draft.value.subject.trim() && draft.value.body.trim())
 
 function applyTemplate(template) {
   draft.value.subject = template.subject
@@ -76,16 +72,17 @@ function addRecipient(member) {
   recipientQuery.value = ''
 }
 
-function removeRecipient(id) {
-  recipients.value = recipients.value.filter((member) => member.id !== id)
-}
-
-function addAttachment() {
-  draft.value.attachments.push(`첨부파일_${draft.value.attachments.length + 1}.pdf`)
+function removeRecipient(userId) {
+  recipients.value = recipients.value.filter((member) => member.userId !== userId)
 }
 
 function send() {
-  emit('send', { ...draft.value, recipientCount: recipients.value.length })
+  if (!canSend.value) return
+  emit('send', {
+    subject: draft.value.subject.trim(),
+    body: draft.value.body.trim(),
+    recipientUserIds: recipients.value.map((recipient) => recipient.userId),
+  })
   recipients.value = []
   draft.value = { subject: '', body: '', attachments: [] }
 }

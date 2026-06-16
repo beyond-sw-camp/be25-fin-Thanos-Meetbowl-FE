@@ -32,11 +32,27 @@ export function patchJson(path, body, options = {}) {
   return requestJson(path, { ...options, method: 'PATCH', body })
 }
 
+export function deleteJson(path, options = {}) {
+  return requestJson(path, { ...options, method: 'DELETE' })
+}
+
+export function postForm(path, formData, options = {}) {
+  return request(path, { ...options, method: 'POST', body: formData })
+}
+
 export async function requestJson(path, options = {}) {
+  return request(path, {
+    ...options,
+    body: options.body === undefined ? undefined : JSON.stringify(options.body),
+    jsonBody: options.body !== undefined,
+  })
+}
+
+export async function request(path, options = {}) {
   const response = await fetch(buildApiUrl(path), {
     method: options.method || 'GET',
     headers: buildHeaders(options),
-    body: options.body === undefined ? undefined : JSON.stringify(options.body),
+    body: options.body,
   })
 
   const payload = await response.json().catch(() => null)
@@ -62,7 +78,7 @@ function buildHeaders(options) {
     ...(options.headers || {}),
   }
 
-  if (options.body !== undefined && !headers['Content-Type']) {
+  if (options.jsonBody && !headers['Content-Type']) {
     headers['Content-Type'] = 'application/json'
   }
 

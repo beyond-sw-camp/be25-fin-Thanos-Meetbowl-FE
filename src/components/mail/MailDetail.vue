@@ -1,33 +1,31 @@
 <template>
   <section class="page mail-detail-page">
     <div class="mail-detail-toolbar">
-      <button @click="$emit('back')">뒤로</button>
-      <button @click="$emit('backup', mail.id)">백업</button>
-      <button>삭제</button>
-      <button>인쇄</button>
-      <button>더보기</button>
+      <button @click="$emit('back')"><ArrowLeft :size="16" /> 뒤로</button>
+      <button @click="$emit('backup', mail.mailId)"><Archive :size="16" /> 백업</button>
+      <button v-if="mail.trashed" @click="$emit('restore', mail.mailId)"><RotateCcw :size="16" /> 복구</button>
+      <button @click="$emit('delete', mail.mailId)"><Trash2 :size="16" /> {{ mail.trashed ? '영구 삭제' : '삭제' }}</button>
+      <button><Printer :size="16" /> 인쇄</button>
+      <button><MoreHorizontal :size="16" /> 더보기</button>
     </div>
     <article class="card mail-message-card">
-      <header><h1>{{ mail.subject }}</h1><button @click="$emit('backup', mail.id)">백업</button></header>
+      <header><h1>{{ mail.subject }}</h1><button @click="$emit('backup', mail.mailId)" aria-label="백업"><Archive :size="16" /></button></header>
       <div class="mail-sender-line">
-        <span class="table-avatar">{{ mail.from[0] }}</span>
-        <div><strong>{{ mail.from }}</strong><small>{{ mail.dept }} · 받는 사람: 나 · {{ mail.date }}</small></div>
+        <span class="table-avatar">{{ (mail.senderName || '?').slice(0, 1) }}</span>
+        <div><strong>{{ mail.senderName || mail.senderUserId }}</strong><small>{{ mail.senderMeta || '사용자' }} · 받는 사람 {{ mail.recipientUserIds?.length || 0 }}명 · {{ mail.displayDate }}</small></div>
       </div>
-      <pre>{{ mail.body || mail.preview }}</pre>
-      <div v-if="mail.hasAttachment" class="mail-attachments">
-        <strong>첨부파일 (2)</strong>
-        <button>회의록.pdf <small>240KB</small></button>
-        <button>녹음.mp3 <small>42.1MB</small></button>
-      </div>
-      <div class="modal-actions"><button class="secondary-button">답장</button><button class="secondary-button">전달</button></div>
+      <pre>{{ mail.body }}</pre>
+      <div class="modal-actions"><button class="secondary-button"><Reply :size="16" /> 답장</button><button class="secondary-button"><Forward :size="16" /> 전달</button></div>
     </article>
   </section>
 </template>
 
 <script setup>
+import { Archive, ArrowLeft, Forward, MoreHorizontal, Printer, Reply, RotateCcw, Trash2 } from '@lucide/vue'
+
 defineProps({
   mail: { type: Object, required: true },
 })
 
-defineEmits(['back', 'backup'])
+defineEmits(['back', 'backup', 'delete', 'restore'])
 </script>

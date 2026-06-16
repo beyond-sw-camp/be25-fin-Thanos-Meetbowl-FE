@@ -46,7 +46,7 @@ const routes = [
       { path: 'app/minutes', component: MinutesPage, meta: { role: 'USER' } },
       { path: 'app/recordings', redirect: '/app/minutes', meta: { role: 'USER' } },
       { path: 'app/workspace', component: WorkspacePage, meta: { role: 'USER' } },
-      { path: 'app/shared-docs', component: SharedDocsPage, meta: { role: 'USER' } },
+      { path: 'app/shared-docs', component: SharedDocsPage, meta: { role: ['USER', 'ADMIN'] } },
       { path: 'app/community', component: CommunityPage, meta: { role: 'USER' } },
       {
         path: 'app/backup/:id',
