@@ -22,11 +22,12 @@
 </template>
 
 <script setup>
-import { computed, ref } from 'vue'
+import { computed, onMounted, onUnmounted, ref } from 'vue'
 import MinuteDetail from '../../components/minutes/MinuteDetail.vue'
 import MinuteList from '../../components/minutes/MinuteList.vue'
 import ShareMailModal from '../../components/minutes/ShareMailModal.vue'
 import { members, minutes } from '../../data/mockData'
+import { onMinuteFavoritesChanged, readMinuteFavorites, toggleMinuteFavorite } from '../../lib/minute-favorites'
 
 const mockTranscript = [
   { t: '00:00:08', who: '이지연', text: '오늘은 OKR 점검과 Q2 우선순위 재정렬을 진행하겠습니다.' },
@@ -41,11 +42,22 @@ const q = ref('')
 const shareOpen = ref(false)
 const transcriptOpen = ref(false)
 const editing = ref(false)
-const favorites = ref({ min1: true })
+const favorites = ref(readMinuteFavorites())
 const share = ref({ recipients: members.slice(4, 7), query: '', subject: '', body: '' })
+let stopFavoriteSync = null
 
 const filtered = computed(() => minuteItems.value.filter((minute) => minute.title.toLowerCase().includes(q.value.toLowerCase())))
 const selected = computed(() => minuteItems.value.find((minute) => minute.id === selectedId.value) || minuteItems.value[0])
+
+onMounted(() => {
+  stopFavoriteSync = onMinuteFavoritesChanged((next) => {
+    favorites.value = next
+  })
+})
+
+onUnmounted(() => {
+  stopFavoriteSync?.()
+})
 
 function selectMinute(id) {
   selectedId.value = id
@@ -58,7 +70,7 @@ function saveEdit(draft) {
 }
 
 function toggleFavorite(id) {
-  favorites.value = { ...favorites.value, [id]: !favorites.value[id] }
+  favorites.value = toggleMinuteFavorite(id)
 }
 
 function openShare() {

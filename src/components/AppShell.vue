@@ -73,6 +73,8 @@
       </header>
       <RouterView />
     </main>
+
+    <FloatingChatbot />
   </div>
 </template>
 
@@ -80,6 +82,7 @@
 import { computed, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { myMeetings } from '../data/mockData'
+import FloatingChatbot from './FloatingChatbot.vue'
 import { meetingRoute } from '../lib/meeting-route'
 import { useAuthStore } from '../stores/auth'
 
@@ -121,6 +124,7 @@ const navSections = [
       { to: '/admin/reservations', label: '예약 현황', icon: '◷' },
       { to: '/admin/mail-policy', label: '메일 정책 관리', icon: '✉' },
       { to: '/admin/minutes-policy', label: '보관 정책 관리', icon: '◫' },
+      { to: '/app/shared-docs', label: '공유 워크스페이스', icon: '▤' },
       { to: '/admin/logs', label: '관리자 작업 로그', icon: '≣' },
     ],
   },
