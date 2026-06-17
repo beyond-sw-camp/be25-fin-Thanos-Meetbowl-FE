@@ -4,6 +4,7 @@ import test from 'node:test'
 import { setApiClientAuthHandlers } from '../src/lib/api-client.js'
 import { writeStoredAuthSession } from '../src/lib/auth-session.js'
 import {
+  buildOrganizationNameMaps,
   createAdminDepartment,
   getAdminAffiliates,
   updateAdminTeamStatus,
@@ -161,4 +162,18 @@ test('organization mutation APIs send the expected request body and skip the glo
   assert.equal(updated.status, 'INACTIVE')
 
   setApiClientAuthHandlers({})
+})
+
+test('organization helpers build UUID to name maps from master data', () => {
+  const maps = buildOrganizationNameMaps({
+    affiliates: [{ affiliateId: 'a1', name: '한화시스템' }],
+    departments: [{ departmentId: 'd1', name: '경영지원부' }],
+    teams: [{ teamId: 't1', name: '운영관리팀' }],
+    positions: [{ positionId: 'p1', name: '과장' }],
+  })
+
+  assert.equal(maps.affiliateId.get('a1'), '한화시스템')
+  assert.equal(maps.departmentId.get('d1'), '경영지원부')
+  assert.equal(maps.teamId.get('t1'), '운영관리팀')
+  assert.equal(maps.positionId.get('p1'), '과장')
 })
