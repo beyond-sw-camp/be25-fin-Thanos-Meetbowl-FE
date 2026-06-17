@@ -80,3 +80,25 @@ export function updateAdminPositionStatus(positionId, status) {
     adminRequestOptions,
   )
 }
+
+export function buildOrganizationNameMaps({
+  affiliates = [],
+  departments = [],
+  teams = [],
+  positions = [],
+} = {}) {
+  return {
+    affiliateId: buildNameMap(affiliates, 'affiliateId'),
+    departmentId: buildNameMap(departments, 'departmentId'),
+    teamId: buildNameMap(teams, 'teamId'),
+    positionId: buildNameMap(positions, 'positionId'),
+  }
+}
+
+function buildNameMap(items, idKey) {
+  const entries = items
+    .map((item) => [item?.[idKey], item?.name])
+    .filter(([id, name]) => Boolean(id) && Boolean(name))
+
+  return new Map(entries)
+}
