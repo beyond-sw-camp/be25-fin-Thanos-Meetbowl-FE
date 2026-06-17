@@ -54,8 +54,16 @@ const routes = [
         meta: { role: 'USER' },
       },
       {
+        path: 'password/change',
+        component: SettingsPage,
+        // 최초 로그인 사용자는 일반 설정 화면이 아니라 이 강제 변경 경로로만 진입시킨다.
+        props: { forcePasswordChange: true },
+        meta: { role: ['USER', 'ADMIN'], allowWhenPasswordChangeRequired: true },
+      },
+      {
         path: 'app/settings',
         component: SettingsPage,
+        props: { forcePasswordChange: false },
         meta: { role: ['USER', 'ADMIN'] },
       },
       { path: 'admin/dashboard', component: AdminDashboardPage, meta: { role: 'ADMIN' } },
@@ -103,10 +111,17 @@ const router = createRouter({
 router.beforeEach((to) => {
   const auth = useAuthStore()
   if (to.meta.public) {
-    if (to.path === '/login' && auth.isAuthenticated) return auth.homePath
+    if (to.path === '/login' && auth.isAuthenticated) return auth.postLoginPath
     return true
   }
   if (!auth.isAuthenticated) return '/login'
+  if (auth.requiresInitialPasswordChange) {
+    // 초기 비밀번호 변경 전에는 다른 화면으로 이동하지 못하게 강제한다.
+    if (to.path !== '/password/change') return '/password/change'
+  } else if (to.path === '/password/change') {
+    // 이미 비밀번호를 바꿨다면 강제 변경 화면에 다시 머물지 않도록 기본 홈으로 돌린다.
+    return auth.homePath
+  }
   const requiredRole = to.meta.role
   const requiredRoles = Array.isArray(requiredRole) ? requiredRole : requiredRole ? [requiredRole] : []
   if (to.path === '/admin/dashboard' && requiredRoles.length === 1 && requiredRoles[0] === 'ADMIN') return true

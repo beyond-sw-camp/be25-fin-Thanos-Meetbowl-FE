@@ -2,7 +2,7 @@ import assert from 'node:assert/strict'
 import test from 'node:test'
 
 import { writeStoredAuthSession } from '../src/lib/auth-session.js'
-import { getAllAdminUsers } from '../src/lib/admin-users.js'
+import { getAllAdminUsers, resetAdminUserPassword } from '../src/lib/admin-users.js'
 
 function createStorage() {
   const values = new Map()
@@ -80,4 +80,48 @@ test('getAllAdminUsers follows the paged admin user API until all items are coll
     result.items.map((item) => item.userId),
     ['user-1', 'user-2', 'user-3'],
   )
+})
+
+test('resetAdminUserPassword calls the admin password reset endpoint', async () => {
+  globalThis.localStorage = createStorage()
+
+  writeStoredAuthSession({
+    accessToken: 'admin-user-token',
+    user: { role: 'ADMIN', name: 'Admin', loginId: 'admin' },
+  })
+
+  const requests = []
+
+  globalThis.fetch = async (url, options) => {
+    requests.push({
+      url,
+      method: options?.method,
+      auth: options?.headers?.Authorization,
+      body: options?.body,
+    })
+
+    return {
+      ok: true,
+      async json() {
+        return {
+          success: true,
+          data: {
+            temporaryPassword: '1234',
+          },
+        }
+      },
+    }
+  }
+
+  const result = await resetAdminUserPassword('user-123')
+
+  assert.deepEqual(requests, [
+    {
+      url: '/api/v1/admin/users/user-123/password/reset',
+      method: 'POST',
+      auth: 'Bearer admin-user-token',
+      body: '{}',
+    },
+  ])
+  assert.equal(result.temporaryPassword, '1234')
 })
