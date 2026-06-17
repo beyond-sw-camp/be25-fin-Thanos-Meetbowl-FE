@@ -398,44 +398,64 @@
           <span class="meeting-caption-status">{{ captionPanelStatus }}</span>
         </div>
 
-<!--        <div class="meeting-diagnostics">-->
-<!--          <strong>실시간 연결 진단</strong>-->
-<!--          <dl class="meeting-diagnostics-list">-->
-<!--            <div>-->
-<!--              <dt>회의 room</dt>-->
-<!--              <dd>{{ livekitRoomName }}</dd>-->
-<!--            </div>-->
-<!--            <div>-->
-<!--              <dt>내 participant</dt>-->
-<!--              <dd>{{ livekitParticipantIdentity }}</dd>-->
-<!--            </div>-->
-<!--            <div>-->
-<!--              <dt>마이크 publish</dt>-->
-<!--              <dd>{{ localMicPublicationStatus }}</dd>-->
-<!--            </div>-->
-<!--            <div>-->
-<!--              <dt>자막 수신</dt>-->
-<!--              <dd>{{ captionReceptionStatus }}</dd>-->
-<!--            </div>-->
-<!--            <div>-->
-<!--              <dt>최근 DataChannel</dt>-->
-<!--              <dd>{{ lastDataChannelReceivedLabel }}</dd>-->
-<!--            </div>-->
-<!--            <div>-->
-<!--              <dt>마이크 오류</dt>-->
-<!--              <dd>{{ microphonePublishErrorLabel }}</dd>-->
-<!--            </div>-->
-<!--            <div>-->
-<!--              <dt>로컬 track 이벤트</dt>-->
-<!--              <dd>{{ localTrackEventStatus }}</dd>-->
-<!--            </div>-->
-<!--            <div>-->
-<!--              <dt>로컬 audio publication</dt>-->
-<!--              <dd>{{ localAudioPublicationCountLabel }}</dd>-->
-<!--            </div>-->
-<!--          </dl>-->
-<!--        </div>-->
-<!--        -->
+        <div class="meeting-diagnostics">
+          <strong>실시간 연결 진단</strong>
+          <dl class="meeting-diagnostics-list">
+            <div>
+              <dt>회의 room</dt>
+              <dd>{{ livekitRoomName }}</dd>
+            </div>
+            <div>
+              <dt>내 participant</dt>
+              <dd>{{ livekitParticipantIdentity }}</dd>
+            </div>
+            <div>
+              <dt>마이크 publish</dt>
+              <dd>{{ localMicPublicationStatus }}</dd>
+            </div>
+            <div>
+              <dt>자막 수신</dt>
+              <dd>{{ captionReceptionStatus }}</dd>
+            </div>
+            <div>
+              <dt>최근 DataChannel</dt>
+              <dd>{{ lastDataChannelReceivedLabel }}</dd>
+            </div>
+            <div>
+              <dt>전송 지연</dt>
+              <dd>{{ lastCaptionTransportLatencyLabel }}</dd>
+            </div>
+            <div>
+              <dt>내 음성 감지</dt>
+              <dd>{{ lastLocalSpeechDetectedLabel }}</dd>
+            </div>
+            <div>
+              <dt>자막 렌더</dt>
+              <dd>{{ lastCaptionRenderedLabel }}</dd>
+            </div>
+            <div>
+              <dt>내 음성→자막</dt>
+              <dd>{{ lastSpeechToCaptionLatencyLabel }}</dd>
+            </div>
+            <div>
+              <dt>STT 기준 지연</dt>
+              <dd>{{ lastCaptionEndToEndLatencyLabel }}</dd>
+            </div>
+            <div>
+              <dt>마이크 오류</dt>
+              <dd>{{ microphonePublishErrorLabel }}</dd>
+            </div>
+            <div>
+              <dt>로컬 track 이벤트</dt>
+              <dd>{{ localTrackEventStatus }}</dd>
+            </div>
+            <div>
+              <dt>로컬 audio publication</dt>
+              <dd>{{ localAudioPublicationCountLabel }}</dd>
+            </div>
+          </dl>
+        </div>
+
         <p v-if="sttStatusHint" class="meeting-caption-hint">
           {{ sttStatusHint }}
         </p>
@@ -725,6 +745,13 @@ const meetingConnectionError = ref('')
 const feedbackMessage = ref('실시간 피드백이 도착하면 여기에 표시됩니다.')
 const lastCaptionReceivedAt = ref(null)
 const lastCaptionText = ref('')
+const lastCaptionPublishedAtMs = ref(null)
+const lastCaptionStartedAtEpochMs = ref(null)
+const lastCaptionTransportLatencyMs = ref(null)
+const lastCaptionEndToEndLatencyMs = ref(null)
+const lastLocalSpeechDetectedAtMs = ref(null)
+const lastCaptionRenderedAtMs = ref(null)
+const lastSpeechToCaptionLatencyMs = ref(null)
 const captionMap = ref(new Map())
 const participantStateMap = ref(new Map())
 const chatMessages = ref([])
@@ -766,9 +793,22 @@ let microphoneSource = null
 let microphoneAnimationFrame = null
 let speakerTestStream = null
 let speakerTestTrack = null
+let speechLatencyAudioContext = null
+let speechLatencyAnalyser = null
+let speechLatencySource = null
+let speechLatencyAnimationFrame = null
+let speechLatencyStream = null
+let speechLatencyTrackId = ''
+let localSpeechIsActive = false
+let localSpeechLastDetectedAtMs = 0
+const pendingSpeechDetectionQueue = []
 let elapsedTimer = null
 let captionScrollRaf = null
 const elapsedSeconds = ref(0)
+
+const LOCAL_SPEECH_MEASUREMENT_RMS_THRESHOLD = 0.01
+const LOCAL_SPEECH_MEASUREMENT_SILENCE_MS = 160
+const LOCAL_SPEECH_TO_CAPTION_MATCH_WINDOW_MS = 15000
 
 const meetingTitle = computed(() => {
   const titleFromRoute = typeof route.query.title === 'string' ? route.query.title.trim() : ''
@@ -978,6 +1018,26 @@ const lastDataChannelReceivedLabel = computed(() => {
   if (!lastDataChannelReceivedAt.value) return '수신 없음'
   return `${formatChatTime(lastDataChannelReceivedAt.value)} · ${lastDataChannelEventType.value || 'unknown'}`
 })
+const lastCaptionTransportLatencyLabel = computed(() => {
+  if (lastCaptionTransportLatencyMs.value === null) return '측정 전'
+  return `${(lastCaptionTransportLatencyMs.value / 1000).toFixed(2)}초`
+})
+const lastCaptionEndToEndLatencyLabel = computed(() => {
+  if (lastCaptionEndToEndLatencyMs.value === null) return '측정 전'
+  return `${(lastCaptionEndToEndLatencyMs.value / 1000).toFixed(2)}초`
+})
+const lastLocalSpeechDetectedLabel = computed(() => {
+  if (lastLocalSpeechDetectedAtMs.value === null) return '측정 전'
+  return formatMeasurementTime(lastLocalSpeechDetectedAtMs.value)
+})
+const lastCaptionRenderedLabel = computed(() => {
+  if (lastCaptionRenderedAtMs.value === null) return '측정 전'
+  return formatMeasurementTime(lastCaptionRenderedAtMs.value)
+})
+const lastSpeechToCaptionLatencyLabel = computed(() => {
+  if (lastSpeechToCaptionLatencyMs.value === null) return '측정 전'
+  return `${(lastSpeechToCaptionLatencyMs.value / 1000).toFixed(2)}초`
+})
 const microphonePublishErrorLabel = computed(() => lastMicPublishError.value || '오류 없음')
 const localTrackEventStatus = computed(() => {
   if (!meetingRoom.value) return '회의 연결 전'
@@ -1100,6 +1160,52 @@ function stopAudioTest() {
   testingAudio.value = false
 }
 
+function stopLocalSpeechLatencyMonitor() {
+  if (speechLatencyAnimationFrame) cancelAnimationFrame(speechLatencyAnimationFrame)
+  speechLatencyAnimationFrame = null
+  speechLatencySource?.disconnect()
+  speechLatencyAnalyser?.disconnect()
+  speechLatencySource = null
+  speechLatencyAnalyser = null
+  speechLatencyStream?.getTracks().forEach((track) => track.stop())
+  speechLatencyStream = null
+  if (speechLatencyAudioContext) speechLatencyAudioContext.close()
+  speechLatencyAudioContext = null
+  speechLatencyTrackId = ''
+  localSpeechIsActive = false
+  localSpeechLastDetectedAtMs = 0
+  pendingSpeechDetectionQueue.length = 0
+}
+
+function prunePendingSpeechDetectionQueue(nowMs = Date.now()) {
+  while (
+    pendingSpeechDetectionQueue.length > 0 &&
+    nowMs - pendingSpeechDetectionQueue[0] > LOCAL_SPEECH_TO_CAPTION_MATCH_WINDOW_MS
+  ) {
+    pendingSpeechDetectionQueue.shift()
+  }
+}
+
+function recordPendingSpeechDetection(detectedAtMs) {
+  prunePendingSpeechDetectionQueue(detectedAtMs)
+  // 여러 번의 미세 잡음으로 큐가 길어지면 체감 지연 측정이 왜곡된다.
+  // 화면 자막과 비교할 때는 가장 최근 로컬 발화 시작만 유지하는 편이 맞다.
+  pendingSpeechDetectionQueue.length = 0
+  pendingSpeechDetectionQueue.push(detectedAtMs)
+}
+
+function matchPendingSpeechDetection(renderedAtMs) {
+  prunePendingSpeechDetectionQueue(renderedAtMs)
+  if (!pendingSpeechDetectionQueue.length) return null
+
+  const matchedDetectedAtMs = pendingSpeechDetectionQueue[pendingSpeechDetectionQueue.length - 1]
+  pendingSpeechDetectionQueue.length = 0
+  if (renderedAtMs - matchedDetectedAtMs > LOCAL_SPEECH_TO_CAPTION_MATCH_WINDOW_MS) {
+    return null
+  }
+  return matchedDetectedAtMs
+}
+
 function formatCaptionReceivedTime(timestampMs) {
   return new Date(timestampMs).toLocaleTimeString('ko-KR', {
     hour: '2-digit',
@@ -1107,6 +1213,15 @@ function formatCaptionReceivedTime(timestampMs) {
     second: '2-digit',
     hour12: false,
   })
+}
+
+function formatMeasurementTime(timestampMs) {
+  const date = new Date(timestampMs)
+  const hours = String(date.getHours()).padStart(2, '0')
+  const minutes = String(date.getMinutes()).padStart(2, '0')
+  const seconds = String(date.getSeconds()).padStart(2, '0')
+  const milliseconds = String(date.getMilliseconds()).padStart(3, '0')
+  return `${hours}:${minutes}:${seconds}.${milliseconds}`
 }
 
 function stopPreview() {
@@ -1212,6 +1327,7 @@ async function handleAudioInputSelection() {
       true,
       selectedAudioInput.value ? { deviceId: selectedAudioInput.value } : undefined,
     )
+    await restartLocalSpeechLatencyMonitor(meetingRoom.value)
     deviceError.value = false
     deviceStatus.value = '마이크 장치를 변경했습니다.'
     syncParticipantsFromRoom()
@@ -1550,6 +1666,11 @@ function currentMicrophonePublication(room = meetingRoom.value) {
   ).find((publication) => publication.source === Track.Source.Microphone)
 }
 
+function resolveLocalMicrophoneMediaStreamTrack(room = meetingRoom.value) {
+  const publication = currentMicrophonePublication(room)
+  return publication?.audioTrack?.mediaStreamTrack || publication?.track?.mediaStreamTrack || null
+}
+
 function currentCameraPublication(room = meetingRoom.value) {
   return Array.from(
     room?.localParticipant?.videoTrackPublications?.values?.() || [],
@@ -1628,6 +1749,71 @@ async function ensureLocalMicrophonePublished(room) {
   }
 }
 
+async function restartLocalSpeechLatencyMonitor(room = meetingRoom.value) {
+  if (!room?.localParticipant || !mic.value) {
+    stopLocalSpeechLatencyMonitor()
+    return
+  }
+
+  const mediaStreamTrack = resolveLocalMicrophoneMediaStreamTrack(room)
+  if (!mediaStreamTrack) {
+    stopLocalSpeechLatencyMonitor()
+    return
+  }
+
+  const nextTrackId = mediaStreamTrack.id || currentMicrophonePublication(room)?.trackSid || 'local-mic'
+  if (speechLatencyTrackId === nextTrackId && speechLatencyAnalyser) return
+
+  const AudioContextClass = window.AudioContext || window.webkitAudioContext
+  if (!AudioContextClass) return
+
+  stopLocalSpeechLatencyMonitor()
+
+  // 회의 중 체감 지연은 STT 서버 시각이 아니라 브라우저에서 로컬 마이크 입력이 감지된 순간을 기준으로 잡는다.
+  // 그래서 실제 publish 중인 마이크 track을 복제해 별도 analyser에 연결한다.
+  const clonedTrack = mediaStreamTrack.clone()
+  speechLatencyStream = new MediaStream([clonedTrack])
+  speechLatencyTrackId = nextTrackId
+  speechLatencyAudioContext = new AudioContextClass()
+  await speechLatencyAudioContext.resume()
+  speechLatencySource = speechLatencyAudioContext.createMediaStreamSource(speechLatencyStream)
+  speechLatencyAnalyser = speechLatencyAudioContext.createAnalyser()
+  speechLatencyAnalyser.fftSize = 1024
+  speechLatencyAnalyser.smoothingTimeConstant = 0.2
+  speechLatencySource.connect(speechLatencyAnalyser)
+
+  const samples = new Uint8Array(speechLatencyAnalyser.fftSize)
+  const updateSpeechLatency = () => {
+    if (!speechLatencyAnalyser) return
+
+    speechLatencyAnalyser.getByteTimeDomainData(samples)
+    const sum = samples.reduce((total, sample) => {
+      const normalized = (sample - 128) / 128
+      return total + normalized * normalized
+    }, 0)
+    const rootMeanSquare = Math.sqrt(sum / samples.length)
+    const nowMs = Date.now()
+
+    if (rootMeanSquare >= LOCAL_SPEECH_MEASUREMENT_RMS_THRESHOLD) {
+      localSpeechLastDetectedAtMs = nowMs
+      if (!localSpeechIsActive) {
+        localSpeechIsActive = true
+        lastLocalSpeechDetectedAtMs.value = nowMs
+        recordPendingSpeechDetection(nowMs)
+      }
+    } else if (
+      localSpeechIsActive &&
+      nowMs - localSpeechLastDetectedAtMs >= LOCAL_SPEECH_MEASUREMENT_SILENCE_MS
+    ) {
+      localSpeechIsActive = false
+    }
+
+    speechLatencyAnimationFrame = requestAnimationFrame(updateSpeechLatency)
+  }
+
+  updateSpeechLatency()
+}
+
 async function ensureLocalCameraPublished(room) {
   if (!cam.value) return
   if (currentCameraPublication(room)) return
@@ -1682,6 +1868,13 @@ function resetMeetingSessionState() {
   feedbackMessage.value = '실시간 피드백이 도착하면 여기에 표시됩니다.'
   lastCaptionReceivedAt.value = null
   lastCaptionText.value = ''
+  lastCaptionPublishedAtMs.value = null
+  lastCaptionStartedAtEpochMs.value = null
+  lastCaptionTransportLatencyMs.value = null
+  lastCaptionEndToEndLatencyMs.value = null
+  lastLocalSpeechDetectedAtMs.value = null
+  lastCaptionRenderedAtMs.value = null
+  lastSpeechToCaptionLatencyMs.value = null
   meetingConnectionError.value = ''
   screenShareEnabled.value = false
   meetingConnection.value = null
@@ -1717,6 +1910,7 @@ function resetMeetingSessionState() {
   Array.from(tileTrackBindings.keys()).forEach((tileKey) => cleanupTileBinding(tileKey))
   tileMediaElements.clear()
   clearRemoteAudioBindings()
+  stopLocalSpeechLatencyMonitor()
 }
 
 function updateCaptionScrollState() {
@@ -1789,6 +1983,11 @@ async function toggleMicrophone() {
     lastMicPublishError.value = error?.message || '마이크 상태를 변경하지 못했습니다.'
     meetingConnectionError.value = error?.message || '마이크 상태를 변경하지 못했습니다.'
   })
+  if (mic.value) {
+    await restartLocalSpeechLatencyMonitor(meetingRoom.value)
+  } else {
+    stopLocalSpeechLatencyMonitor()
+  }
   syncParticipantsFromRoom()
 
   if (!mic.value) stopAudioTest()
@@ -1902,6 +2101,7 @@ async function connectMeetingRoom() {
 
   await ensureLocalMicrophonePublished(room)
   await ensureLocalCameraPublished(room)
+  await restartLocalSpeechLatencyMonitor(room)
 
   syncParticipantsFromRoom(room)
   if (mic.value && !currentMicrophonePublication(room)) {
@@ -1924,6 +2124,9 @@ function bindMeetingRoomEvents(room) {
     if (publication?.source === Track.Source.ScreenShare) {
       markScreenShareActive(room.localParticipant.identity)
     }
+    if (publication?.source === Track.Source.Microphone) {
+      void restartLocalSpeechLatencyMonitor(room)
+    }
     syncParticipantsFromRoom(room)
   })
   room.on(RoomEvent.LocalTrackUnpublished, (publication) => {
@@ -1931,6 +2134,9 @@ function bindMeetingRoomEvents(room) {
     lastLocalTrackEvent.value = 'unpublished'
     if (publication?.source === Track.Source.ScreenShare) {
       markScreenShareInactive(room.localParticipant.identity)
+    }
+    if (publication?.source === Track.Source.Microphone) {
+      stopLocalSpeechLatencyMonitor()
     }
     syncParticipantsFromRoom(room)
   })
@@ -2013,16 +2219,36 @@ function handleDataChannelMessage(payload, participant) {
     if (event?.eventType === 'caption.updated') {
       const shouldAutoScroll = captionFollowLatest.value
       captionMap.value = upsertCaption(captionMap.value, event)
-      lastCaptionReceivedAt.value = Date.now()
+      const receivedAtMs = Date.now()
+      lastCaptionReceivedAt.value = receivedAtMs
       lastCaptionText.value = event.text || event.sourceText || event.sourceTranscript || ''
-    nextTick(() => {
-      // 자막이 스크롤 구간에 들어간 뒤에는 사용자가 최신 문장 근처를 보고 있을 때만 자동으로 따라간다.
-      if (shouldAutoScroll) {
-        scheduleCaptionScrollToLatest()
-      } else {
-        updateCaptionScrollState()
-      }
-    })
+      lastCaptionPublishedAtMs.value = Number.isFinite(Number(event.publishedAtMs)) ? Number(event.publishedAtMs) : null
+      lastCaptionStartedAtEpochMs.value = Number.isFinite(Number(event.startedAtEpochMs)) ? Number(event.startedAtEpochMs) : null
+      lastCaptionTransportLatencyMs.value =
+        lastCaptionPublishedAtMs.value !== null
+          ? Math.max(0, receivedAtMs - lastCaptionPublishedAtMs.value)
+          : null
+      lastCaptionEndToEndLatencyMs.value =
+        lastCaptionStartedAtEpochMs.value !== null
+          ? Math.max(0, receivedAtMs - lastCaptionStartedAtEpochMs.value)
+          : null
+      nextTick(() => {
+        const renderedAtMs = Date.now()
+        lastCaptionRenderedAtMs.value = renderedAtMs
+        // 외부 caption.updated에는 화자 식별자를 싣지 않으므로,
+        // 로컬 마이크에서 감지한 다음 첫 자막을 내 발화 기준 체감 지연으로 본다.
+        const matchedSpeechDetectedAtMs = matchPendingSpeechDetection(renderedAtMs)
+        if (matchedSpeechDetectedAtMs !== null) {
+          lastLocalSpeechDetectedAtMs.value = matchedSpeechDetectedAtMs
+          lastSpeechToCaptionLatencyMs.value = Math.max(0, renderedAtMs - matchedSpeechDetectedAtMs)
+        }
+        // 자막이 스크롤 구간에 들어간 뒤에는 사용자가 최신 문장 근처를 보고 있을 때만 자동으로 따라간다.
+        if (shouldAutoScroll) {
+          scheduleCaptionScrollToLatest()
+        } else {
+          updateCaptionScrollState()
+        }
+      })
       return
     }
 

@@ -17,7 +17,9 @@ export function parseCaptionPayload(payload) {
     language: normalizeLanguage(payload.language ?? payload.sourceLanguage),
     text,
     startedAtMs: finiteNumber(payload.startedAtMs) ?? 0,
+    startedAtEpochMs: finiteNumber(payload.startedAtEpochMs),
     endedAtMs: finiteNumber(payload.endedAtMs),
+    publishedAtMs: finiteNumber(payload.publishedAtMs),
     updatedAt: String(payload.updatedAt || ''),
   }
 }
