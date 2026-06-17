@@ -70,7 +70,12 @@ const routes = [
       {
         path: 'admin/mail-policy',
         component: PolicyPage,
-        props: { title: '메일 정책 관리', description: '내부 메일 보관, 백업, 삭제 정책을 관리합니다.', kind: 'mail' },
+        // 기존 관리자 메일 정책 라우트는 유지하고, 내부 화면만 실제 보관 정책 API에 연결한다.
+        props: {
+          title: '메일 정책 관리',
+          description: '관리자 메일 보관 정책을 조회하고 수정합니다.',
+          kind: 'mail',
+        },
         meta: { role: 'ADMIN' },
       },
       {
