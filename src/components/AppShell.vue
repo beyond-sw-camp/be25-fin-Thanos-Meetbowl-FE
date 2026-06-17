@@ -108,7 +108,7 @@ const navSections = [
       { to: '/app/workspace', label: '개인 워크스페이스', icon: '▣' },
       { to: '/admin/members', label: '사용자 검색', icon: '⌕' },
       { to: '/app/shared-docs', label: '공유 워크스페이스', icon: '▤' },
-      { to: '/app/community', label: '커뮤니티', icon: '◇' },
+      { to: '/app/community', label: '도파민', icon: '◇' },
     ],
   },
   {

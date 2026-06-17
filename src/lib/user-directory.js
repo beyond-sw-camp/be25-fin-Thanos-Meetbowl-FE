@@ -8,6 +8,7 @@ export function searchUsers(params = {}) {
   const searchParams = new URLSearchParams()
 
   const keyword = `${params.keyword || ''}`.trim()
+  // 이름/로그인 ID/이메일/부서/팀 검색어를 하나의 keyword로 전달한다.
   if (keyword) searchParams.set('keyword', keyword)
 
   if (params.affiliateId) searchParams.set('affiliateId', params.affiliateId)
@@ -27,5 +28,6 @@ export function searchUsers(params = {}) {
 }
 
 export function getOrganizationUserSummary(userId) {
+  // 검색 결과나 조직도에서 클릭한 사용자의 요약 정보를 다시 조회한다.
   return getJson(`/organization/users/${userId}/summary`, userDirectoryRequestOptions)
 }
