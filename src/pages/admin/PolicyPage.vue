@@ -8,6 +8,7 @@ import {
   formatRetentionPeriod,
   fromRetentionDays,
   MAX_MONTHS,
+  MAX_WEEKS,
   MAX_YEARS,
   toRetentionDays,
   validateRetentionPeriod,
@@ -54,9 +55,14 @@ const legacySaved = ref(false)
 
 const yearOptions = Array.from({ length: MAX_YEARS + 1 }, (_, value) => value)
 const monthOptions = Array.from({ length: MAX_MONTHS + 1 }, (_, value) => value)
+const weekOptions = Array.from({ length: MAX_WEEKS + 1 }, (_, value) => value)
 
 const retentionPeriodText = computed(() => (
-  formatRetentionPeriod(form.value.retentionYears, form.value.retentionMonths)
+  formatRetentionPeriod(
+    form.value.retentionYears,
+    form.value.retentionMonths,
+    form.value.retentionWeeks,
+  )
 ))
 
 onMounted(() => {
@@ -106,10 +112,11 @@ async function saveMailPolicy() {
   saveErrorMessage.value = ''
   retentionDaysError.value = ''
 
-  // 화면에서는 년/개월을 선택하지만, 저장 직전에는 BE 계약에 맞춰 retentionDays로 검증한다.
+  // 화면에서는 년/개월/주를 선택하지만, 저장 직전에는 BE 계약에 맞춰 retentionDays로 검증한다.
   const validationMessage = validateRetentionPeriod(
     form.value.retentionYears,
     form.value.retentionMonths,
+    form.value.retentionWeeks,
   )
   if (validationMessage) {
     retentionDaysError.value = validationMessage
@@ -119,9 +126,13 @@ async function saveMailPolicy() {
   saving.value = true
 
   try {
-    // API 스펙은 유지하고 FE에서만 년/개월 -> 일수 변환을 수행한다.
+    // API 스펙은 유지하고 FE에서만 년/개월/주 -> 일수 변환을 수행한다.
     const savedPolicy = await updateAdminMailRetentionPolicy({
-      retentionDays: toRetentionDays(form.value.retentionYears, form.value.retentionMonths),
+      retentionDays: toRetentionDays(
+        form.value.retentionYears,
+        form.value.retentionMonths,
+        form.value.retentionWeeks,
+      ),
       autoDeleteEnabled: form.value.autoDeleteEnabled,
     })
 
@@ -146,12 +157,13 @@ async function saveMailPolicy() {
 }
 
 function applyPolicy(result) {
-  // GET 응답의 retentionDays를 가장 가까운 년/개월 드롭다운 값으로 환산해 초기값으로 사용한다.
+  // GET 응답의 retentionDays를 가장 가까운 년/개월/주 드롭다운 값으로 환산해 초기값으로 사용한다.
   const retentionPeriod = fromRetentionDays(result?.retentionDays)
   policy.value = result || null
   form.value = {
     retentionYears: retentionPeriod.years,
     retentionMonths: retentionPeriod.months,
+    retentionWeeks: retentionPeriod.weeks,
     autoDeleteEnabled: Boolean(result?.autoDeleteEnabled),
   }
 }
@@ -160,6 +172,7 @@ function createEmptyForm() {
   return {
     retentionYears: 0,
     retentionMonths: 0,
+    retentionWeeks: 0,
     autoDeleteEnabled: false,
   }
 }
@@ -215,9 +228,19 @@ function onRetentionMonthsChange(event) {
   retentionDaysError.value = ''
 }
 
+function onRetentionWeeksChange(event) {
+  form.value.retentionWeeks = Number.parseInt(event?.target?.value || '0', 10)
+  retentionDaysError.value = ''
+}
+
 function isMonthOptionDisabled(month) {
   // 10년 초과 조합은 FE에서 미리 막아 3650일 상한을 넘지 않도록 한다.
-  return form.value.retentionYears === MAX_YEARS && month > 0
+  return toRetentionDays(form.value.retentionYears, month, form.value.retentionWeeks) > 3650
+}
+
+function isWeekOptionDisabled(week) {
+  // 주 단위까지 합산했을 때도 최종 저장 상한 3650일을 넘지 않도록 한다.
+  return toRetentionDays(form.value.retentionYears, form.value.retentionMonths, week) > 3650
 }
 
 function selectAutoDeleteOption(value) {
@@ -293,8 +316,23 @@ function saveLegacyPolicy() {
                   {{ month }}개월
                 </option>
               </select>
+
+              <select
+                class="mail-policy-select"
+                :value="form.retentionWeeks"
+                @change="onRetentionWeeksChange"
+              >
+                <option
+                  v-for="week in weekOptions"
+                  :key="`week-${week}`"
+                  :value="week"
+                  :disabled="isWeekOptionDisabled(week)"
+                >
+                  {{ week }}주
+                </option>
+              </select>
             </div>
-            <small class="mail-policy-help">메일 보관 기간을 년/개월 단위로 선택합니다.</small>
+            <small class="mail-policy-help">메일 보관 기간을 년/개월/주 단위로 선택합니다.</small>
             <small class="mail-policy-help">현재 보관 기간: {{ retentionPeriodText }}</small>
             <div v-if="retentionDaysError" class="error-box mail-policy-field-error">{{ retentionDaysError }}</div>
           </div>
