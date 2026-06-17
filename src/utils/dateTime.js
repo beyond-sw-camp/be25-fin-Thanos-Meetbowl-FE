@@ -63,3 +63,46 @@ export function formatKstTime(value) {
     hour12: false,
   }).format(new Date(value))
 }
+
+// 백엔드는 UTC Instant(ISO-8601), 화면은 KST(UTC+9, DST 없음) 기준이라 변환 헬퍼를 둔다.
+
+// KST 'YYYY-MM-DD' + 'HH:MM' → UTC ISO-8601 (예약 생성 시 scheduledAt/scheduledEndAt)
+export function kstToUtcIso(date, time) {
+  return new Date(`${date}T${time}:00+09:00`).toISOString()
+}
+
+// KST 'YYYY-MM-DD' 하루를 UTC ISO 반개구간 [from, to) 로 (예약 현황 조회 from/to)
+export function kstDayRangeUtc(date) {
+  const start = new Date(`${date}T00:00:00+09:00`)
+  const end = new Date(start.getTime() + 24 * 60 * 60 * 1000)
+  return { from: start.toISOString(), to: end.toISOString() }
+}
+
+// UTC ISO → KST 'YYYY-MM-DD'
+export function utcToKstDate(value) {
+  if (!value) return ''
+  return new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Seoul' }).format(new Date(value))
+}
+
+// UTC ISO → KST 'HH:MM' (타임라인 계산용, 항상 콜론 형식 보장)
+export function utcToKstClock(value) {
+  if (!value) return ''
+  return new Intl.DateTimeFormat('en-GB', {
+    timeZone: 'Asia/Seoul',
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false,
+  }).format(new Date(value))
+}
+
+// KST 'YYYY-MM-DD' 를 delta일 이동한 'YYYY-MM-DD' (날짜 네비게이터 < >)
+export function shiftDateKst(date, deltaDays) {
+  const base = new Date(`${date}T00:00:00+09:00`)
+  const moved = new Date(base.getTime() + deltaDays * 24 * 60 * 60 * 1000)
+  return new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Seoul' }).format(moved)
+}
+
+// 오늘(KST) 'YYYY-MM-DD'
+export function todayKst() {
+  return new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Seoul' }).format(new Date())
+}

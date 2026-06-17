@@ -1,0 +1,46 @@
+import { timeToMinutes, utcToKstClock } from './dateTime'
+
+// 타임라인 시간축 설정. 백엔드 예약은 임의 시각이 가능하므로 하루 전체(06~24)를 통일 기준으로 둔다.
+export const TIMELINE = {
+  startHour: 6,
+  endHour: 24,
+  hourPx: 64,
+}
+
+export const timelineHours = Array.from(
+  { length: TIMELINE.endHour - TIMELINE.startHour },
+  (_, index) => TIMELINE.startHour + index,
+)
+
+const WINDOW_START = TIMELINE.startHour * 60
+const WINDOW_END = TIMELINE.endHour * 60
+const clamp = (value, lo, hi) => Math.min(Math.max(value, lo), hi)
+
+// 'HH:MM' 시작/종료 → 막대 좌표(px). 윈도 밖(06시 이전·24시 이후·자정 종료)은 잘라 트랙을 벗어나지 않게 한다.
+export function blockStyle(start, end) {
+  const rawStart = timeToMinutes(start)
+  let rawEnd = timeToMinutes(end)
+  if (rawEnd <= rawStart) rawEnd = WINDOW_END // 자정(00:00) 종료 방어
+  const startPx = clamp(rawStart, WINDOW_START, WINDOW_END)
+  const endPx = clamp(rawEnd, WINDOW_START, WINDOW_END)
+  return {
+    left: `${((startPx - WINDOW_START) / 60) * TIMELINE.hourPx}px`,
+    width: `${Math.max(((endPx - startPx) / 60) * TIMELINE.hourPx, 36)}px`,
+  }
+}
+
+// 트랙 내 클릭 위치(px) → 30분 단위로 스냅한 'HH:MM'
+export function slotTimeFromOffset(offsetPx) {
+  const maxHours = TIMELINE.endHour - TIMELINE.startHour - 0.5
+  const raw = clamp(offsetPx / TIMELINE.hourPx, 0, maxHours)
+  const minutes = WINDOW_START + Math.floor(raw * 2) * 30
+  const hour = String(Math.floor(minutes / 60)).padStart(2, '0')
+  const minute = String(minutes % 60).padStart(2, '0')
+  return `${hour}:${minute}`
+}
+
+// 현재(KST) 시각 세로 마커 위치
+export function nowMarkerStyle() {
+  const minutes = clamp(timeToMinutes(utcToKstClock(new Date().toISOString())), WINDOW_START, WINDOW_END)
+  return { left: `${((minutes - WINDOW_START) / 60) * TIMELINE.hourPx}px` }
+}

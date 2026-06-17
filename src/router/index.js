@@ -21,6 +21,7 @@ import MeetingsPage from '../pages/meetings/MeetingsPage.vue'
 import MinutesPage from '../pages/minutes/MinutesPage.vue'
 import BackupDetailPage from '../pages/backup/BackupDetailPage.vue'
 import MyReservationsPage from '../pages/reservations/MyReservationsPage.vue'
+import MyAttendingPage from '../pages/reservations/MyAttendingPage.vue'
 import RoomsPage from '../pages/rooms/RoomsPage.vue'
 import SettingsPage from '../pages/settings/SettingsPage.vue'
 import SharedDocsPage from '../pages/shared-docs/SharedDocsPage.vue'
@@ -40,6 +41,7 @@ const routes = [
       { path: 'app/dashboard', component: DashboardPage, meta: { role: 'USER' } },
       { path: 'app/rooms', component: RoomsPage, meta: { role: 'USER' } },
       { path: 'app/my-reservations', component: MyReservationsPage, meta: { role: 'USER' } },
+      { path: 'app/my-attending', component: MyAttendingPage, meta: { role: 'USER' } },
       { path: 'app/meetings', component: MeetingsPage, meta: { role: 'USER' } },
       { path: 'app/livekit-test', component: LiveKitTestPage, meta: { role: 'USER' } },
       { path: 'app/mail', component: MailPage, meta: { role: 'USER' } },
