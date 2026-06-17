@@ -104,18 +104,38 @@ export const AUDIT_TARGET_TYPE_OPTIONS = [
   { value: 'MAIL_RETENTION_POLICY', label: '메일 보관 정책' },
 ]
 
+/**
+ * 감사 로그의 결과(성공/실패)를 번역된 텍스트로 변환합니다.
+ * @param {string|boolean} result - 변환할 결과 값 (예: 'SUCCESS', 'FAILED')
+ * @returns {string} 번역된 결과 텍스트
+ */
 export function formatAuditResultLabel(result) {
   return formatTranslatedValue(result)
 }
 
+/**
+ * 감사 로그의 작업 유형(actionType)을 번역된 텍스트로 변환합니다.
+ * @param {string} actionType - 작업 유형 코드 (예: 'USER_CREATE')
+ * @returns {string} 번역된 작업 유형 텍스트
+ */
 export function formatActionTypeLabel(actionType) {
   return ACTION_TYPE_LABELS[actionType] || actionType || '-'
 }
 
+/**
+ * 감사 로그의 대상 유형(targetType)을 번역된 텍스트로 변환합니다.
+ * @param {string} targetType - 대상 유형 코드 (예: 'USER')
+ * @returns {string} 번역된 대상 유형 텍스트
+ */
 export function formatTargetTypeLabel(targetType) {
   return TARGET_TYPE_LABELS[targetType] || targetType || '-'
 }
 
+/**
+ * 스냅샷 데이터 내에 존재하는 민감한 정보(비밀번호, 토큰 등)를 마스킹 처리하여 안전한 데이터로 변환합니다.
+ * @param {any} snapshot - 정제할 스냅샷 객체, 배열 또는 문자열
+ * @returns {any} 민감 정보가 마스킹된 스냅샷
+ */
 export function sanitizeSnapshot(snapshot) {
   if (snapshot === null || snapshot === undefined || snapshot === '') return null
 
@@ -138,6 +158,13 @@ export function sanitizeSnapshot(snapshot) {
   return snapshot
 }
 
+/**
+ * 작업 전/후 스냅샷을 비교하여 어떤 필드들이 어떻게 변경되었는지 요약된 배열을 반환합니다.
+ * @param {Object} beforeSnapshot - 작업 전 스냅샷
+ * @param {Object} afterSnapshot - 작업 후 스냅샷
+ * @param {Object} options - 추가 옵션 (참조 ID 매핑 테이블 등)
+ * @returns {Array<{key: string, label: string, before: string, after: string, beforeTitle: string, afterTitle: string}>} 변경 내역 배열
+ */
 export function summarizeAuditLogChanges(beforeSnapshot, afterSnapshot, options = {}) {
   const before = sanitizeSnapshot(beforeSnapshot)
   const after = sanitizeSnapshot(afterSnapshot)
@@ -179,6 +206,13 @@ export function summarizeAuditLogChanges(beforeSnapshot, afterSnapshot, options 
   return changes
 }
 
+/**
+ * 작업 전/후 스냅샷에서 대상(Target)의 표시 이름 및 로그인 ID를 추출합니다.
+ * @param {string} targetId - 대상의 고유 ID
+ * @param {Object} beforeSnapshot - 작업 전 스냅샷
+ * @param {Object} afterSnapshot - 작업 후 스냅샷
+ * @returns {{loginId: string, name: string, rawTargetId: string}} 화면에 표시할 대상의 정보
+ */
 export function extractAuditLogTargetDisplay(targetId, beforeSnapshot, afterSnapshot) {
   const before = sanitizeSnapshot(beforeSnapshot)
   const after = sanitizeSnapshot(afterSnapshot)

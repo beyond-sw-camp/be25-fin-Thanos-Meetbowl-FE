@@ -65,10 +65,8 @@ const pageNo = ref(1)
 const pageSize = ref(DEFAULT_PAGE_SIZE)
 
 const filterForm = reactive({
-  ipAddress: '',
   actionType: '',
   targetType: '',
-  targetId: '',
   result: '',
   dateRange: 'last7Days',
   from: '',
@@ -86,10 +84,8 @@ const isAdmin = computed(() => auth.user?.role === 'ADMIN')
 const useCustomDateRange = computed(() => filterForm.dateRange === 'custom')
 const hasFilters = computed(() =>
   Boolean(
-    filterForm.ipAddress ||
       filterForm.actionType ||
       filterForm.targetType ||
-      filterForm.targetId ||
       filterForm.result ||
       filterForm.from ||
       filterForm.to,
@@ -155,10 +151,8 @@ async function loadLogs() {
 
   try {
     const response = await getAdminAuditLogs({
-      ipAddress: filterForm.ipAddress.trim(),
       actionType: filterForm.actionType,
       targetType: filterForm.targetType,
-      targetId: filterForm.targetId.trim(),
       result: normalizeResultFilter(filterForm.result),
       from: toIsoUtc(filterForm.from),
       to: toIsoUtc(filterForm.to),
@@ -221,10 +215,8 @@ function submitFilters() {
 }
 
 function resetFilters() {
-  filterForm.ipAddress = ''
   filterForm.actionType = ''
   filterForm.targetType = ''
-  filterForm.targetId = ''
   filterForm.result = ''
   filterForm.dateRange = 'last7Days'
   applyDateRangePreset(filterForm.dateRange)
@@ -420,7 +412,6 @@ function toIsoUtc(value) {
     <template v-else>
       <article class="card admin-toolbar admin-log-toolbar">
         <form class="admin-log-filter-form" @submit.prevent="submitFilters">
-          <input v-model="filterForm.ipAddress" type="text" placeholder="작업자 IP" />
 
           <select v-model="filterForm.actionType" aria-label="작업 유형">
             <option v-for="option in AUDIT_ACTION_TYPE_OPTIONS" :key="option.value || 'all-action'" :value="option.value">
@@ -457,15 +448,8 @@ function toIsoUtc(value) {
             </option>
           </select>
 
-          <details class="advanced-filter-panel">
-            <summary>고급 필터</summary>
-            <input v-model="filterForm.targetId" type="text" placeholder="대상 ID(UUID)" />
-          </details>
-
-          <div class="admin-actions filter-actions">
-            <button class="secondary-button small" type="button" @click="resetFilters">초기화</button>
-            <button class="primary-button small" type="submit">검색</button>
-          </div>
+          <button class="secondary-button" type="button" @click="resetFilters">초기화</button>
+          <button class="primary-button" type="submit">검색</button>
         </form>
       </article>
 
@@ -606,14 +590,14 @@ function toIsoUtc(value) {
 
 .admin-log-filter-form {
   width: 100%;
-  display: grid;
+  display: flex;
   gap: 10px;
-  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
 }
 
 .admin-log-filter-form input,
 .admin-log-filter-form select {
-  width: 100%;
+  flex: 1;
+  min-width: 0;
   height: 38px;
   border: 1px solid var(--border);
   border-radius: 8px;
@@ -622,27 +606,10 @@ function toIsoUtc(value) {
   font: inherit;
 }
 
-.advanced-filter-panel {
-  grid-column: 1 / -1;
-  border: 1px dashed var(--border);
-  border-radius: 12px;
-  padding: 12px;
-  background: #fafbfc;
-}
-
-.advanced-filter-panel summary {
-  cursor: pointer;
-  font-weight: 600;
-  color: var(--muted-foreground);
-}
-
-.advanced-filter-panel input {
-  margin-top: 12px;
-}
-
-.filter-actions {
-  justify-content: flex-start;
-  align-items: center;
+.admin-log-filter-form button {
+  flex: 0 0 80px;
+  height: 38px;
+  border-radius: 8px;
 }
 
 .admin-log-table table {
