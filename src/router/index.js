@@ -59,7 +59,7 @@ const routes = [
         meta: { role: ['USER', 'ADMIN'] },
       },
       { path: 'admin/dashboard', component: AdminDashboardPage, meta: { role: 'ADMIN' } },
-      { path: 'admin/members', component: MembersPage, meta: { role: 'ADMIN' } },
+      { path: 'admin/members', component: MembersPage, meta: { role: ['USER', 'ADMIN'] } },
       { path: 'admin/organization', component: OrganizationPage, meta: { role: 'ADMIN' } },
       { path: 'admin/rooms', component: AdminRoomsPage, meta: { role: 'ADMIN' } },
       {

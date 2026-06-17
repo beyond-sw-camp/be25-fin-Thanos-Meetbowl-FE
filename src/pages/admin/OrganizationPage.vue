@@ -16,6 +16,7 @@ import {
   updateAdminTeamStatus,
 } from '../../lib/admin-organizations'
 import { getAllAdminUsers } from '../../lib/admin-users'
+import { getOrganizationUserSummary } from '../../lib/user-directory'
 import { useAuthStore } from '../../stores/auth'
 
 const auth = useAuthStore()
@@ -41,6 +42,10 @@ const actionError = ref('')
 const successMessage = ref('')
 const modalOpen = ref(false)
 const editingItem = ref(null)
+const userSummaryOpen = ref(false)
+const userSummaryLoading = ref(false)
+const userSummaryError = ref('')
+const selectedUserSummary = ref(null)
 
 const affiliates = ref([])
 const departments = ref([])
@@ -143,6 +148,7 @@ const departmentSummaries = computed(() =>
     // 조직도 카드가 너무 길어지지 않도록 미리보기는 4명까지만 노출하고 나머지는 수치로 접는다.
     const previewMembers = departmentUsers.slice(0, 4).map((user) => ({
       key: user.userId,
+      userId: user.userId,
       label: `${user.name || '-'} · ${resolvePositionName(user.positionId, user.position)}`,
     }))
 
@@ -425,6 +431,27 @@ async function changeStatus(item) {
   }
 }
 
+async function openUserSummary(userId) {
+  userSummaryOpen.value = true
+  userSummaryLoading.value = true
+  userSummaryError.value = ''
+  selectedUserSummary.value = null
+
+  try {
+    selectedUserSummary.value = normalizeUserSummary(await getOrganizationUserSummary(userId))
+  } catch (error) {
+    if (error?.status === 403) {
+      forbidden.value = true
+      userSummaryOpen.value = false
+      return
+    }
+
+    userSummaryError.value = error?.message || '회원 요약 정보를 불러오지 못했습니다.'
+  } finally {
+    userSummaryLoading.value = false
+  }
+}
+
 function createEmptyForm() {
   return {
     name: '',
@@ -487,6 +514,21 @@ function normalizeUser(item) {
     teamId: item?.teamId || '',
     positionId: item?.positionId || '',
     position: item?.position || '-',
+  }
+}
+
+function normalizeUserSummary(item) {
+  return {
+    userId: item?.userId || '',
+    loginId: item?.loginId || '',
+    name: item?.name || '-',
+    email: item?.email || '-',
+    affiliate: item?.affiliate || '-',
+    department: item?.department || '-',
+    team: item?.team || '-',
+    position: item?.position || '-',
+    role: `${item?.role || ''}`.toUpperCase(),
+    status: `${item?.status || ''}`.toUpperCase(),
   }
 }
 
@@ -657,7 +699,9 @@ function canCreateInCurrentTab() {
 
                 <ul v-if="department.hasMembers" class="member-preview-list">
                   <li v-for="member in department.previewMembers" :key="member.key">
-                    {{ member.label }}
+                    <button type="button" class="member-preview-button" @click="openUserSummary(member.userId)">
+                      {{ member.label }}
+                    </button>
                   </li>
                 </ul>
                 <p v-else class="empty-member-text">배정된 사용자가 없습니다.</p>
@@ -873,6 +917,33 @@ function canCreateInCurrentTab() {
           </form>
         </article>
       </div>
+
+      <div v-if="userSummaryOpen" class="modal-backdrop" @click.self="userSummaryOpen = false">
+        <article class="card write-modal detail-modal">
+          <header>
+            <div>
+              <h2>{{ userSummaryLoading ? '회원 요약 조회 중' : selectedUserSummary?.name || '-' }}</h2>
+              <p v-if="!userSummaryLoading">{{ selectedUserSummary?.department || '-' }} 쨌 {{ selectedUserSummary?.position || '-' }}</p>
+            </div>
+            <button type="button" @click="userSummaryOpen = false">닫기</button>
+          </header>
+
+          <div v-if="userSummaryLoading" class="empty-state">회원 요약 정보를 불러오는 중입니다.</div>
+          <div v-else-if="userSummaryError" class="error-box">{{ userSummaryError }}</div>
+          <template v-else-if="selectedUserSummary">
+            <dl class="detail-list">
+              <div><dt>이름</dt><dd>{{ selectedUserSummary.name }}</dd></div>
+              <div><dt>이메일</dt><dd>{{ selectedUserSummary.email }}</dd></div>
+              <div><dt>계열사</dt><dd>{{ selectedUserSummary.affiliate }}</dd></div>
+              <div><dt>부서</dt><dd>{{ selectedUserSummary.department }}</dd></div>
+              <div><dt>팀</dt><dd>{{ selectedUserSummary.team }}</dd></div>
+              <div><dt>직급</dt><dd>{{ selectedUserSummary.position }}</dd></div>
+              <div><dt>권한</dt><dd>{{ selectedUserSummary.role || '-' }}</dd></div>
+              <div><dt>상태</dt><dd>{{ statusLabel(selectedUserSummary.status) }}</dd></div>
+            </dl>
+          </template>
+        </article>
+      </div>
     </template>
   </section>
 </template>
@@ -979,6 +1050,21 @@ function canCreateInCurrentTab() {
   color: var(--foreground);
   font-size: 13px;
   font-weight: 600;
+}
+
+.member-preview-button {
+  width: 100%;
+  border: 0;
+  background: transparent;
+  padding: 0;
+  color: inherit;
+  text-align: left;
+  font: inherit;
+  cursor: pointer;
+}
+
+.member-preview-button:hover {
+  color: var(--primary);
 }
 
 .member-overflow {
