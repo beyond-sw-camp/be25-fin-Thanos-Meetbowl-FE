@@ -63,3 +63,7 @@ export function updateAdminUser(userId, payload) {
 export function updateAdminUserStatus(userId, status) {
   return patchJson(`/admin/users/${userId}/status`, { status }, adminRequestOptions)
 }
+
+export function resetAdminUserPassword(userId) {
+  return postJson(`/admin/users/${userId}/password/reset`, {}, adminRequestOptions)
+}
