@@ -117,6 +117,8 @@ function openEdit(meeting) {
 }
 
 function addAttendee(name) {
+  // 추천 선택 직후 중복으로 emit되더라도 참석자 목록이 두 번 늘어나지 않게 방지한다.
+  if (!name || form.value.attendees.includes(name)) return
   form.value.attendees.push(name)
   if (!form.value.reviewer) form.value.reviewer = name
 }

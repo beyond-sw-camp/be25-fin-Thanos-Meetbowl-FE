@@ -14,9 +14,20 @@ export function getAdminUsers(params = {}) {
   const keyword = `${params.keyword || ''}`.trim()
   if (keyword) searchParams.set('keyword', keyword)
 
+  const status = `${params.status || ''}`.trim().toUpperCase()
+  if (status) searchParams.set('status', status)
+
   const query = searchParams.toString()
   const path = query ? `/admin/users?${query}` : '/admin/users'
   return getJson(path, adminRequestOptions)
+}
+
+export function searchAdminUserSuggestions({ keyword = '', size = 5 } = {}) {
+  return getAdminUsers({
+    keyword,
+    page: 1,
+    size,
+  })
 }
 
 export async function getAllAdminUsers(params = {}) {
