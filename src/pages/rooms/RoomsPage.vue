@@ -2,174 +2,419 @@
   <section class="page rooms-page">
     <header class="page-header rooms-header">
       <div><h1>회의실 예약 현황</h1><p>회의실별 예약 시간을 확인하고 빈 시간대를 바로 예약합니다.</p></div>
-      <button class="primary-button" @click="openReservation(filteredRooms[0]?.id || selectedRoom.id)">회의/회의실 예약</button>
+      <button class="primary-button" @click="openCreate(filteredRooms[0]?.roomId || '')">회의/회의실 예약</button>
     </header>
 
-    <div class="reservation-summary-grid">
-      <article class="card reservation-summary">
-        <div class="card-head"><h2>내가 예약한 회의</h2><span>{{ myBooked.length }}건</span></div>
-        <button v-for="item in myBooked" :key="item.id" @click="detail = item">
-          <strong>{{ item.title }}</strong><span>{{ item.start }}-{{ item.end }} · {{ roomName(item.roomId) }}</span>
-        </button>
-        <p v-if="!myBooked.length">예약한 회의가 없습니다.</p>
-      </article>
-      <article class="card reservation-summary">
-        <div class="card-head"><h2>내가 참석해야 하는 회의</h2><span>{{ myInvited.length }}건</span></div>
-        <button v-for="item in myInvited" :key="item.id" @click="detail = item">
-          <strong>{{ item.title }}</strong><span>{{ item.start }}-{{ item.end }} · {{ item.owner }}</span>
-        </button>
-        <p v-if="!myInvited.length">참석 예정 회의가 없습니다.</p>
-      </article>
-    </div>
+    <article v-if="loading" class="card empty-state">회의실 예약 현황을 불러오는 중입니다.</article>
 
-    <div class="card rooms-toolbar">
-      <div class="room-date-control">
-        <input type="date" v-model="date">
-        <button class="secondary-button" @click="date = todayDate">오늘</button>
+    <article v-else-if="errorMessage" class="card">
+      <div class="error-box">{{ errorMessage }}</div>
+      <div class="admin-actions retry-actions">
+        <button class="secondary-button" type="button" @click="loadAll">다시 시도</button>
       </div>
-      <div class="toolbar">
-        <button v-for="item in sites" :key="item" class="chip" :class="{ active: site === item }" @click="site = item">{{ item }}</button>
-      </div>
-      <div class="room-legend"><span><i class="mine"></i>내 예약</span><span><i></i>예약됨</span><span><i class="restricted"></i>사용 제한</span></div>
-    </div>
+    </article>
 
-    <div class="card room-timeline-card">
-      <div class="room-timeline-scroll" :style="{ '--hour-px': roomHourPx + 'px' }">
-        <div class="room-time-header">
-          <div class="room-name-spacer"></div>
-          <div class="room-hours"><span v-for="hour in roomHours" :key="hour">{{ String(hour).padStart(2, '0') }}:00</span></div>
+    <template v-else>
+      <div class="reservation-summary-grid">
+        <article class="card reservation-summary">
+          <div class="card-head"><h2>내가 예약한 회의</h2><RouterLink to="/app/my-reservations" class="card-head-link">전체 보기</RouterLink></div>
+          <button v-for="item in myBooked" :key="item.meetingId" @click="router.push('/app/my-reservations')">
+            <strong>{{ item.title }}</strong><span>{{ item.start }}-{{ item.end }} · {{ item.roomName }}</span>
+          </button>
+          <p v-if="!myBooked.length">예약한 회의가 없습니다.</p>
+        </article>
+        <article class="card reservation-summary">
+          <div class="card-head"><h2>내가 참석해야 하는 회의</h2><RouterLink to="/app/my-attending" class="card-head-link">전체 보기</RouterLink></div>
+          <button v-for="item in myInvited" :key="item.meetingId" @click="openDetail(item)">
+            <strong>{{ item.title }}</strong><span>{{ item.start }}-{{ item.end }} · {{ item.roomName }}</span>
+          </button>
+          <p v-if="!myInvited.length">참석 예정 회의가 없습니다.</p>
+        </article>
+      </div>
+
+      <div class="card rooms-toolbar">
+        <div class="room-date-control">
+          <button class="secondary-button" type="button" @click="shiftDay(-1)">‹</button>
+          <input type="date" v-model="date">
+          <button class="secondary-button" type="button" @click="shiftDay(1)">›</button>
+          <button class="secondary-button" @click="date = todayKst()">오늘</button>
         </div>
-        <div v-for="room in filteredRooms" :key="room.id" class="room-row" :class="{ restricted: room.restricted }">
-          <div class="room-row-meta">
-            <strong>{{ room.name }}</strong>
-            <small>{{ room.site }} · {{ room.floor }}층 · {{ room.capacity }}명</small>
-            <em v-if="room.restricted">{{ room.restrictReason }}</em>
-          </div>
-          <div class="room-track" @click="!room.restricted && openReservation(room.id, slotTime($event))">
-            <span v-for="hour in roomHours" :key="hour" class="hour-line"></span>
-            <span class="now-marker" :style="nowMarkerStyle()"><em>현재</em></span>
-            <button
-              v-for="item in reservations.filter((res) => res.roomId === room.id && res.date === date)"
-              :key="item.id"
-              type="button"
-              :class="['reservation-block', item.status]"
-              :style="reservationStyle(item)"
-              @click.stop="detail = item"
-            >
-              <strong>{{ item.title }}</strong><span>{{ item.start }}-{{ item.end }}</span>
-            </button>
-          </div>
+        <div class="room-legend">
+          <select class="room-site-select" v-model="site">
+            <option v-for="item in sites" :key="item" :value="item">{{ item }}</option>
+          </select>
+          <span><i class="mine"></i>내 예약</span>
+          <span><i></i>예약됨</span>
+          <span><i class="restricted"></i>사용 제한</span>
         </div>
       </div>
-    </div>
 
-    <ModalShell v-if="modal" modal-class="room-modal" @close="modal = false">
-      <header><div><h2>회의/회의실 예약</h2><p>참석자와 검토자를 지정하고 회의실 충돌 여부를 확인합니다.</p></div><button @click="modal = false">닫기</button></header>
-      <div class="room-modal-grid">
-        <form class="form-grid" @submit.prevent="saveReservation">
-          <label>회의 제목<input v-model="form.title" required placeholder="회의 제목"></label>
-          <label>회의실<select v-model="form.roomId"><option v-for="room in rooms" :key="room.id" :value="room.id">{{ room.name }}</option></select></label>
-          <div class="form-row two"><label>시작일<input type="date" v-model="form.date"></label><label>종료일<input type="date" v-model="form.endDate"></label></div>
-          <div class="form-row two"><label>시작 시간<input type="time" v-model="form.start"></label><label>종료 시간<input type="time" v-model="form.end"></label></div>
-          <MemberPicker :members="members" :selected-names="form.attendees" exclude-name="이지연" label="참석자 검색" @select="addAttendee($event.name)" />
-          <div class="participant-chips"><span v-for="name in form.attendees" :key="name">{{ name }}<button type="button" @click="removeAttendee(name)">×</button></span></div>
-          <label>회의록 검토자<select v-model="form.reviewer"><option value="">선택 안 함</option><option v-for="name in form.attendees" :key="name" :value="name">{{ name }}</option></select></label>
-          <label>회의 내용<textarea v-model="form.content" rows="4" placeholder="회의 목적과 안건"></textarea></label>
-          <p v-if="selectedRoom?.restricted" class="warning-text">해당 회의실은 {{ selectedRoom.restrictReason }} 사유로 {{ selectedRoom.restrictUntil }}까지 사용 제한 중입니다.</p>
-          <p v-else-if="conflict" class="warning-text">선택한 시간에 이미 예약이 있습니다. 다른 시간을 선택하세요.</p>
-          <div class="modal-actions"><button type="button" class="secondary-button" @click="modal = false">취소</button><button class="primary-button" :disabled="conflict || selectedRoom?.restricted">예약 저장</button></div>
-        </form>
-        <RoomSchedulePanel :room="selectedRoom" :room-name="selectedRoom?.name || ''" :reservations="roomReservations" title="선택일 예약" />
+      <div class="card room-timeline-card">
+        <div class="room-timeline-scroll" :style="{ '--hour-px': TIMELINE.hourPx + 'px' }">
+          <div class="room-time-header">
+            <div class="room-name-spacer">회의실</div>
+            <div class="room-hours"><span v-for="hour in timelineHours" :key="hour">{{ String(hour).padStart(2, '0') }}:00</span></div>
+          </div>
+          <RoomTimelineRow
+            v-for="room in filteredRooms"
+            :key="room.roomId"
+            :room="room"
+            :blocks="blocksByRoom[room.roomId] || []"
+            :name-map="nameMap"
+            :date="date"
+            @block-click="openDetail"
+            @track-click="openCreate"
+            @track-drag="openCreateRange"
+          />
+          <div v-if="!filteredRooms.length" class="empty-state-inline">표시할 회의실이 없습니다.</div>
+        </div>
       </div>
-    </ModalShell>
+    </template>
 
-    <ModalShell v-if="detail" modal-class="detail-modal" @close="detail = null">
-      <header><div><h2>{{ detail.title }}</h2><p>{{ detail.start }}-{{ detail.end }} · {{ roomName(detail.roomId) }}</p></div><button @click="detail = null">닫기</button></header>
-      <dl class="detail-list">
-        <div><dt>예약자</dt><dd>{{ detail.owner }}</dd></div>
-        <div><dt>상태</dt><dd>{{ statusLabel[detail.status] }}</dd></div>
-        <div><dt>참석자</dt><dd>{{ detail.attendees.join(', ') || '-' }}</dd></div>
-        <div><dt>검토자</dt><dd>{{ detail.reviewer || '-' }}</dd></div>
-      </dl>
-      <p v-if="detail.content">{{ detail.content }}</p>
-      <div class="modal-actions"><button v-if="detail.status === 'mine'" class="danger-button" @click="cancelReservation(detail.id)">예약 취소</button><RouterLink :to="meetingRoute()" class="primary-button">회의 입장</RouterLink></div>
+    <ReservationModal
+      v-if="modal"
+      :rooms="rooms"
+      :initial-room-id="pendingRoomId"
+      :initial-date="date"
+      :initial-start="pendingStart"
+      :initial-end="pendingEnd"
+      @close="modal = false"
+      @saved="onSaved"
+    />
+
+    <ModalShell v-if="detail" modal-class="detail-modal" @close="closeDetail">
+      <header>
+        <div><h2>{{ detail.title }}</h2></div>
+        <button class="modal-close" type="button" aria-label="닫기" @click="closeDetail">×</button>
+      </header>
+      <div class="detail-body">
+        <dl class="detail-list">
+          <div><dt>날짜 / 시간</dt><dd>{{ detailDateLabel ? detailDateLabel + '  ' : '' }}{{ detailTimeLabel }}</dd></div>
+          <div><dt>회의실</dt><dd>{{ detailRoomLabel }}</dd></div>
+          <div><dt>예약자</dt><dd>{{ detailHostName }}</dd></div>
+          <div>
+            <dt>참석자</dt>
+            <dd v-if="detailFull && detailAttendeeList.length" class="detail-chip-group">
+              <span v-for="(name, index) in detailAttendeeList" :key="index" class="detail-chip">{{ name }}</span>
+            </dd>
+            <dd v-else>-</dd>
+          </div>
+          <div><dt>상태</dt><dd><span class="detail-chip">{{ detail.mine ? '내 예약' : '예약됨' }}</span></dd></div>
+        </dl>
+        <p v-if="detailRestricted" class="detail-note">참여한 회의만 상세 정보를 볼 수 있습니다.</p>
+      </div>
+      <p v-if="actionError" class="warning-text">{{ actionError }}</p>
+      <p v-if="detailEnded" class="detail-note">이미 종료된 회의입니다.</p>
+      <div class="modal-actions">
+        <button v-if="detail.mine" class="danger-button" :disabled="saving || detailEnded" @click="cancelReservation(detail.meetingId)">예약 취소</button>
+        <RouterLink v-if="!detailEnded" :to="meetingRoute(detail.meetingId)" class="primary-button">회의 입장</RouterLink>
+        <button v-else class="primary-button" type="button" disabled>회의 입장</button>
+      </div>
     </ModalShell>
   </section>
 </template>
 
 <script setup>
-import { computed, ref } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
+import { useRouter } from 'vue-router'
 import ModalShell from '../../components/common/ModalShell.vue'
-import MemberPicker from '../../components/common/MemberPicker.vue'
-import RoomSchedulePanel from '../../components/rooms/RoomSchedulePanel.vue'
-import { members, rooms, todayReservations } from '../../data/mockData'
+import RoomTimelineRow from '../../components/rooms/RoomTimelineRow.vue'
+import ReservationModal from '../../components/rooms/ReservationModal.vue'
+import { useAuthStore } from '../../stores/auth'
+import { cancelMeeting, getMeeting, getMyReservations, getRoomReservations, getRooms } from '../../lib/reservations'
 import { meetingRoute } from '../../lib/meeting-route'
-import { addMinutes, minutesToTime, overlaps, timeToMinutes } from '../../utils/dateTime'
+import { useUserNames } from '../../composables/useUserNames'
+import { kstDayRangeUtc, shiftDateKst, todayKst, utcToKstClock, utcToKstDate } from '../../utils/dateTime'
+import { TIMELINE, timelineHours } from '../../utils/timeline'
 
-const statusLabel = { mine: '내 예약', booked: '예약됨' }
-const todayDate = '2026-05-22'
-const roomHours = Array.from({ length: 18 }, (_, index) => index + 6)
-const roomHourPx = 70
-const reservations = ref(todayReservations.map((item) => ({ date: todayDate, endDate: todayDate, reviewer: item.attendees[0] || '', content: '', ...item })))
+const auth = useAuthStore()
+const router = useRouter()
+const myUserId = computed(() => auth.user?.userId || '')
+const { nameMap, resolveNames } = useUserNames()
+
+const loading = ref(true)
+const errorMessage = ref('')
+const actionError = ref('')
+const saving = ref(false)
+
+const rooms = ref([])
+const blocksByRoom = ref({})
+const myBooked = ref([])
+const myInvited = ref([])
+
 const site = ref('전체')
-const date = ref(todayDate)
+const date = ref(todayKst())
 const modal = ref(false)
 const detail = ref(null)
-const form = ref({ title: '', roomId: rooms[0]?.id || '', date: todayDate, endDate: todayDate, start: '09:00', end: '10:00', attendees: [], reviewer: '', content: '' })
+const detailFull = ref(null)
+const detailRestricted = ref(false)
+const pendingRoomId = ref('')
+const pendingStart = ref('09:00')
+const pendingEnd = ref('')
 
-const sites = ['전체', ...new Set(rooms.map((room) => room.site))]
-const filteredRooms = computed(() => site.value === '전체' ? rooms : rooms.filter((room) => room.site === site.value))
-const myBooked = computed(() => reservations.value.filter((item) => item.status === 'mine'))
-const myInvited = computed(() => reservations.value.filter((item) => item.status !== 'mine' && item.attendees.includes('이지연')))
-const selectedRoom = computed(() => rooms.find((room) => room.id === form.value.roomId) || rooms[0])
-const roomReservations = computed(() => reservations.value.filter((item) => item.roomId === form.value.roomId && item.date === form.value.date))
-const conflict = computed(() => reservations.value.some((item) => item.roomId === form.value.roomId && item.date === form.value.date && overlaps(form.value.start, form.value.end, item.start, item.end)))
+const sites = computed(() => ['전체', ...new Set(rooms.value.map((room) => room.siteName).filter(Boolean))])
+const filteredRooms = computed(() =>
+  site.value === '전체' ? rooms.value : rooms.value.filter((room) => room.siteName === site.value),
+)
 
-function roomName(roomId) {
-  return rooms.find((room) => room.id === roomId)?.name || ''
+// 상세 모달 표시값 — 상세 조회(detailFull)가 있으면 전체, 없으면 블록 기본정보로 채운다.
+const detailRoomLabel = computed(() => {
+  const room = rooms.value.find((item) => item.roomId === detailFull.value?.meetingRoomId)
+  if (room) return `${room.siteName} · ${room.buildingName}`
+  return detail.value?.roomName || '-'
+})
+const detailDateLabel = computed(() => {
+  const full = detailFull.value
+  if (!full) return ''
+  const startDate = utcToKstDate(full.scheduledAt)
+  const endDate = utcToKstDate(full.scheduledEndAt)
+  return startDate === endDate ? startDate : `${startDate} ~ ${endDate}`
+})
+const detailTimeLabel = computed(() => {
+  const full = detailFull.value
+  if (full) return `${utcToKstClock(full.scheduledAt)} ~ ${utcToKstClock(full.scheduledEndAt)}`
+  return detail.value ? `${detail.value.start} ~ ${detail.value.end}` : ''
+})
+const detailHostName = computed(
+  () => nameMap[detail.value?.hostUserId] || (detail.value?.mine ? '나' : '-'),
+)
+const detailAttendeeList = computed(() =>
+  (detailFull.value?.attendees || [])
+    .filter((attendee) => attendee.role !== 'HOST')
+    .map((attendee) => nameMap[attendee.userId] || '이름 미확인'),
+)
+// 종료시각이 지난 회의는 취소·입장 불가(백엔드도 차단). detailFull이 있으면 우선 사용.
+const detailEnded = computed(() => {
+  const end = detailFull.value?.scheduledEndAt || detail.value?.scheduledEndAt
+  return end ? new Date(end).getTime() < Date.now() : false
+})
+
+onMounted(loadAll)
+
+watch(date, loadReservations)
+
+async function loadAll() {
+  loading.value = true
+  errorMessage.value = ''
+  try {
+    const roomData = await getRooms({ page: 1, size: 100 })
+    rooms.value = (roomData?.items || []).map(normalizeRoom)
+    await Promise.all([loadReservations(), loadMyReservations()])
+  } catch (error) {
+    errorMessage.value = error?.message || '회의실 정보를 불러오지 못했습니다. 잠시 후 다시 시도해 주세요.'
+  } finally {
+    loading.value = false
+  }
 }
 
-function openReservation(roomId, start = '09:00') {
-  form.value = { title: '', roomId, date: date.value, endDate: date.value, start, end: addMinutes(start, 60), attendees: [], reviewer: '', content: '' }
+async function loadReservations() {
+  const { from, to } = kstDayRangeUtc(date.value)
+  try {
+    const data = await getRoomReservations({ from, to })
+    const map = {}
+    const hosts = []
+    for (const room of data || []) {
+      map[room.roomId] = (room.reservations || []).map((reservation) => {
+        hosts.push(reservation.hostUserId)
+        return {
+          meetingId: reservation.meetingId,
+          title: reservation.title,
+          start: utcToKstClock(reservation.scheduledAt),
+          end: utcToKstClock(reservation.scheduledEndAt),
+          scheduledEndAt: reservation.scheduledEndAt,
+          hostUserId: reservation.hostUserId,
+          mine: reservation.hostUserId === myUserId.value,
+          roomName: room.name,
+        }
+      })
+    }
+    blocksByRoom.value = map
+    resolveNames(hosts)
+  } catch (error) {
+    errorMessage.value = error?.message || '예약 현황을 불러오지 못했습니다.'
+  }
+}
+
+async function loadMyReservations() {
+  try {
+    const [hostData, invitedData] = await Promise.all([
+      getMyReservations('host'),
+      getMyReservations('invited'),
+    ])
+    // my-reservations와 동일 기준: 아직 안 끝난(종료시각 >= now) 예약만. (백엔드가 활성만 반환)
+    const now = Date.now()
+    const notEnded = (item) => new Date(item.scheduledEndAt).getTime() >= now
+    myBooked.value = (hostData || []).filter(notEnded).map((item) => normalizeMine(item, true))
+    myInvited.value = (invitedData || []).filter(notEnded).map((item) => normalizeMine(item, false))
+  } catch {
+    // 요약 카드는 보조 정보라 실패해도 화면 전체를 막지 않는다.
+  }
+}
+
+function normalizeMine(item, mine) {
+  return {
+    meetingId: item.meetingId,
+    roomName: item.roomName || '',
+    title: item.title,
+    start: utcToKstClock(item.scheduledAt),
+    end: utcToKstClock(item.scheduledEndAt),
+    scheduledEndAt: item.scheduledEndAt,
+    hostUserId: item.hostUserId,
+    mine,
+  }
+}
+
+function normalizeRoom(item) {
+  return {
+    roomId: item?.roomId || '',
+    name: item?.name || '-',
+    siteName: item?.siteName || '-',
+    buildingName: item?.buildingName || '-',
+    floor: item?.floor ?? null,
+    capacity: item?.capacity ?? 0,
+    isAvailable: (item?.isAvailable ?? item?.available) !== false,
+  }
+}
+
+function shiftDay(delta) {
+  date.value = shiftDateKst(date.value, delta)
+}
+
+function openCreate(roomId, start = '09:00') {
+  pendingRoomId.value = roomId || rooms.value[0]?.roomId || ''
+  pendingStart.value = start
+  pendingEnd.value = ''
   modal.value = true
 }
 
-function addAttendee(name) {
-  // 추천 선택 직후 중복으로 emit되더라도 참석자 목록이 두 번 늘어나지 않게 방지한다.
-  if (!name || form.value.attendees.includes(name)) return
-  form.value.attendees.push(name)
-  if (!form.value.reviewer) form.value.reviewer = name
+// 타임라인 빈 시간대 드래그 → 회의실·시작·종료를 prefill한 채 예약 모달을 연다.
+function openCreateRange(roomId, start, end) {
+  pendingRoomId.value = roomId || rooms.value[0]?.roomId || ''
+  pendingStart.value = start
+  pendingEnd.value = end
+  modal.value = true
 }
 
-function removeAttendee(name) {
-  form.value.attendees = form.value.attendees.filter((item) => item !== name)
-  if (form.value.reviewer === name) form.value.reviewer = form.value.attendees[0] || ''
-}
-
-function saveReservation() {
-  if (!form.value.title.trim() || conflict.value || selectedRoom.value?.restricted) return
-  reservations.value.push({ id: `new-${Date.now()}`, status: 'mine', owner: '이지연', ...form.value, title: form.value.title.trim() })
+async function onSaved() {
   modal.value = false
+  await Promise.all([loadReservations(), loadMyReservations()])
 }
 
-function cancelReservation(id) {
-  reservations.value = reservations.value.filter((item) => item.id !== id)
+async function openDetail(item) {
+  detail.value = item
+  detailFull.value = null
+  detailRestricted.value = false
+  // 예약자 이름은 기본정보(타인 회의 포함)에서도 보여줄 수 있게 먼저 조회한다.
+  resolveNames([item.hostUserId])
+
+  try {
+    const full = await getMeeting(item.meetingId)
+    detailFull.value = full
+    resolveNames([full.hostUserId, ...(full.attendees || []).map((attendee) => attendee.userId)])
+  } catch {
+    // 403 등(참여하지 않은 회의)은 상세를 못 보므로 기본정보만 표시한다.
+    detailRestricted.value = true
+  }
+}
+
+function closeDetail() {
   detail.value = null
+  detailFull.value = null
+  detailRestricted.value = false
+  actionError.value = ''
 }
 
-function reservationStyle(item) {
-  const left = ((timeToMinutes(item.start) - 360) / 60) * roomHourPx
-  const width = ((timeToMinutes(item.end) - timeToMinutes(item.start)) / 60) * roomHourPx
-  return { left: `${left}px`, width: `${Math.max(width, 36)}px` }
-}
+async function cancelReservation(meetingId) {
+  if (saving.value) return
+  if (!window.confirm('이 예약을 취소하시겠습니까?')) return
 
-function nowMarkerStyle() {
-  return { left: `${((timeToMinutes('13:30') - 360) / 60) * roomHourPx}px` }
-}
-
-function slotTime(event) {
-  const rect = event.currentTarget.getBoundingClientRect()
-  const raw = Math.max(0, Math.min(17.5, (event.clientX - rect.left) / roomHourPx))
-  return minutesToTime(360 + Math.floor(raw * 2) * 30)
+  saving.value = true
+  actionError.value = ''
+  try {
+    await cancelMeeting(meetingId)
+    detail.value = null
+    detailFull.value = null
+    await Promise.all([loadReservations(), loadMyReservations()])
+  } catch (error) {
+    actionError.value = error?.message || '예약 취소에 실패했습니다.'
+  } finally {
+    saving.value = false
+  }
 }
 </script>
+
+<style scoped>
+
+.empty-state-inline {
+  padding: 18px 16px;
+  color: var(--muted-foreground);
+  text-align: center;
+  font-size: 17px;
+}
+/* 날짜 컨트롤 버튼 */
+.room-date-control button {
+  white-space: nowrap;
+  flex: 0 0 auto;
+}
+/* 지점 필터 select */
+.room-site-select {
+  height: 36px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: white;
+  padding: 0 10px;
+  font: inherit;
+  font-weight: 400;
+  color: var(--foreground);
+}
+.room-name-spacer {
+  display: grid;
+  align-items: center;
+  padding-left: 15px;
+  font-weight: 600;
+}
+/* 내가 예약한 회의 */
+.card-head-link {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--primary);
+}
+/* 종료된 회의 상세 모달 버튼 */
+.modal-actions .primary-button:disabled,
+.modal-actions .danger-button:disabled {
+  background: var(--muted);
+  color: var(--muted-foreground);
+  cursor: not-allowed;
+}
+
+.reservation-summary {
+  align-content: start;
+}
+/* 두 요약 카드 헤더 높이 통일  */
+.reservation-summary .card-head {
+  min-height: 56px;
+  flex-wrap: nowrap;
+}
+.reservation-summary .card-head h2 {
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.reservation-summary .card-head .card-head-link {
+  flex: 0 0 auto;
+}
+/* 카드 안 회의 항목 높이 통일 */
+.reservation-summary button {
+  min-height: 56px;
+  align-content: center;
+}
+.reservation-summary button strong,
+.reservation-summary button span {
+  display: block;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+</style>

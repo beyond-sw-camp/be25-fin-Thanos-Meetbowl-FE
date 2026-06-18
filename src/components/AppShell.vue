@@ -9,17 +9,28 @@
       <nav class="nav">
         <section v-for="section in visibleSections" :key="section.title" class="nav-section">
           <p class="nav-title">{{ section.title }}</p>
-          <RouterLink
-            v-for="item in section.items"
-            :key="item.to"
-            :to="item.to"
-            class="nav-link"
-            :class="{ active: isActive(item.to) }"
-            @click="mobileOpen = false"
-          >
-            <span class="nav-icon">{{ item.icon }}</span>
-            <span>{{ item.label }}</span>
-          </RouterLink>
+          <template v-for="item in section.items" :key="item.to">
+            <RouterLink
+              :to="item.to"
+              class="nav-link"
+              :class="{ active: isActive(item.to) }"
+              @click="mobileOpen = false"
+            >
+              <span class="nav-icon">{{ item.icon }}</span>
+              <span>{{ item.label }}</span>
+            </RouterLink>
+            <RouterLink
+              v-for="child in (isExpanded(item) ? item.children : [])"
+              :key="child.to"
+              :to="child.to"
+              class="nav-link nav-sublink"
+              :class="{ active: isActive(child.to) }"
+              @click="mobileOpen = false"
+            >
+              <span class="nav-icon">{{ child.icon }}</span>
+              <span>{{ child.label }}</span>
+            </RouterLink>
+          </template>
         </section>
       </nav>
     </aside>
@@ -103,8 +114,15 @@ const navSections = [
     roles: ['USER'],
     items: [
       { to: '/app/dashboard', label: '대시보드', icon: '▦' },
-      { to: '/app/rooms', label: '회의실 예약', icon: '□' },
-      { to: '/app/my-reservations', label: '내 예약', icon: '◷' },
+      {
+        to: '/app/rooms',
+        label: '회의실 예약',
+        icon: '□',
+        children: [
+          { to: '/app/my-reservations', label: '내 예약', icon: '◷' },
+          { to: '/app/my-attending', label: '나의 참석 회의', icon: '◷' },
+        ],
+      },
       { to: '/app/meetings', label: '회의', icon: '▶' },
       { to: '/app/minutes', label: '내 회의록', icon: '≡' },
       { to: '/app/mail', label: '메일', icon: '✉' },
@@ -122,10 +140,8 @@ const navSections = [
       { to: '/admin/members', label: '회원 관리', icon: '⌕' },
       { to: '/admin/organization', label: '조직/직급 관리', icon: '▧' },
       { to: '/admin/rooms', label: '회의실 관리', icon: '□' },
-      { to: '/admin/reservations', label: '예약 현황', icon: '◷' },
       { to: '/admin/mail-policy', label: '메일 정책 관리', icon: '✉' },
       { to: '/admin/minutes-policy', label: '보관 정책 관리', icon: '◫' },
-      { to: '/app/shared-docs', label: '공유 워크스페이스', icon: '▤' },
       { to: '/admin/logs', label: '관리자 작업 로그', icon: '≣' },
     ],
   },
@@ -144,6 +160,12 @@ const visibleSections = computed(() =>
 
 function isActive(to) {
   return route.path === to || route.path.startsWith(`${to}/`)
+}
+
+// 부모(회의실 예약)나 하위 메뉴 경로에 있을 때만 하위 메뉴를 펼친다.
+function isExpanded(item) {
+  if (!item.children) return false
+  return isActive(item.to) || item.children.some((child) => isActive(child.to))
 }
 
 async function handleLogout() {
