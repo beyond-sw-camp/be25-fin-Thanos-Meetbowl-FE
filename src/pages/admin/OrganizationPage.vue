@@ -4,10 +4,12 @@ import {
   createAdminDepartment,
   createAdminPosition,
   createAdminTeam,
+  downloadOrganizationMembersExcel,
   getAdminAffiliates,
   getAdminDepartments,
   getAdminPositions,
   getAdminTeams,
+  importOrganizationMembersExcel,
   updateAdminDepartment,
   updateAdminDepartmentStatus,
   updateAdminPosition,
@@ -18,6 +20,7 @@ import {
 import { getAllAdminUsers } from '../../lib/admin-users'
 import { getOrganizationUserSummary } from '../../lib/user-directory'
 import { useAuthStore } from '../../stores/auth'
+import ModalShell from '../../components/common/ModalShell.vue'
 
 const auth = useAuthStore()
 
@@ -40,12 +43,20 @@ const forbidden = ref(false)
 const errorMessage = ref('')
 const actionError = ref('')
 const successMessage = ref('')
+const excelResult = ref(null)
+const excelValidationErrors = ref([])
+const showAllExcelErrors = ref(false)
 const modalOpen = ref(false)
+const importConfirmOpen = ref(false)
 const editingItem = ref(null)
 const userSummaryOpen = ref(false)
 const userSummaryLoading = ref(false)
 const userSummaryError = ref('')
 const selectedUserSummary = ref(null)
+const excelDownloading = ref(false)
+const excelUploading = ref(false)
+const uploadFileInput = ref(null)
+const pendingUploadFile = ref(null)
 
 const affiliates = ref([])
 const departments = ref([])
@@ -590,17 +601,195 @@ function createButtonLabel() {
   return '부서 추가'
 }
 
+async function handleExcelDownload() {
+  if (excelDownloading.value) return
+
+  excelDownloading.value = true
+  actionError.value = ''
+  successMessage.value = ''
+  excelResult.value = null
+  excelValidationErrors.value = []
+  showAllExcelErrors.value = false
+
+  try {
+    // Blob 다운로드는 브라우저 객체 URL로 연결하고, 서버가 준 파일명이 있으면 그대로 사용한다.
+    const { blob, fileName } = await downloadOrganizationMembersExcel()
+    const downloadUrl = window.URL.createObjectURL(blob)
+    const anchor = document.createElement('a')
+    anchor.href = downloadUrl
+    anchor.download = fileName || 'meetbowl_organization_members.xlsx'
+    anchor.style.display = 'none'
+    document.body.appendChild(anchor)
+    anchor.click()
+    anchor.remove()
+    // 일부 브라우저는 클릭 직후 URL을 정리하면 저장이 시작되기 전에 다운로드가 끊길 수 있다.
+    window.setTimeout(() => {
+      window.URL.revokeObjectURL(downloadUrl)
+    }, 1000)
+  } catch (error) {
+    if (error?.status === 403) {
+      forbidden.value = true
+      return
+    }
+
+    actionError.value =
+      error?.message || '엑셀 파일을 다운로드하지 못했습니다. 잠시 후 다시 시도해 주세요.'
+  } finally {
+    excelDownloading.value = false
+  }
+}
+
+function openExcelUploadPicker() {
+  if (excelUploading.value) return
+  // 업로드 버튼은 기본 file input을 직접 노출하지 않고 기존 관리자 액션 버튼 패턴을 유지한다.
+  uploadFileInput.value?.click()
+}
+
+function handleExcelFileChange(event) {
+  const file = event?.target?.files?.[0] || null
+  resetUploadInputValue()
+
+  if (!file) return
+  if (!isXlsxFile(file)) {
+    actionError.value = '엑셀 업로드는 .xlsx 파일만 가능합니다.'
+    return
+  }
+
+  pendingUploadFile.value = file
+  importConfirmOpen.value = true
+}
+
+function closeImportConfirm() {
+  importConfirmOpen.value = false
+  pendingUploadFile.value = null
+}
+
+async function confirmExcelImport() {
+  if (!pendingUploadFile.value || excelUploading.value) return
+
+  excelUploading.value = true
+  actionError.value = ''
+  successMessage.value = ''
+  excelResult.value = null
+  excelValidationErrors.value = []
+  showAllExcelErrors.value = false
+
+  try {
+    // multipart 업로드는 file 필드 하나만 보내서 BE 검증과 집계를 그대로 신뢰한다.
+    const result = await importOrganizationMembersExcel(pendingUploadFile.value)
+    excelResult.value = normalizeExcelImportResult(result)
+    successMessage.value = '엑셀 일괄 반영이 완료되었습니다.'
+    importConfirmOpen.value = false
+    pendingUploadFile.value = null
+    await reloadAllData()
+  } catch (error) {
+    if (error?.status === 403) {
+      forbidden.value = true
+      importConfirmOpen.value = false
+      pendingUploadFile.value = null
+      return
+    }
+
+    excelValidationErrors.value = normalizeExcelValidationErrors(error?.details)
+    showAllExcelErrors.value = false
+    actionError.value =
+      error?.message || '엑셀 파일을 업로드하지 못했습니다. 잠시 후 다시 시도해 주세요.'
+  } finally {
+    excelUploading.value = false
+  }
+}
+
+function normalizeExcelImportResult(result) {
+  // BE 집계값이 비어 있더라도 UI에서는 항상 숫자 형태로 안정적으로 렌더링한다.
+  return {
+    createdAffiliates: Number(result?.createdAffiliates) || 0,
+    updatedAffiliates: Number(result?.updatedAffiliates) || 0,
+    createdDepartments: Number(result?.createdDepartments) || 0,
+    updatedDepartments: Number(result?.updatedDepartments) || 0,
+    createdTeams: Number(result?.createdTeams) || 0,
+    updatedTeams: Number(result?.updatedTeams) || 0,
+    createdPositions: Number(result?.createdPositions) || 0,
+    updatedPositions: Number(result?.updatedPositions) || 0,
+    createdUsers: Number(result?.createdUsers) || 0,
+    updatedUsers: Number(result?.updatedUsers) || 0,
+  }
+}
+
+function normalizeExcelValidationErrors(details) {
+  if (!Array.isArray(details)) return []
+
+  // validation error는 row별 상세 정보를 그대로 보여 주되, 빈 값은 안전한 기본값으로 치환한다.
+  return details.map((detail) => ({
+    sheetName: detail?.sheetName || '-',
+    rowNumber: Number.isFinite(Number(detail?.rowNumber)) ? Number(detail.rowNumber) : null,
+    field: detail?.field || '-',
+    reason: detail?.reason || '오류 사유를 확인해 주세요.',
+  }))
+}
+
+function formatExcelValidationError(detail) {
+  // validation 오류는 "시트/행/필드/사유"를 한 줄로 합쳐 관리자가 바로 수정 지점을 찾게 돕는다.
+  const rowLabel = detail.rowNumber ? `${detail.rowNumber}행` : '행 정보 없음'
+  return `${detail.sheetName} 시트 ${rowLabel} ${detail.field}: ${detail.reason}`
+}
+
+function resetUploadInputValue() {
+  if (uploadFileInput.value) {
+    uploadFileInput.value.value = ''
+  }
+}
+
+function isXlsxFile(file) {
+  return `${file?.name || ''}`.toLowerCase().endsWith('.xlsx')
+}
+
 function canCreateInCurrentTab() {
   return activeTab.value === 'department' || activeTab.value === 'team' || activeTab.value === 'position'
 }
+
+const visibleExcelValidationErrors = computed(() =>
+  // 오류가 많을 때는 처음 10건만 먼저 보여 주고, 나머지는 펼쳐서 확인하게 한다.
+  showAllExcelErrors.value
+    ? excelValidationErrors.value
+    : excelValidationErrors.value.slice(0, 10),
+)
+
+const remainingExcelValidationErrorCount = computed(() =>
+  Math.max(excelValidationErrors.value.length - visibleExcelValidationErrors.value.length, 0),
+)
 </script>
 
 <template>
   <section class="page admin-page organization-page">
-    <header class="page-header">
+    <header class="page-header organization-header">
       <div>
         <h1>조직/직급 관리</h1>
         <p>부서, 팀, 직급을 분리해 관리하고 조직도를 확인합니다.</p>
+      </div>
+      <div class="admin-actions header-actions excel-actions">
+        <input
+          ref="uploadFileInput"
+          class="hidden-file-input"
+          type="file"
+          accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+          @change="handleExcelFileChange"
+        />
+        <button
+          class="secondary-button"
+          type="button"
+          :disabled="excelDownloading || excelUploading"
+          @click="handleExcelDownload"
+        >
+          {{ excelDownloading ? '다운로드 중...' : '엑셀 다운로드' }}
+        </button>
+        <button
+          class="primary-button"
+          type="button"
+          :disabled="excelUploading || excelDownloading"
+          @click="openExcelUploadPicker"
+        >
+          {{ excelUploading ? '업로드 중...' : '엑셀 업로드' }}
+        </button>
       </div>
     </header>
 
@@ -626,6 +815,62 @@ function canCreateInCurrentTab() {
       <div v-if="actionError" class="card feedback-card">
         <div class="error-box">{{ actionError }}</div>
       </div>
+
+      <div v-if="excelResult" class="card feedback-card excel-result-card">
+        <h2>엑셀 반영 결과</h2>
+        <div class="excel-result-grid">
+          <p>계열사 생성/수정: {{ excelResult.createdAffiliates }} / {{ excelResult.updatedAffiliates }}</p>
+          <p>부서 생성/수정: {{ excelResult.createdDepartments }} / {{ excelResult.updatedDepartments }}</p>
+          <p>팀 생성/수정: {{ excelResult.createdTeams }} / {{ excelResult.updatedTeams }}</p>
+          <p>직급 생성/수정: {{ excelResult.createdPositions }} / {{ excelResult.updatedPositions }}</p>
+          <p>회원 생성/수정: {{ excelResult.createdUsers }} / {{ excelResult.updatedUsers }}</p>
+        </div>
+      </div>
+
+      <div v-if="excelValidationErrors.length" class="card feedback-card excel-error-card">
+        <h2>엑셀 검증 오류</h2>
+        <p class="excel-error-summary">
+          {{ excelValidationErrors.length }}건의 오류가 있습니다. 시트/행/필드 정보를 확인해 수정해 주세요.
+        </p>
+        <ul class="excel-error-list">
+          <li
+            v-for="(detail, index) in visibleExcelValidationErrors"
+            :key="`${detail.sheetName}-${detail.rowNumber}-${detail.field}-${index}`"
+          >
+            {{ formatExcelValidationError(detail) }}
+          </li>
+        </ul>
+        <p v-if="remainingExcelValidationErrorCount > 0" class="excel-error-summary">
+          나머지 {{ remainingExcelValidationErrorCount }}건은 펼쳐서 확인할 수 있습니다.
+        </p>
+        <button
+          v-if="excelValidationErrors.length > 10"
+          class="icon-text"
+          type="button"
+          @click="showAllExcelErrors = !showAllExcelErrors"
+        >
+          {{ showAllExcelErrors ? '오류 접기' : '전체 보기' }}
+        </button>
+      </div>
+
+      <article class="card excel-guide-card">
+        <div class="excel-guide-grid">
+          <section>
+            <h2>다운로드 안내</h2>
+            <p>현재 계열사, 부서, 팀, 직급, 회원 정보를 엑셀로 내려받습니다.</p>
+          </section>
+          <section>
+            <h2>업로드 안내</h2>
+            <p>수정한 엑셀 파일을 업로드하면 조직도와 회원 정보에 일괄 반영됩니다.</p>
+          </section>
+        </div>
+        <ul class="excel-notice-list">
+          <li>엑셀에 없는 기존 데이터는 삭제되지 않습니다.</li>
+          <li>신규 회원은 초기 비밀번호 1234로 생성됩니다.</li>
+          <li>권한은 ADMIN 또는 USER만 입력할 수 있습니다.</li>
+          <li>부서, 팀, 직급의 순서는 sortNumber 기준으로 반영됩니다.</li>
+        </ul>
+      </article>
 
       <div class="tab-actions">
         <div class="admin-tabs">
@@ -918,6 +1163,25 @@ function canCreateInCurrentTab() {
         </article>
       </div>
 
+      <ModalShell v-if="importConfirmOpen" modal-class="excel-confirm-modal" @close="closeImportConfirm">
+        <header>
+          <h2>엑셀 업로드 확인</h2>
+          <button type="button" @click="closeImportConfirm">닫기</button>
+        </header>
+
+        <div class="excel-confirm-body">
+          <p>엑셀 파일의 계열사, 부서, 팀, 직급, 회원 정보가 일괄 반영됩니다. 계속 진행할까요?</p>
+          <p class="excel-confirm-file">{{ pendingUploadFile?.name || '-' }}</p>
+        </div>
+
+        <div class="modal-actions">
+          <button type="button" class="secondary-button" @click="closeImportConfirm">취소</button>
+          <button class="primary-button" :disabled="excelUploading" @click="confirmExcelImport">
+            {{ excelUploading ? '업로드 중...' : '확인' }}
+          </button>
+        </div>
+      </ModalShell>
+
       <div v-if="userSummaryOpen" class="modal-backdrop" @click.self="userSummaryOpen = false">
         <article class="card write-modal detail-modal">
           <header>
@@ -954,9 +1218,90 @@ function canCreateInCurrentTab() {
   gap: 18px;
 }
 
+.organization-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 16px;
+}
+
+.header-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 10px;
+  margin-top: 28px;
+}
+
+.excel-actions button {
+  min-height: 44px;
+}
+
 .feedback-card {
   padding-top: 14px;
   padding-bottom: 14px;
+}
+
+.excel-guide-card,
+.excel-result-card,
+.excel-error-card {
+  display: grid;
+  gap: 12px;
+}
+
+.excel-guide-card h2,
+.excel-result-card h2,
+.excel-error-card h2 {
+  margin: 0;
+  font-size: 18px;
+}
+
+.excel-guide-grid,
+.excel-result-grid {
+  display: grid;
+  gap: 10px;
+}
+
+.excel-guide-grid p,
+.excel-result-grid p,
+.excel-error-summary {
+  margin: 0;
+  color: var(--muted-foreground);
+  line-height: 1.6;
+}
+
+.excel-notice-list,
+.excel-error-list {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding-left: 18px;
+  color: var(--foreground);
+}
+
+.excel-error-list {
+  color: var(--danger);
+}
+
+.excel-confirm-modal {
+  max-width: 520px;
+}
+
+.excel-confirm-body {
+  display: grid;
+  gap: 10px;
+  margin: 16px 0 20px;
+}
+
+.excel-confirm-body p {
+  margin: 0;
+  line-height: 1.6;
+}
+
+.excel-confirm-file {
+  color: var(--muted-foreground);
+  font-size: 13px;
 }
 
 .retry-actions {
@@ -1091,15 +1436,27 @@ function canCreateInCurrentTab() {
 }
 
 @media (min-width: 960px) {
+  .excel-guide-grid,
+  .excel-result-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
   .organization-summary-grid {
     grid-template-columns: 360px minmax(0, 1fr);
   }
 }
 
 @media (max-width: 959px) {
+  .organization-header,
   .tab-actions {
     flex-direction: column;
     align-items: stretch;
+  }
+
+  .header-actions {
+    width: 100%;
+    justify-content: flex-start;
+    margin-top: 10px;
   }
 }
 </style>
