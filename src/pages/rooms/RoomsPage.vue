@@ -61,8 +61,10 @@
             :room="room"
             :blocks="blocksByRoom[room.roomId] || []"
             :name-map="nameMap"
+            :date="date"
             @block-click="openDetail"
             @track-click="openCreate"
+            @track-drag="openCreateRange"
           />
           <div v-if="!filteredRooms.length" class="empty-state-inline">표시할 회의실이 없습니다.</div>
         </div>
@@ -75,6 +77,7 @@
       :initial-room-id="pendingRoomId"
       :initial-date="date"
       :initial-start="pendingStart"
+      :initial-end="pendingEnd"
       @close="modal = false"
       @saved="onSaved"
     />
@@ -147,6 +150,7 @@ const detailFull = ref(null)
 const detailRestricted = ref(false)
 const pendingRoomId = ref('')
 const pendingStart = ref('09:00')
+const pendingEnd = ref('')
 
 const sites = computed(() => ['전체', ...new Set(rooms.value.map((room) => room.siteName).filter(Boolean))])
 const filteredRooms = computed(() =>
@@ -279,6 +283,15 @@ function shiftDay(delta) {
 function openCreate(roomId, start = '09:00') {
   pendingRoomId.value = roomId || rooms.value[0]?.roomId || ''
   pendingStart.value = start
+  pendingEnd.value = ''
+  modal.value = true
+}
+
+// 타임라인 빈 시간대 드래그 → 회의실·시작·종료를 prefill한 채 예약 모달을 연다.
+function openCreateRange(roomId, start, end) {
+  pendingRoomId.value = roomId || rooms.value[0]?.roomId || ''
+  pendingStart.value = start
+  pendingEnd.value = end
   modal.value = true
 }
 
@@ -331,6 +344,13 @@ async function cancelReservation(meetingId) {
 </script>
 
 <style scoped>
+
+.empty-state-inline {
+  padding: 18px 16px;
+  color: var(--muted-foreground);
+  text-align: center;
+  font-size: 17px;
+}
 /* 날짜 컨트롤 버튼 */
 .room-date-control button {
   white-space: nowrap;

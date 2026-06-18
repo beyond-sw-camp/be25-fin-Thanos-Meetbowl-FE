@@ -5,7 +5,7 @@
       <button class="modal-close" type="button" aria-label="닫기" @click="$emit('close')">×</button>
     </header>
     <div class="room-modal-grid">
-      <ReservationForm :form="form" :rooms="rooms" :my-user-id="myUserId" :action-error="actionError" @submit="save">
+      <ReservationForm :form="form" :rooms="rooms" :my-user-id="myUserId" :action-error="actionError" :allow-remote="allowRemote" @submit="save">
         <template #actions>
           <div class="modal-actions">
             <button type="button" class="secondary-button" @click="$emit('close')">취소</button>
@@ -20,7 +20,7 @@
         :name-map="nameMap"
         :range="{ start: form.start, end: form.end }"
         :selected-room-id="form.roomId"
-        @select-room="form.roomId = $event"
+        @select-room="selectRoom"
       />
     </div>
   </ModalShell>
@@ -41,10 +41,16 @@ const props = defineProps({
   initialRoomId: { type: String, default: '' },
   initialDate: { type: String, default: '' },
   initialStart: { type: String, default: '09:00' },
+  // 드래그로 종료시간까지 prefill할 때 사용(없으면 시작+60분).
+  initialEnd: { type: String, default: '' },
   // 'create'(신규 예약) | 'edit'(기존 회의 수정)
   mode: { type: String, default: 'create' },
   // 수정 대상 회의(meetingId 필수). mode='edit'일 때만 사용.
   meeting: { type: Object, default: null },
+  // 원격(회의실 없음) 토글 노출 여부. 회의 페이지에서만 true, 회의실 예약에서는 false.
+  allowRemote: { type: Boolean, default: false },
+  // 생성(create) 시 원격 기본값. 원격 전용 회의 페이지에서 true로 열면 기본 원격으로 시작한다.
+  initialRemote: { type: Boolean, default: false },
 })
 const emit = defineEmits(['close', 'saved'])
 
@@ -66,11 +72,13 @@ const submitLabel = computed(() => {
 const initialDate = props.initialDate || todayKst()
 const form = ref({
   title: '',
-  roomId: props.initialRoomId || props.rooms[0]?.roomId || '',
+  // 회의실 선택값이 곧 meetingRoomId(미선택 ''=원격). 원격 토글은 roomId로부터 파생된다(별도 상태 없음).
+  // initialRemote면 기본 미선택('')으로 시작(회의 모달). 회의실 예약은 첫 회의실을 기본 선택.
+  roomId: props.initialRoomId || (props.initialRemote ? '' : props.rooms[0]?.roomId || ''),
   date: initialDate,
   endDate: initialDate,
   start: props.initialStart,
-  end: addMinutes(props.initialStart, 60),
+  end: props.initialEnd || addMinutes(props.initialStart, 60),
   attendees: [],
   reviewerUserId: '',
   content: '',
@@ -91,7 +99,8 @@ async function prefillFromMeeting() {
     await resolveNames(participants.map((attendee) => attendee.userId))
     form.value = {
       title: full.title || '',
-      roomId: full.meetingRoomId || props.rooms[0]?.roomId || '',
+      // 회의실 선택값으로 복원(없으면 ''=원격). 토글은 roomId에서 파생되므로 별도 복원 불필요.
+      roomId: full.meetingRoomId || '',
       date: utcToKstDate(full.scheduledAt),
       endDate: utcToKstDate(full.scheduledEndAt),
       start: utcToKstClock(full.scheduledAt),
@@ -153,6 +162,11 @@ async function loadDay() {
   }
 }
 
+// 타임라인에서 회의실을 고르면 그 회의실로 지정한다(원격 토글은 roomId에서 파생).
+function selectRoom(roomId) {
+  form.value.roomId = roomId
+}
+
 async function save() {
   if (saving.value) return
   actionError.value = ''
@@ -162,7 +176,8 @@ async function save() {
     actionError.value = '회의 제목을 입력해 주세요.'
     return
   }
-  if (!form.value.roomId) {
+  // 회의실 예약(allowRemote=false)은 회의실 필수. 회의 모달(allowRemote)은 미선택=원격을 허용.
+  if (!props.allowRemote && !form.value.roomId) {
     actionError.value = '회의실을 선택해 주세요.'
     return
   }
@@ -186,7 +201,7 @@ async function save() {
     title,
     scheduledAt,
     scheduledEndAt,
-    meetingRoomId: form.value.roomId,
+    meetingRoomId: form.value.roomId || null,
     attendeeUserIds: form.value.attendees.map((attendee) => attendee.userId),
     reviewerUserId: form.value.reviewerUserId,
     description: form.value.content.trim() || null,

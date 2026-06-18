@@ -140,10 +140,8 @@ const navSections = [
       { to: '/admin/members', label: '회원 관리', icon: '⌕' },
       { to: '/admin/organization', label: '조직/직급 관리', icon: '▧' },
       { to: '/admin/rooms', label: '회의실 관리', icon: '□' },
-      { to: '/admin/reservations', label: '예약 현황x', icon: '◷' },
       { to: '/admin/mail-policy', label: '메일 정책 관리', icon: '✉' },
       { to: '/admin/minutes-policy', label: '보관 정책 관리', icon: '◫' },
-      { to: '/app/shared-docs', label: '공유 워크스페이스', icon: '▤' },
       { to: '/admin/logs', label: '관리자 작업 로그', icon: '≣' },
     ],
   },
@@ -156,9 +154,6 @@ const notifications = [
   { title: '회의록 공유 완료', desc: '주간 전략 회의 회의록이 공유되었습니다.', time: '3시간 전', to: '/app/minutes' },
 ]
 
-// dev에서 메뉴 prefix 필터링을 제거해, 의도적으로 섞인 항목(USER의 '사용자 검색'=/admin/members,
-// ADMIN의 공유 워크스페이스=/app/shared-docs)이 그대로 노출되게 한다. 하위 메뉴는 템플릿에서
-// item.children를 직접 렌더하므로 별도 필터가 필요 없다.
 const visibleSections = computed(() =>
   navSections.filter((section) => section.roles.includes(user.value?.role)),
 )
