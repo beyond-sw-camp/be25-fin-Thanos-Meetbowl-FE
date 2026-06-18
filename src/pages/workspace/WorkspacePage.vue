@@ -87,11 +87,12 @@
     <div v-else-if="activeTab === 'memo'" class="workspace-memo-grid">
       <aside class="card workspace-memo-list">
         <div class="workspace-panel-head"><h2>최근 메모</h2><button type="button" @click="createNewMemo"><Plus :size="14" /></button></div>
-        <button v-for="memo in memos" :key="memo.memoId" type="button" class="workspace-memo-item" :class="{ active: activeMemoId === memo.memoId }" @click="selectMemo(memo.memoId)">
+        <button v-for="memo in pagedMemos" :key="memo.memoId" type="button" class="workspace-memo-item" :class="{ active: activeMemoId === memo.memoId }" @click="selectMemo(memo.memoId)">
           <strong>{{ memo.title }}</strong>
           <span>{{ memo.content.split('\n')[0] || '내용 없음' }}</span>
           <small>{{ displayDate(memo.updatedAt || memo.createdAt) }}</small>
         </button>
+        <Pagination v-model="memoPage" :total-pages="memoTotalPages" />
       </aside>
       <article class="card workspace-memo-editor">
         <template v-if="memoDraft.memoId">
@@ -219,6 +220,7 @@
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { BookmarkCheck, CalendarDays, FileText, Folder, Mail, Plus, StickyNote, Upload } from '@lucide/vue'
+import Pagination from '../../components/common/Pagination.vue'
 import {
   createMemo,
   createWorkspaceEvent,
@@ -272,6 +274,9 @@ const subscriptions = ref([])
 const userMap = ref(new Map())
 const memos = ref([])
 const activeMemoId = ref('')
+// 메모는 한 페이지에 5개씩 보여주고 나머지는 페이지네이션으로 넘긴다.
+const MEMO_PAGE_SIZE = 5
+const memoPage = ref(1)
 const memoDraft = ref({ memoId: '', title: '', content: '' })
 const backups = ref([])
 const backupKeyword = ref('')
@@ -311,6 +316,15 @@ const eventsByDate = computed(() => {
 })
 const selectedEvents = computed(() => (eventsByDate.value[selected.value] || []).slice().sort((a, b) => String(a.startedAt).localeCompare(String(b.startedAt))))
 const activeMemo = computed(() => memos.value.find((memo) => memo.memoId === activeMemoId.value))
+const memoTotalPages = computed(() => Math.max(1, Math.ceil(memos.value.length / MEMO_PAGE_SIZE)))
+const pagedMemos = computed(() => {
+  const start = (memoPage.value - 1) * MEMO_PAGE_SIZE
+  return memos.value.slice(start, start + MEMO_PAGE_SIZE)
+})
+// 메모 삭제 등으로 페이지 수가 줄면 현재 페이지가 범위를 벗어날 수 있어 마지막 페이지로 보정한다.
+watch(memoTotalPages, (total) => {
+  if (memoPage.value > total) memoPage.value = total
+})
 const favoriteMinuteItems = computed(() => mockMinutes.filter((minute) => minuteFavorites.value[minute.id]))
 
 watch(cursor, loadCalendar)
@@ -463,6 +477,7 @@ function selectMemo(memoId) {
 async function createNewMemo() {
   const memo = await createMemo({ title: '새 메모', content: '내용을 입력하세요.' })
   memos.value.unshift(memo)
+  memoPage.value = 1
   selectMemo(memo.memoId)
   showToast('메모 생성 완료', memo.title)
 }
