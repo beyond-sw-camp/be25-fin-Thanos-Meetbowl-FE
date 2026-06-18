@@ -13,8 +13,9 @@ export function useUserNames() {
         try {
           const summary = await getUserSummary(id)
           if (summary?.name) nameMap[id] = summary.name
-        } catch {
+        } catch (error) {
           // 이름 조회 실패는 무시하고 폴백 라벨(내 예약/예약됨)로 표시한다.
+          console.warn(`[useUserNames] 유저 정보 조회 실패 (ID: ${id}):`, error)
         }
       }),
     )
