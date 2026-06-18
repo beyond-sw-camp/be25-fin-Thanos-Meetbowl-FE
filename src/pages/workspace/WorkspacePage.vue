@@ -60,13 +60,13 @@
           <span class="badge primary">{{ selectedEvents.length }}건</span>
         </div>
         <div class="workspace-event-list">
-          <div v-for="event in selectedEvents" :key="event.eventId" :class="['workspace-event-item', event.source === 'MEETING' ? 'team' : 'mine']">
+          <button v-for="event in selectedEvents" :key="event.eventId" type="button" :class="['workspace-event-item', event.source === 'MEETING' ? 'team' : 'mine']" @click="openSelectedEvent(event)">
             <div>
               <strong>{{ event.title }}</strong>
               <span>{{ event.timeRange }} <template v-if="event.description">· {{ event.description }}</template></span>
             </div>
             <span :class="['badge', event.source === 'MEETING' ? 'navy' : 'primary']">{{ event.source === 'MEETING' ? '회의' : '개인' }}</span>
-          </div>
+          </button>
           <div v-if="selectedEvents.length === 0" class="empty-state">예정된 일정이 없습니다.</div>
         </div>
 
@@ -108,17 +108,21 @@
 
     <article v-else-if="activeTab === 'backups'" class="card workspace-panel">
       <div class="workspace-panel-head">
-        <h2>백업 자료</h2>
+        <h2>백업한 메일</h2>
+        <span class="badge primary">총 {{ backups.length }}건</span>
         <input v-model="backupKeyword" placeholder="백업 자료 검색">
       </div>
       <div v-for="backup in backups" :key="backup.backupId" class="workspace-mail-row">
         <RouterLink :to="'/app/backup/' + backup.backupId">
+          <span class="workspace-file-icon mail"><Mail :size="17" /></span>
+          <span>
           <strong>{{ backup.title }}</strong>
-          <small>{{ backup.sourceType }} · {{ displayDate(backup.backedUpAt) }} · {{ backup.summary }}</small>
+            <small>{{ backup.sourceType }} · {{ displayDate(backup.backedUpAt) }} · {{ backup.summary }}</small>
+          </span>
         </RouterLink>
-        <button type="button" @click="toggleBookmark(backup)">{{ backup.bookmarked ? '북마크 해제' : '북마크' }}</button>
+        <button type="button" class="workspace-backup-release" @click="releaseBackup(backup)">해제</button>
       </div>
-      <div v-if="backups.length === 0" class="empty-state">백업 자료가 없습니다.</div>
+      <div v-if="backups.length === 0" class="empty-state">백업한 메일이 없습니다.</div>
     </article>
 
     <article v-else-if="activeTab === 'minutes'" class="card workspace-panel workspace-minutes-panel">
@@ -166,40 +170,56 @@
     </article>
 
     <div v-if="eventOpen" class="modal-backdrop" @click="eventOpen = false">
-      <form class="write-modal" @submit.prevent="saveEvent" @click.stop>
-        <header><h2>일정 추가</h2><button type="button" @click="eventOpen = false">닫기</button></header>
-        <input v-model="eventDraft.title" placeholder="일정 제목">
-        <div class="workspace-event-form-grid">
-          <input v-model="eventDraft.date" type="date">
-          <input v-model="eventDraft.start" type="time">
-          <input v-model="eventDraft.end" type="time">
+      <form class="write-modal workspace-event-modal" @submit.prevent="saveEvent" @click.stop>
+        <header>
+          <div>
+            <h2>{{ editingEventId ? '내 일정 수정' : '일정 추가' }}</h2>
+            <p>개인 일정으로 등록되며 회의 일정은 회의 수정 화면에서 관리합니다.</p>
+          </div>
+          <button type="button" @click="eventOpen = false">닫기</button>
+        </header>
+        <div class="workspace-event-form-body">
+          <label>일정 제목<input v-model="eventDraft.title" placeholder="일정 제목" required></label>
+          <div class="workspace-event-form-grid">
+            <label>날짜<input v-model="eventDraft.date" type="date" required></label>
+            <label>시작<input v-model="eventDraft.start" type="time" required></label>
+            <label>종료<input v-model="eventDraft.end" type="time" required></label>
+          </div>
+          <label>설명<textarea v-model="eventDraft.description" rows="3" placeholder="참여자, 안건 등"></textarea></label>
         </div>
-        <textarea v-model="eventDraft.description" rows="3" placeholder="설명"></textarea>
-        <footer><button type="button" class="ghost-button" @click="eventOpen = false">취소</button><button type="submit" class="primary-button small">저장</button></footer>
+        <footer><button type="button" class="ghost-button" @click="eventOpen = false">취소</button><button type="submit" class="primary-button small">{{ editingEventId ? '수정 저장' : '일정 추가' }}</button></footer>
       </form>
     </div>
 
     <div v-if="subscriptionOpen" class="modal-backdrop" @click="subscriptionOpen = false">
       <form class="write-modal" @submit.prevent="addSubscription" @click.stop>
         <header><h2>동료 구독 추가</h2><button type="button" @click="subscriptionOpen = false">닫기</button></header>
-        <input v-model="userKeyword" placeholder="이름, 부서/팀, 이메일 검색">
-        <div class="recipient-results">
-          <button v-for="user in userCandidates" :key="user.userId" type="button" @click="selectedUserId = user.userId">
+        <div ref="subscriptionSearchRoot" class="recipient-picker">
+          <input v-model="userKeyword" placeholder="이름, 부서/팀, 이메일 검색" @focus="openSubscriptionSearch">
+          <div v-if="subscriptionSearchOpen && userCandidates.length" class="recipient-results">
+          <button v-for="user in userCandidates" :key="user.userId" type="button" :class="{ selected: selectedUserId === user.userId }" @click="selectSubscriptionUser(user)">
             <strong>{{ user.name }}</strong>
             <small>{{ user.department || user.team || '-' }} · {{ user.email }}</small>
           </button>
+          </div>
         </div>
         <footer><button type="button" class="ghost-button" @click="subscriptionOpen = false">취소</button><button type="submit" class="primary-button small" :disabled="!selectedUserId">구독</button></footer>
       </form>
+    </div>
+    <div class="toast-stack" aria-live="polite">
+      <div v-for="toast in toasts" :key="toast.id" class="toast-card">
+        <strong>{{ toast.title }}</strong>
+        <span>{{ toast.message }}</span>
+      </div>
     </div>
   </section>
 </template>
 
 <script setup>
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
+import { useRouter } from 'vue-router'
 import { BookmarkCheck, CalendarDays, FileText, Folder, Mail, Plus, StickyNote, Upload } from '@lucide/vue'
 import {
-  addBackupBookmark,
   createMemo,
   createWorkspaceEvent,
   deleteDriveFile,
@@ -213,15 +233,25 @@ import {
   searchBackups,
   subscribeCalendar,
   unsubscribeCalendar,
+  updateWorkspaceEvent,
   updateMemo,
   uploadDriveFile,
 } from '../../lib/workspace'
 import { getUserSummary, searchUsers } from '../../lib/users'
 import { formatKstDateTime, formatKstTime } from '../../utils/dateTime'
-import { workspaceDateKey, workspaceMonthCells } from '../../data/workspaceData'
+import { workspaceDateKey, workspaceMonthCells, workspaceNow } from '../../data/workspaceData'
 import { minutes as mockMinutes } from '../../data/mockData'
+import {
+  fallbackWorkspaceBackups,
+  fallbackWorkspaceCalendar,
+  fallbackWorkspaceDriveFiles,
+  fallbackWorkspaceMemos,
+  fallbackUserSearch,
+  withFallback,
+} from '../../data/mailWorkspaceFallbacks'
 import { onMinuteFavoritesChanged, readMinuteFavorites, toggleMinuteFavorite } from '../../lib/minute-favorites'
 
+const router = useRouter()
 const tabs = [
   { id: 'calendar', label: '일정', icon: CalendarDays },
   { id: 'memo', label: '개인 메모장', icon: StickyNote },
@@ -229,13 +259,15 @@ const tabs = [
   { id: 'backups', label: '백업 자료', icon: Mail },
   { id: 'drive', label: '개인 드라이브', icon: Folder },
 ]
+const workspaceToday = new Date(workspaceNow().replace(' ', 'T'))
 const monthNames = ['1월', '2월', '3월', '4월', '5월', '6월', '7월', '8월', '9월', '10월', '11월', '12월']
 const weekNames = ['일', '월', '화', '수', '목', '금', '토']
 const activeTab = ref('calendar')
-const cursor = ref(new Date())
-const selected = ref(workspaceDateKey(new Date()))
+const cursor = ref(workspaceToday)
+const selected = ref(workspaceDateKey(workspaceToday))
 const filter = ref('all')
 const events = ref([])
+const localEvents = ref([])
 const subscriptions = ref([])
 const userMap = ref(new Map())
 const memos = ref([])
@@ -247,12 +279,16 @@ const driveFiles = ref([])
 const driveInput = ref(null)
 const eventOpen = ref(false)
 const subscriptionOpen = ref(false)
+const subscriptionSearchOpen = ref(false)
+const subscriptionSearchRoot = ref(null)
+const editingEventId = ref('')
 const eventDraft = ref({ title: '', date: selected.value, start: '09:00', end: '10:00', description: '' })
 const userKeyword = ref('')
 const userCandidates = ref([])
 const selectedUserId = ref('')
 const errorMessage = ref('')
-const todayKey = workspaceDateKey(new Date())
+const toasts = ref([])
+const todayKey = workspaceDateKey(workspaceToday)
 const minuteFavorites = ref(readMinuteFavorites())
 let stopFavoriteSync = null
 
@@ -280,11 +316,15 @@ const favoriteMinuteItems = computed(() => mockMinutes.filter((minute) => minute
 watch(cursor, loadCalendar)
 watch(backupKeyword, () => loadBackups())
 watch(userKeyword, async () => {
-  const data = await searchUsers({ keyword: userKeyword.value, size: 8 }).catch(() => ({ items: [] }))
-  userCandidates.value = data.items || []
+  if (!userKeyword.value.trim()) {
+    await loadUserCandidates('')
+    return
+  }
+  await loadUserCandidates(userKeyword.value)
 })
 
 onMounted(async () => {
+  document.addEventListener('mousedown', closeSubscriptionSearchOnOutside)
   stopFavoriteSync = onMinuteFavoritesChanged((next) => {
     minuteFavorites.value = next
   })
@@ -292,6 +332,7 @@ onMounted(async () => {
 })
 
 onUnmounted(() => {
+  document.removeEventListener('mousedown', closeSubscriptionSearchOnOutside)
   stopFavoriteSync?.()
 })
 
@@ -299,25 +340,36 @@ async function loadCalendar() {
   const from = new Date(cursor.value.getFullYear(), cursor.value.getMonth(), 1 - new Date(cursor.value.getFullYear(), cursor.value.getMonth(), 1).getDay())
   const to = new Date(from)
   to.setDate(from.getDate() + 42)
-  events.value = (await getWorkspaceCalendar(from.toISOString(), to.toISOString())).map(normalizeEvent)
+  try {
+    events.value = mergeLocalEvents((await getWorkspaceCalendar(from.toISOString(), to.toISOString())).map(normalizeEvent))
+    if (!events.value.length) events.value = mergeLocalEvents(fallbackWorkspaceCalendar().map(normalizeEvent))
+  } catch {
+    events.value = mergeLocalEvents(fallbackWorkspaceCalendar().map(normalizeEvent))
+  }
 }
 
 async function loadSubscriptions() {
-  subscriptions.value = await getCalendarSubscriptions()
+  subscriptions.value = await getCalendarSubscriptions().catch(() => [])
   await Promise.all(subscriptions.value.map((item) => cacheUser(item.targetUserId)))
 }
 
 async function loadMemos() {
-  memos.value = await getMemos()
+  memos.value = await withFallback(() => getMemos(), () => fallbackWorkspaceMemos())
+  if (!memos.value.length) memos.value = fallbackWorkspaceMemos()
   if (!activeMemoId.value && memos.value[0]) selectMemo(memos.value[0].memoId)
 }
 
 async function loadBackups() {
-  backups.value = backupKeyword.value.trim() ? await searchBackups(backupKeyword.value.trim()) : await getBackups()
+  backups.value = await withFallback(
+    () => (backupKeyword.value.trim() ? searchBackups(backupKeyword.value.trim()) : getBackups()),
+    () => fallbackWorkspaceBackups(backupKeyword.value),
+  )
+  if (!backups.value.length) backups.value = fallbackWorkspaceBackups(backupKeyword.value)
 }
 
 async function loadDriveFiles() {
-  driveFiles.value = await getDriveFiles()
+  driveFiles.value = await withFallback(() => getDriveFiles(), () => fallbackWorkspaceDriveFiles())
+  if (!driveFiles.value.length) driveFiles.value = fallbackWorkspaceDriveFiles()
 }
 
 function normalizeEvent(event) {
@@ -333,25 +385,73 @@ function moveMonth(offset) {
 }
 
 function goToday() {
-  cursor.value = new Date()
+  cursor.value = new Date(workspaceToday)
   selected.value = todayKey
 }
 
-function openEventForm() {
-  eventDraft.value = { title: '', date: selected.value, start: '09:00', end: '10:00', description: '' }
+function openEventForm(event = null) {
+  editingEventId.value = event?.eventId || ''
+  eventDraft.value = event
+    ? {
+        title: event.title || '',
+        date: workspaceDateKey(new Date(event.startedAt)),
+        start: toTimeInput(event.startedAt),
+        end: toTimeInput(event.endedAt),
+        description: event.description || '',
+      }
+    : { title: '', date: selected.value, start: '09:00', end: '10:00', description: '' }
   eventOpen.value = true
 }
 
 async function saveEvent() {
-  await createWorkspaceEvent({
+  const payload = {
     title: eventDraft.value.title.trim(),
     description: eventDraft.value.description.trim(),
     startedAt: new Date(`${eventDraft.value.date}T${eventDraft.value.start}:00+09:00`).toISOString(),
     endedAt: new Date(`${eventDraft.value.date}T${eventDraft.value.end}:00+09:00`).toISOString(),
     allDay: false,
-  })
+  }
+  if (!payload.title) return
+  const wasEditing = Boolean(editingEventId.value)
+  try {
+    if (editingEventId.value) await updateWorkspaceEvent(editingEventId.value, payload)
+    else await createWorkspaceEvent(payload)
+  } catch {
+    upsertLocalEvent(payload)
+  }
   eventOpen.value = false
+  editingEventId.value = ''
   await loadCalendar()
+  showToast(wasEditing ? '일정 수정 완료' : '일정 생성 완료', payload.title)
+}
+
+function openSelectedEvent(event) {
+  if (event.source === 'MEETING') {
+    router.push({ path: '/app/meetings', query: { tab: 'host', editMeetingId: event.meetingId || event.relatedMeetingId || event.eventId, from: 'workspace' } })
+    return
+  }
+  openEventForm(event)
+}
+
+function upsertLocalEvent(payload) {
+  const nextEvent = normalizeEvent({
+    eventId: editingEventId.value || `local-event-${Date.now()}`,
+    source: 'PERSONAL',
+    ...payload,
+  })
+  const localExists = localEvents.value.some((event) => event.eventId === editingEventId.value)
+  localEvents.value = editingEventId.value && localExists
+    ? localEvents.value.map((event) => event.eventId === editingEventId.value ? nextEvent : event)
+    : [...localEvents.value, nextEvent]
+  events.value = editingEventId.value
+    ? events.value.map((event) => event.eventId === editingEventId.value ? nextEvent : event)
+    : [...events.value, nextEvent]
+}
+
+function mergeLocalEvents(baseEvents) {
+  const byId = new Map(baseEvents.map((event) => [event.eventId, event]))
+  localEvents.value.forEach((event) => byId.set(event.eventId, event))
+  return [...byId.values()]
 }
 
 function selectMemo(memoId) {
@@ -364,6 +464,7 @@ async function createNewMemo() {
   const memo = await createMemo({ title: '새 메모', content: '내용을 입력하세요.' })
   memos.value.unshift(memo)
   selectMemo(memo.memoId)
+  showToast('메모 생성 완료', memo.title)
 }
 
 async function saveActiveMemo() {
@@ -374,6 +475,7 @@ async function saveActiveMemo() {
   })
   memos.value = memos.value.map((memo) => memo.memoId === updated.memoId ? updated : memo)
   selectMemo(updated.memoId)
+  showToast('메모 수정 완료', updated.title)
 }
 
 async function deleteActiveMemo() {
@@ -381,12 +483,17 @@ async function deleteActiveMemo() {
   await deleteMemo(memoDraft.value.memoId)
   memos.value = memos.value.filter((memo) => memo.memoId !== memoDraft.value.memoId)
   selectMemo(memos.value[0]?.memoId || '')
+  showToast('메모 삭제 완료', '선택한 메모를 삭제했습니다.')
 }
 
-async function toggleBookmark(backup) {
-  if (backup.bookmarked) await removeBackupBookmark(backup.backupId)
-  else await addBackupBookmark(backup.backupId)
-  await loadBackups()
+async function releaseBackup(backup) {
+  try {
+    await removeBackupBookmark(backup.backupId)
+  } catch {
+    backups.value = backups.value.filter((item) => item.backupId !== backup.backupId)
+  }
+  backups.value = backups.value.filter((item) => item.backupId !== backup.backupId)
+  showToast('백업 해제 완료', backup.title)
 }
 
 function removeFavoriteMinute(minuteId) {
@@ -406,15 +513,44 @@ async function removeDriveFile(fileId) {
   await loadDriveFiles()
 }
 
-async function addSubscription() {
-  if (!selectedUserId.value) return
-  await subscribeCalendar(selectedUserId.value)
+async function addSubscription(userId = selectedUserId.value) {
+  if (!userId) return
+  selectedUserId.value = userId
+  let mocked = false
+  await subscribeCalendar(userId).catch(() => {
+    subscriptions.value = [...subscriptions.value, { subscriptionId: `mock-sub-${Date.now()}`, targetUserId: userId }]
+    mocked = true
+  })
   subscriptionOpen.value = false
   selectedUserId.value = ''
   userKeyword.value = ''
   userCandidates.value = []
-  await loadSubscriptions()
+  subscriptionSearchOpen.value = false
+  if (!mocked) await loadSubscriptions()
   await loadCalendar()
+  showToast('동료 구독 추가', '동료 일정을 구독했습니다.')
+}
+
+function selectSubscriptionUser(user) {
+  userMap.value = new Map(userMap.value).set(user.userId, user)
+  addSubscription(user.userId)
+}
+
+async function loadUserCandidates(keyword) {
+  const data = await withFallback(() => searchUsers({ keyword, size: 8 }), () => fallbackUserSearch({ keyword, size: 8 }))
+  const subscribedIds = new Set(subscriptions.value.map((subscription) => subscription.targetUserId))
+  userCandidates.value = (data.items || []).filter((user) => !subscribedIds.has(user.userId))
+}
+
+async function openSubscriptionSearch() {
+  subscriptionSearchOpen.value = true
+  await loadUserCandidates(userKeyword.value)
+}
+
+function closeSubscriptionSearchOnOutside(event) {
+  if (!subscriptionSearchOpen.value) return
+  if (subscriptionSearchRoot.value?.contains(event.target)) return
+  subscriptionSearchOpen.value = false
 }
 
 async function removeSubscription(subscriptionId) {
@@ -442,5 +578,18 @@ function formatSize(bytes) {
   if (bytes < 1024) return `${bytes}B`
   if (bytes < 1024 * 1024) return `${Math.round(bytes / 1024)}KB`
   return `${(bytes / 1024 / 1024).toFixed(1)}MB`
+}
+
+function toTimeInput(value) {
+  const date = new Date(value)
+  return `${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}`
+}
+
+function showToast(title, message) {
+  const toast = { id: crypto.randomUUID?.() || String(Date.now()), title, message }
+  toasts.value = [toast, ...toasts.value].slice(0, 3)
+  setTimeout(() => {
+    toasts.value = toasts.value.filter((item) => item.id !== toast.id)
+  }, 2600)
 }
 </script>

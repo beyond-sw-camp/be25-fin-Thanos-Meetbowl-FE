@@ -1,8 +1,8 @@
 <template>
-  <div class="member-picker">
-    <label v-if="label">{{ label }}<input v-model="query" :placeholder="placeholder"></label>
-    <input v-else v-model="query" :placeholder="placeholder">
-    <div class="member-picker-results">
+  <div ref="pickerRoot" class="member-picker">
+    <label v-if="label">{{ label }}<input v-model="query" :placeholder="placeholder" @focus="open = true"></label>
+    <input v-else v-model="query" :placeholder="placeholder" @focus="open = true">
+    <div v-if="open && matches.length" class="member-picker-results">
       <button v-for="member in matches" :key="member.id" type="button" @click="select(member)">
         <strong>{{ member.name }}</strong>
         <span>{{ member.dept }} · {{ member.email }}</span>
@@ -12,7 +12,7 @@
 </template>
 
 <script setup>
-import { computed, ref } from 'vue'
+import { computed, onMounted, onUnmounted, ref } from 'vue'
 
 const props = defineProps({
   members: { type: Array, required: true },
@@ -24,6 +24,8 @@ const props = defineProps({
 
 const emit = defineEmits(['select'])
 const query = ref('')
+const open = ref(false)
+const pickerRoot = ref(null)
 
 const matches = computed(() => {
   const value = query.value.trim().toLowerCase()
@@ -37,5 +39,15 @@ const matches = computed(() => {
 function select(member) {
   emit('select', member)
   query.value = ''
+  open.value = false
 }
+
+function closeOnOutside(event) {
+  if (!open.value) return
+  if (pickerRoot.value?.contains(event.target)) return
+  open.value = false
+}
+
+onMounted(() => document.addEventListener('mousedown', closeOnOutside))
+onUnmounted(() => document.removeEventListener('mousedown', closeOnOutside))
 </script>

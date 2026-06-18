@@ -41,8 +41,8 @@
 
     <Pagination v-model="pageNo" :total-pages="totalPages" />
 
-    <ModalShell v-if="modal" modal-class="meeting-modal" @close="modal = false">
-      <header><div><h2>{{ mode === 'create' ? '내 회의 생성' : '회의 수정' }}</h2><p v-if="mode === 'edit'">참석자에게 변경 알림이 발송됩니다.</p></div><button @click="modal = false">닫기</button></header>
+    <ModalShell v-if="modal" modal-class="meeting-modal" @close="closeModal">
+      <header><div><h2>{{ mode === 'create' ? '내 회의 생성' : '회의 수정' }}</h2><p v-if="mode === 'edit'">참석자에게 변경 알림이 발송됩니다.</p></div><button @click="closeModal">닫기</button></header>
       <div class="meeting-modal-grid">
         <form class="form-grid" @submit.prevent="saveMeeting">
           <label>회의 제목<input v-model="form.title" required placeholder="회의 제목"></label>
@@ -53,7 +53,7 @@
           <label>회의록 검토자<select v-model="form.reviewer"><option value="">선택 안 함</option><option v-for="name in form.attendees" :key="name" :value="name">{{ name }}</option></select></label>
           <label>회의 내용<textarea v-model="form.content" rows="4" placeholder="회의 목적과 안건"></textarea></label>
           <div v-if="mode === 'edit'" class="copy-box">https://meetbowl.local/join/{{ form.id }}</div>
-          <div class="modal-actions"><button type="button" class="secondary-button" @click="modal = false">취소</button><button class="primary-button">저장</button></div>
+          <div class="modal-actions"><button type="button" class="secondary-button" @click="closeModal">취소</button><button class="primary-button">저장</button></div>
         </form>
         <RoomSchedulePanel :room="selectedRoom" :room-name="form.room" :reservations="selectedRoomReservations" />
       </div>
@@ -62,8 +62,8 @@
 </template>
 
 <script setup>
-import { computed, ref } from 'vue'
-import { useRouter } from 'vue-router'
+import { computed, onMounted, ref, watch } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 import MemberPicker from '../../components/common/MemberPicker.vue'
 import ModalShell from '../../components/common/ModalShell.vue'
 import Pagination from '../../components/common/Pagination.vue'
@@ -73,6 +73,7 @@ import { meetingRoute } from '../../lib/meeting-route'
 import { fromDateTimeInput, meetingEnd, toDateTimeInput } from '../../utils/dateTime'
 
 const router = useRouter()
+const route = useRoute()
 const statusLabel = { live: '진행 중', upcoming: '예정', ended: '종료' }
 const tabs = [{ key: 'all', label: '전체' }, { key: 'host', label: '내가 주최한 회의' }, { key: 'attendee', label: '초대된 회의' }]
 const items = ref(myMeetings.map((meeting) => ({ ...meeting, end: meetingEnd(meeting), content: '' })))
@@ -98,6 +99,11 @@ const totalPages = computed(() => Math.max(1, Math.ceil(filtered.value.length / 
 const paged = computed(() => filtered.value.slice((pageNo.value - 1) * pageSize, pageNo.value * pageSize))
 const selectedRoom = computed(() => rooms.find((room) => room.name === form.value.room))
 const selectedRoomReservations = computed(() => selectedRoom.value ? todayReservations.filter((item) => item.roomId === selectedRoom.value.id) : [])
+const shouldReturnWorkspace = computed(() => route.query.from === 'workspace' || Boolean(route.query.editMeetingId))
+
+onMounted(openMeetingFromQuery)
+
+watch(() => route.query.editMeetingId, openMeetingFromQuery)
 
 function changeTab(value) {
   tab.value = value
@@ -116,6 +122,14 @@ function openEdit(meeting) {
   modal.value = true
 }
 
+function openMeetingFromQuery() {
+  const editMeetingId = route.query.editMeetingId
+  if (!editMeetingId) return
+  tab.value = route.query.tab === 'host' ? 'host' : tab.value
+  const meeting = items.value.find((item) => item.id === editMeetingId && item.role === 'host' && item.status !== 'ended')
+  if (meeting) openEdit(meeting)
+}
+
 function addAttendee(name) {
   form.value.attendees.push(name)
   if (!form.value.reviewer) form.value.reviewer = name
@@ -131,7 +145,12 @@ function saveMeeting() {
   if (!payload.title) return
   if (mode.value === 'edit') items.value = items.value.map((item) => item.id === form.value.id ? { ...item, ...payload } : item)
   else items.value.unshift({ id: crypto.randomUUID?.() || `mt-${Date.now()}`, role: 'host', status: 'upcoming', ...payload })
+  closeModal()
+}
+
+function closeModal() {
   modal.value = false
+  if (shouldReturnWorkspace.value) router.push('/app/workspace')
 }
 
 function enterMeeting(meeting) {
