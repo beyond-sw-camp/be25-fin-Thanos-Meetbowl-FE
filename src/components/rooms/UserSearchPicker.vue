@@ -16,7 +16,7 @@
 </template>
 
 <script setup>
-import { ref, watch } from 'vue'
+import { onBeforeUnmount, ref, watch } from 'vue'
 import { searchUsers } from '../../lib/users'
 
 const props = defineProps({
@@ -28,13 +28,10 @@ const emit = defineEmits(['update:modelValue'])
 const query = ref('')
 const results = ref([])
 let seq = 0
+let debounceTimer = null
+const DEBOUNCE_MS = 250
 
-watch(query, async (value) => {
-  const keyword = value.trim()
-  if (!keyword) {
-    results.value = []
-    return
-  }
+async function runSearch(keyword) {
   const current = ++seq
   try {
     const data = await searchUsers({ keyword, page: 1, size: 8 })
@@ -51,7 +48,21 @@ watch(query, async (value) => {
   } catch {
     results.value = []
   }
+}
+
+// 디바운스: 타이핑 중에는 호출하지 않고, 입력이 멈춘 뒤 DEBOUNCE_MS가 지나면 한 번만 검색한다.
+watch(query, (value) => {
+  clearTimeout(debounceTimer)
+  const keyword = value.trim()
+  if (!keyword) {
+    results.value = []
+    return
+  }
+  debounceTimer = setTimeout(() => runSearch(keyword), DEBOUNCE_MS)
 })
+
+// 입력 도중 컴포넌트가 닫히면 예약된 검색 타이머를 정리한다.
+onBeforeUnmount(() => clearTimeout(debounceTimer))
 
 function add(user) {
   if (props.modelValue.some((attendee) => attendee.userId === user.userId)) return
