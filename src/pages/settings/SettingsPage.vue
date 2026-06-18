@@ -1,13 +1,29 @@
 <script setup>
 import { computed, onMounted, ref } from 'vue'
-import { getMyProfile, getMySettings, updateMyProfile, updateMySettings } from '../../lib/my-profile'
+import { useRouter } from 'vue-router'
+import {
+  changeMyPassword,
+  getMyProfile,
+  getMySettings,
+  updateMyProfile,
+  updateMySettings,
+} from '../../lib/my-profile'
 import { useAuthStore } from '../../stores/auth'
 
+const props = defineProps({
+  forcePasswordChange: {
+    type: Boolean,
+    default: false,
+  },
+})
+
+const router = useRouter()
 const auth = useAuthStore()
 
-const loading = ref(true)
+const loading = ref(!props.forcePasswordChange)
 const profileSaving = ref(false)
 const settingsSaving = ref(false)
+const passwordSaving = ref(false)
 const forbidden = ref(false)
 const errorMessage = ref('')
 
@@ -20,12 +36,18 @@ const settingsForm = ref({
   meetingStartReminderMinutes: 10,
   minutesReviewReminderMinutes: 60,
 })
+const passwordForm = ref({
+  currentPassword: '',
+  newPassword: '',
+  newPasswordConfirm: '',
+})
 
 const profileMessage = ref('')
 const profileError = ref('')
 const settingsMessage = ref('')
 const settingsError = ref('')
-const passwordMessage = ref('비밀번호 변경은 별도 인증 흐름에서 제공하고, 현재 화면에서는 연결하지 않습니다.')
+const passwordMessage = ref('')
+const passwordError = ref('')
 
 const roleLabelMap = {
   USER: '사용자',
@@ -55,6 +77,12 @@ const minutesReviewReminderOptions = [
 const canEditProfile = computed(() => Boolean(auth.user))
 
 onMounted(() => {
+  if (props.forcePasswordChange) {
+    // 강제 변경 모드에서는 프로필/개인설정 조회 없이 비밀번호 폼만 바로 보여준다.
+    loading.value = false
+    return
+  }
+
   loadPage()
 })
 
@@ -68,7 +96,6 @@ async function loadPage() {
   settingsError.value = ''
 
   try {
-    // 프로필과 개인 설정은 서로 독립적이므로 초기 진입 시 함께 조회한다.
     const [profileData, settingsData] = await Promise.all([getMyProfile(), getMySettings()])
 
     profile.value = profileData
@@ -78,7 +105,6 @@ async function loadPage() {
       email: profileData?.email || '',
     }
 
-    // 응답값을 셀렉트에 바로 바인딩할 수 있도록 숫자형으로 정규화한다.
     settingsForm.value = {
       meetingStartReminderMinutes: Number(settingsData?.meetingStartReminderMinutes ?? 10),
       minutesReviewReminderMinutes: Number(settingsData?.minutesReviewReminderMinutes ?? 60),
@@ -104,7 +130,6 @@ async function saveProfile() {
   profileError.value = ''
 
   try {
-    // BE에서 허용하는 수정 필드인 name, email만 전송한다.
     const savedProfile = await updateMyProfile({
       name: profileForm.value.name.trim(),
       email: profileForm.value.email.trim(),
@@ -135,13 +160,11 @@ async function saveSettings() {
   settingsError.value = ''
 
   try {
-    // BE 개인 설정 PATCH DTO와 동일한 필드명으로 저장 요청을 보낸다.
     const savedSettings = await updateMySettings({
       meetingStartReminderMinutes: Number(settingsForm.value.meetingStartReminderMinutes),
       minutesReviewReminderMinutes: Number(settingsForm.value.minutesReviewReminderMinutes),
     })
 
-    // 저장 후에는 BE 응답값으로 다시 맞춰 화면 상태를 동기화한다.
     settingsForm.value = {
       meetingStartReminderMinutes: Number(savedSettings?.meetingStartReminderMinutes ?? 10),
       minutesReviewReminderMinutes: Number(savedSettings?.minutesReviewReminderMinutes ?? 60),
@@ -154,6 +177,60 @@ async function saveSettings() {
     settingsError.value = error?.message || '개인 설정 저장에 실패했습니다.'
   } finally {
     settingsSaving.value = false
+  }
+}
+
+async function savePassword() {
+  if (passwordSaving.value) return
+
+  passwordMessage.value = ''
+  passwordError.value = ''
+
+  const currentPassword = passwordForm.value.currentPassword.trim()
+  const newPassword = passwordForm.value.newPassword.trim()
+  const newPasswordConfirm = passwordForm.value.newPasswordConfirm.trim()
+
+  if (!currentPassword) {
+    passwordError.value = '현재 비밀번호를 입력해 주세요.'
+    return
+  }
+
+  if (!newPassword) {
+    passwordError.value = '새 비밀번호를 입력해 주세요.'
+    return
+  }
+
+  if (newPassword !== newPasswordConfirm) {
+    passwordError.value = '새 비밀번호와 새 비밀번호 확인이 일치하지 않습니다.'
+    return
+  }
+
+  passwordSaving.value = true
+
+  try {
+    await changeMyPassword({
+      currentPassword,
+      newPassword,
+      newPasswordConfirm,
+    })
+
+    passwordForm.value = {
+      currentPassword: '',
+      newPassword: '',
+      newPasswordConfirm: '',
+    }
+    passwordMessage.value = '비밀번호가 변경되었습니다.'
+    // 라우터 가드가 즉시 해제되어야 변경 직후 홈 화면 이동이 막히지 않는다.
+    auth.clearInitialPasswordChangeRequired()
+
+    if (props.forcePasswordChange) {
+      // 최초 변경 흐름에서는 저장 성공 후 권한별 기본 화면으로 즉시 복귀시킨다.
+      await router.replace(auth.homePath)
+    }
+  } catch (error) {
+    passwordError.value = error?.message || '비밀번호 변경에 실패했습니다.'
+  } finally {
+    passwordSaving.value = false
   }
 }
 
@@ -171,9 +248,18 @@ function statusLabel(status) {
 <template>
   <section class="page settings-page">
     <header class="page-header">
-      <h1>설정</h1>
-      <p>내 정보와 개인 설정을 관리합니다.</p>
+      <h1>{{ forcePasswordChange ? '비밀번호 변경' : '설정' }}</h1>
+      <p v-if="forcePasswordChange">초기 비밀번호를 변경해 주세요. 계정 보안을 위해 최초 로그인 후 비밀번호 변경이 필요합니다.</p>
+      <p v-else>내 정보와 개인 설정을 관리합니다.</p>
     </header>
+
+    <article v-if="forcePasswordChange" class="card settings-card">
+      <h2>최초 로그인 안내</h2>
+      <p>초기 비밀번호를 변경하기 전에는 주요 서비스에 진입할 수 없습니다.</p>
+      <div class="settings-alert">
+        계정 보안을 위해 현재 비밀번호와 새 비밀번호를 입력한 뒤 비밀번호를 변경해 주세요.
+      </div>
+    </article>
 
     <article v-if="loading" class="card empty-state">
       내 정보와 개인 설정을 불러오는 중입니다.
@@ -194,75 +280,104 @@ function statusLabel(status) {
     <template v-else>
       <article class="card settings-card">
         <div class="settings-card-head">
-          <h2>내 정보</h2>
+          <h2>비밀번호 변경</h2>
           <button
             type="button"
             class="primary-button small"
-            :disabled="!canEditProfile || profileSaving"
-            @click="saveProfile"
+            :disabled="passwordSaving"
+            @click="savePassword"
           >
-            {{ profileSaving ? '저장 중...' : '저장' }}
+            {{ passwordSaving ? '저장 중...' : '비밀번호 변경' }}
           </button>
         </div>
-        <div class="settings-form-grid">
-          <label>이름<input v-model="profileForm.name"></label>
-          <label>이메일<input v-model="profileForm.email" type="email"></label>
-          <label>계열사<input :value="profile?.affiliate || '-'" readonly class="readonly"></label>
-          <label>부서<input :value="profile?.department || '-'" readonly class="readonly"></label>
-          <label>팀<input :value="profile?.team || '-'" readonly class="readonly"></label>
-          <label>직급<input :value="profile?.position || '-'" readonly class="readonly"></label>
-          <label>권한<input :value="roleLabel(profile?.role)" readonly class="readonly"></label>
-          <label>상태<input :value="statusLabel(profile?.status)" readonly class="readonly"></label>
+        <!-- 일반 설정 화면과 최초 로그인 강제 변경 화면이 같은 폼을 재사용하도록 분기한다. -->
+        <p v-if="forcePasswordChange">초기 비밀번호는 반드시 새 비밀번호로 변경해 주세요.</p>
+        <p v-else>본인 확인을 위해 현재 비밀번호를 입력한 뒤 새 비밀번호로 변경해 주세요.</p>
+        <div class="settings-form-grid password-form-grid">
+          <label>
+            현재 비밀번호
+            <input v-model="passwordForm.currentPassword" type="password" autocomplete="current-password">
+          </label>
+          <label>
+            새 비밀번호
+            <input v-model="passwordForm.newPassword" type="password" autocomplete="new-password">
+          </label>
+          <label>
+            새 비밀번호 확인
+            <input v-model="passwordForm.newPasswordConfirm" type="password" autocomplete="new-password">
+          </label>
         </div>
-        <p v-if="profileMessage" class="settings-success">{{ profileMessage }}</p>
-        <div v-if="profileError" class="error-box" style="margin-top: 12px;">{{ profileError }}</div>
+        <p v-if="passwordMessage" class="settings-success">{{ passwordMessage }}</p>
+        <div v-if="passwordError" class="error-box" style="margin-top: 12px;">{{ passwordError }}</div>
       </article>
 
-      <article class="card settings-card">
-        <h2>비밀번호 변경</h2>
-        <p>비밀번호 변경은 별도 인증 흐름에서 제공합니다.</p>
-        <div class="settings-alert">{{ passwordMessage }}</div>
-      </article>
+      <template v-if="!forcePasswordChange">
+        <article class="card settings-card">
+          <div class="settings-card-head">
+            <h2>내 정보</h2>
+            <button
+              type="button"
+              class="primary-button small"
+              :disabled="!canEditProfile || profileSaving"
+              @click="saveProfile"
+            >
+              {{ profileSaving ? '저장 중...' : '저장' }}
+            </button>
+          </div>
+          <div class="settings-form-grid">
+            <label>이름<input v-model="profileForm.name"></label>
+            <label>이메일<input v-model="profileForm.email" type="email"></label>
+            <label>계열사<input :value="profile?.affiliate || '-'" readonly class="readonly"></label>
+            <label>부서<input :value="profile?.department || '-'" readonly class="readonly"></label>
+            <label>팀<input :value="profile?.team || '-'" readonly class="readonly"></label>
+            <label>직책<input :value="profile?.position || '-'" readonly class="readonly"></label>
+            <label>권한<input :value="roleLabel(profile?.role)" readonly class="readonly"></label>
+            <label>상태<input :value="statusLabel(profile?.status)" readonly class="readonly"></label>
+          </div>
+          <p v-if="profileMessage" class="settings-success">{{ profileMessage }}</p>
+          <div v-if="profileError" class="error-box" style="margin-top: 12px;">{{ profileError }}</div>
+        </article>
 
-      <article class="card settings-card">
-        <div class="settings-card-head">
-          <h2>개인 설정</h2>
-          <button
-            type="button"
-            class="primary-button small"
-            :disabled="settingsSaving"
-            @click="saveSettings"
-          >
-            {{ settingsSaving ? '저장 중...' : '저장' }}
-          </button>
-        </div>
-        <div class="settings-notification-row">
-          <span>회의 시작 전 알림</span>
-          <select v-model.number="settingsForm.meetingStartReminderMinutes">
-            <option
-              v-for="option in reminderOptions"
-              :key="option.value"
-              :value="option.value"
+        <article class="card settings-card">
+          <div class="settings-card-head">
+            <h2>개인 설정</h2>
+            <button
+              type="button"
+              class="primary-button small"
+              :disabled="settingsSaving"
+              @click="saveSettings"
             >
-              {{ option.label }}
-            </option>
-          </select>
-        </div>
-        <div class="settings-notification-row">
-          <span>회의록 미검토 알림</span>
-          <select v-model.number="settingsForm.minutesReviewReminderMinutes">
-            <option
-              v-for="option in minutesReviewReminderOptions"
-              :key="option.value"
-              :value="option.value"
-            >
-              {{ option.label }}
-            </option>
-          </select>
-        </div>
-        <p v-if="settingsMessage" class="settings-success">{{ settingsMessage }}</p>
-        <div v-if="settingsError" class="error-box" style="margin-top: 12px;">{{ settingsError }}</div>
-      </article>
+              {{ settingsSaving ? '저장 중...' : '저장' }}
+            </button>
+          </div>
+          <div class="settings-notification-row">
+            <span>회의 시작 전 알림</span>
+            <select v-model.number="settingsForm.meetingStartReminderMinutes">
+              <option
+                v-for="option in reminderOptions"
+                :key="option.value"
+                :value="option.value"
+              >
+                {{ option.label }}
+              </option>
+            </select>
+          </div>
+          <div class="settings-notification-row">
+            <span>회의록 미검토 알림</span>
+            <select v-model.number="settingsForm.minutesReviewReminderMinutes">
+              <option
+                v-for="option in minutesReviewReminderOptions"
+                :key="option.value"
+                :value="option.value"
+              >
+                {{ option.label }}
+              </option>
+            </select>
+          </div>
+          <p v-if="settingsMessage" class="settings-success">{{ settingsMessage }}</p>
+          <div v-if="settingsError" class="error-box" style="margin-top: 12px;">{{ settingsError }}</div>
+        </article>
+      </template>
     </template>
   </section>
 </template>

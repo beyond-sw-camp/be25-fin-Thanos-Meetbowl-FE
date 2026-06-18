@@ -38,7 +38,7 @@
     <div v-if="errorMessage" class="error-box">{{ errorMessage }}</div>
     <MailList :items="pageItems" :selected-ids="selected" @open="openMail" @toggle="toggleOne" />
     <Pagination v-model="pageNo" :total-pages="totalPages" />
-    <ComposeModal v-if="compose" :members="members" :templates="mailTemplates" @close="compose = false" @send="sendDraft" />
+    <ComposeModal v-if="compose" :templates="mailTemplates" @close="compose = false" @send="sendDraft" />
   </section>
 </template>
 
@@ -60,7 +60,7 @@ import {
   searchMails,
   sendMail,
 } from '../../lib/mail'
-import { getUserSummary, searchUsers } from '../../lib/users'
+import { getUserSummary } from '../../lib/users'
 import { formatKstDateTime } from '../../utils/dateTime'
 
 const mailTemplates = [
@@ -77,7 +77,6 @@ const tabs = [
 ]
 
 const mailList = ref([])
-const members = ref([])
 const tab = ref('inbox')
 const open = ref(null)
 const compose = ref(false)
@@ -111,7 +110,7 @@ watch(q, () => {
 })
 
 onMounted(async () => {
-  await Promise.all([loadMails(), loadMembers()])
+  await loadMails()
 })
 
 async function loadMails() {
@@ -129,15 +128,6 @@ async function loadMails() {
     errorMessage.value = error?.message || '메일을 불러오지 못했습니다.'
   } finally {
     loading.value = false
-  }
-}
-
-async function loadMembers() {
-  try {
-    const data = await searchUsers({ page: 1, size: 50 })
-    members.value = data.items || []
-  } catch {
-    members.value = []
   }
 }
 
