@@ -392,69 +392,79 @@
         <button :class="{ active: tab === 'chat' }" @click="tab = 'chat'">채팅</button>
       </nav>
 
+      <!-- 
+        [실시간 자막(STT) 패널 영역]
+        회의 중 오디오 스트림이 분석된 결과를 DataChannel을 통해 수신하여 화면에 표시합니다.
+      -->
       <div v-if="tab === 'stt'" class="side-body meeting-caption-panel">
         <div class="toolbar meeting-caption-toolbar">
           <span class="chip active">원문 자막</span>
           <span class="meeting-caption-status">{{ captionPanelStatus }}</span>
         </div>
 
-        <div class="meeting-diagnostics">
-          <strong>실시간 연결 진단</strong>
-          <dl class="meeting-diagnostics-list">
-            <div>
-              <dt>회의 room</dt>
-              <dd>{{ livekitRoomName }}</dd>
-            </div>
-            <div>
-              <dt>내 participant</dt>
-              <dd>{{ livekitParticipantIdentity }}</dd>
-            </div>
-            <div>
-              <dt>마이크 publish</dt>
-              <dd>{{ localMicPublicationStatus }}</dd>
-            </div>
-            <div>
-              <dt>자막 수신</dt>
-              <dd>{{ captionReceptionStatus }}</dd>
-            </div>
-            <div>
-              <dt>최근 DataChannel</dt>
-              <dd>{{ lastDataChannelReceivedLabel }}</dd>
-            </div>
-            <div>
-              <dt>전송 지연</dt>
-              <dd>{{ lastCaptionTransportLatencyLabel }}</dd>
-            </div>
-            <div>
-              <dt>내 음성 감지</dt>
-              <dd>{{ lastLocalSpeechDetectedLabel }}</dd>
-            </div>
-            <div>
-              <dt>자막 렌더</dt>
-              <dd>{{ lastCaptionRenderedLabel }}</dd>
-            </div>
-            <div>
-              <dt>내 음성→자막</dt>
-              <dd>{{ lastSpeechToCaptionLatencyLabel }}</dd>
-            </div>
-            <div>
-              <dt>STT 기준 지연</dt>
-              <dd>{{ lastCaptionEndToEndLatencyLabel }}</dd>
-            </div>
-            <div>
-              <dt>마이크 오류</dt>
-              <dd>{{ microphonePublishErrorLabel }}</dd>
-            </div>
-            <div>
-              <dt>로컬 track 이벤트</dt>
-              <dd>{{ localTrackEventStatus }}</dd>
-            </div>
-            <div>
-              <dt>로컬 audio publication</dt>
-              <dd>{{ localAudioPublicationCountLabel }}</dd>
-            </div>
-          </dl>
-        </div>
+        <!-- 
+          [네트워크 및 연결 진단 모니터링]
+          LiveKit WebRTC 연결 상태, 마이크 송출(Publish) 상태, 자막 데이터 수신(DataChannel) 지연 시간 등
+          실시간 음성 처리 인프라의 건강 상태(Health)를 디버깅할 수 있는 정보를 제공합니다.
+        -->
+<!--        <div class="meeting-diagnostics">-->
+<!--          <strong>실시간 연결 진단</strong>-->
+<!--          <dl class="meeting-diagnostics-list">-->
+<!--            <div>-->
+<!--              <dt>회의 room</dt>-->
+<!--              <dd>{{ livekitRoomName }}</dd>-->
+<!--            </div>-->
+<!--            <div>-->
+<!--              <dt>내 participant</dt>-->
+<!--              <dd>{{ livekitParticipantIdentity }}</dd>-->
+<!--            </div>-->
+<!--            <div>-->
+<!--              <dt>마이크 publish</dt>-->
+<!--              <dd>{{ localMicPublicationStatus }}</dd>-->
+<!--            </div>-->
+<!--            <div>-->
+<!--              <dt>자막 수신</dt>-->
+<!--              <dd>{{ captionReceptionStatus }}</dd>-->
+<!--            </div>-->
+<!--            <div>-->
+<!--              <dt>최근 DataChannel</dt>-->
+<!--              <dd>{{ lastDataChannelReceivedLabel }}</dd>-->
+<!--            </div>-->
+<!--            <div>-->
+<!--              <dt>전송 지연</dt>-->
+<!--              <dd>{{ lastCaptionTransportLatencyLabel }}</dd>-->
+<!--            </div>-->
+<!--            <div>-->
+<!--              <dt>내 음성 감지</dt>-->
+<!--              <dd>{{ lastLocalSpeechDetectedLabel }}</dd>-->
+
+<!--            </div>-->
+<!--            <div>-->
+<!--              <dt>자막 렌더</dt>-->
+<!--              <dd>{{ lastCaptionRenderedLabel }}</dd>-->
+<!--            </div>-->
+<!--            <div>-->
+<!--              <dt>내 음성→자막</dt>-->
+<!--              <dd>{{ lastSpeechToCaptionLatencyLabel }}</dd>-->
+<!--            </div>-->
+<!--            <div>-->
+<!--              <dt>STT 기준 지연</dt>-->
+<!--              <dd>{{ lastCaptionEndToEndLatencyLabel }}</dd>-->
+<!--            </div>-->
+<!--            <div>-->
+<!--              <dt>마이크 오류</dt>-->
+<!--              <dd>{{ microphonePublishErrorLabel }}</dd>-->
+<!--            </div>-->
+<!--            <div>-->
+<!--              <dt>로컬 track 이벤트</dt>-->
+<!--              <dd>{{ localTrackEventStatus }}</dd>-->
+<!--            </div>-->
+<!--            <div>-->
+<!--              <dt>로컬 audio publication</dt>-->
+<!--              <dd>{{ localAudioPublicationCountLabel }}</dd>-->
+<!--            </div>-->
+<!--          </dl>-->
+<!--        </div>-->
 
         <p v-if="sttStatusHint" class="meeting-caption-hint">
           {{ sttStatusHint }}
@@ -2185,6 +2195,9 @@ function bindMeetingRoomEvents(room) {
     syncParticipantsFromRoom(room)
   })
   room.on(RoomEvent.Disconnected, () => {
+    // 브라우저 탭 종료, 네트워크 단절, 명시적 leave/end 모두 결국 RTC disconnect로 보일 수 있다.
+    // 즉 이 이벤트만으로는 "회의 종료"와 "내가 그냥 나감"을 구분할 수 없으므로,
+    // 실제 세션 종료 판단은 별도의 `meeting.ended` DataChannel 또는 BE 종료 API 결과를 기준으로 한다.
     meetingConnectionStatus.value = '연결 종료'
     resetMeetingSessionState()
   })
@@ -2293,6 +2306,8 @@ async function handleMeetingEndedEvent(event) {
   pushSystemChat('회의가 종료되었습니다.')
   meetingConnectionError.value = ''
   hostTransferStatus.value = ''
+  // 종료 이벤트는 "호스트가 회의를 끝냈다" 또는 "시스템이 세션 종료를 확정했다"는 의미다.
+  // 단순한 브라우저 창 닫기와는 의미가 다르므로, 여기서는 room disconnect보다 상위 개념으로 처리한다.
   // 종료 이벤트는 중복 수신될 수 있으므로 먼저 화면 상태를 정리하고, 그 다음 room을 떠난다.
   await disconnectMeetingRoom().catch(() => {})
   if (event?.reason) {
@@ -2391,6 +2406,10 @@ async function disconnectMeetingRoom() {
 async function publishMeetingEndedSignal(reason) {
   if (!meetingRoom.value?.localParticipant) return
 
+  // 이 DataChannel 메시지는 "회의 전체 종료" 신호다.
+  // 따라서 호스트가 명시적으로 종료 버튼을 눌렀을 때만 보낸다.
+  // 브라우저 탭을 그냥 닫는 경우에는 이 신호가 보장되지 않으며, 그 경우 다른 참가자 입장에서는
+  // 우선 "한 참가자가 연결에서 사라졌다"로만 보이고, 회의 종료 여부는 BE/STT 후속 처리로 판단한다.
   const message = {
     eventType: 'meeting.ended',
     meetingId: meetingId.value,
@@ -2411,6 +2430,8 @@ async function leaveMeeting() {
   meetingEndPending.value = true
   try {
     hostTransferDialogOpen.value = false
+    // "회의 나가기"는 내 참가만 종료한다.
+    // 호스트가 아닌 사용자는 회의를 끝내지 않고, 호스트라도 이 경로를 타면 meeting.ended를 보내지 않는다.
     await disconnectMeetingRoom()
     router.push(auth.isAuthenticated ? '/app/minutes' : '/login')
   } finally {
@@ -2425,6 +2446,9 @@ async function endMeeting() {
   try {
     hostTransferDialogOpen.value = false
     if (isCurrentUserHost.value) {
+      // authoritative 종료 기준은 먼저 BE에 `회의 종료`를 기록하는 것이다.
+      // DataChannel은 다른 참가자 화면을 빨리 정리하기 위한 보조 신호이고,
+      // 저장 보장이나 후속 AI 작업 시작 기준은 BE의 `/meetings/{id}/end` 성공이다.
       await postJson(`/meetings/${meetingId.value}/end`, {})
       meetingEndHandled.value = true
       await publishMeetingEndedSignal('host-ended').catch((error) => {
