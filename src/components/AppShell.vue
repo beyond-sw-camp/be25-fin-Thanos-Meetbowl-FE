@@ -125,7 +125,6 @@ const navSections = [
       { to: '/admin/reservations', label: '예약 현황', icon: '◷' },
       { to: '/admin/mail-policy', label: '메일 정책 관리', icon: '✉' },
       { to: '/admin/minutes-policy', label: '보관 정책 관리', icon: '◫' },
-      { to: '/app/shared-docs', label: '공유 워크스페이스', icon: '▤' },
       { to: '/admin/logs', label: '관리자 작업 로그', icon: '≣' },
     ],
   },
