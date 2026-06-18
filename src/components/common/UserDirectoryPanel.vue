@@ -1,13 +1,21 @@
 <script setup>
-import { computed, onMounted, ref, watch } from 'vue'
-import { createAdminUser, getAdminUser, resetAdminUserPassword, updateAdminUser } from '../../lib/admin-users'
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import {
+  createAdminUser,
+  getAdminUser,
+  getAdminUsers,
+  resetAdminUserPassword,
+  searchAdminUserSuggestions,
+  updateAdminUser,
+} from '../../lib/admin-users'
 import {
   getAdminAffiliates,
   getAdminDepartments,
   getAdminPositions,
   getAdminTeams,
 } from '../../lib/admin-organizations'
-import { getOrganizationUserSummary, searchUsers } from '../../lib/user-directory'
+import { useUserSuggestions } from '../../composables/useUserSuggestions.js'
+import { getOrganizationUserSummary } from '../../lib/user-directory'
 import Pagination from './Pagination.vue'
 
 const props = defineProps({
@@ -48,6 +56,32 @@ const affiliates = ref([])
 const departments = ref([])
 const teams = ref([])
 const positions = ref([])
+const suggestionFieldRef = ref(null)
+
+const {
+  suggestions,
+  suggestionLoading,
+  suggestionError,
+  activeSuggestionIndex,
+  showSuggestionDropdown,
+  selectSuggestion,
+  setActiveSuggestion,
+  closeSuggestions,
+  handleSuggestionInput,
+  handleSuggestionKeydown,
+} = useUserSuggestions({
+  keyword,
+  rootRef: suggestionFieldRef,
+  maxItems: 5,
+  debounceMs: 250,
+  fetchSuggestions: (trimmedKeyword) =>
+    searchAdminUserSuggestions({
+      keyword: trimmedKeyword,
+      size: 5,
+    }),
+})
+
+let keywordSearchTimer = null
 
 const statusFilterOptions = [
   { value: 'ALL', label: '전체 상태' },
@@ -83,17 +117,26 @@ onMounted(() => {
   loadUsers()
 })
 
+onBeforeUnmount(() => {
+  clearTimeout(keywordSearchTimer)
+})
+
 watch(pageNo, () => {
   loadUsers()
 })
 
 watch(keyword, () => {
+  clearTimeout(keywordSearchTimer)
+
   if (pageNo.value !== 1) {
     pageNo.value = 1
     return
   }
 
-  loadUsers()
+  // 목록 조회도 debounce로 묶어 추천 검색과 타이밍을 맞춘다.
+  keywordSearchTimer = setTimeout(() => {
+    loadUsers()
+  }, 250)
 })
 
 watch(status, () => {
@@ -136,7 +179,7 @@ async function loadUsers() {
   actionError.value = ''
 
   try {
-    const data = await searchUsers({
+    const data = await getAdminUsers({
       keyword: keyword.value,
       status: status.value === 'ALL' ? '' : status.value,
       page: pageNo.value,
@@ -156,6 +199,11 @@ async function loadUsers() {
   } finally {
     loading.value = false
   }
+}
+
+function applySuggestion(user) {
+  keyword.value = user?.name || ''
+  closeSuggestions()
 }
 
 async function openDetail(user) {
@@ -429,7 +477,40 @@ function filterActiveOrSelected(items, selectedId, idField) {
     </div>
 
     <div class="admin-toolbar directory-toolbar">
-      <input v-model="keyword" placeholder="이름, 로그인 ID, 이메일, 부서로 검색" />
+      <div ref="suggestionFieldRef" class="user-suggestion-field directory-search-field">
+        <input
+          v-model="keyword"
+          @input="handleSuggestionInput"
+          @compositionupdate="handleSuggestionInput"
+          @compositionend="handleSuggestionInput"
+          placeholder="이름, 로그인 ID, 이메일, 부서로 검색"
+          @keydown="handleSuggestionKeydown($event, applySuggestion)"
+        />
+        <div v-if="showSuggestionDropdown" class="user-suggestion-dropdown">
+          <div v-if="suggestionLoading" class="user-suggestion-status">검색 중...</div>
+          <div v-else-if="suggestionError" class="user-suggestion-status">{{ suggestionError }}</div>
+          <div v-else-if="!suggestions.length" class="user-suggestion-status">검색 결과가 없습니다.</div>
+          <button
+            v-for="(user, index) in suggestions"
+            v-else
+            :key="user.userId"
+            type="button"
+            class="user-suggestion-item"
+            :class="{ active: activeSuggestionIndex === index }"
+            @mouseenter="setActiveSuggestion(index)"
+            @click="selectSuggestion(user, applySuggestion)"
+          >
+            <div class="user-suggestion-main">
+              <strong>{{ user.name || '-' }}</strong>
+              <span>{{ user.email || '-' }}</span>
+              <!-- 관리자 회원 관리 화면에서만 로그인 ID를 노출한다. -->
+              <small>{{ user.loginId || '-' }}</small>
+              <small>{{ [user.affiliate, user.department, user.team, user.position].filter(Boolean).join(' · ') || '-' }}</small>
+            </div>
+            <span class="badge navy">{{ roleLabel(user.role) }}</span>
+          </button>
+        </div>
+      </div>
       <div class="toolbar">
         <button
           v-for="option in statusFilterOptions"
@@ -687,6 +768,10 @@ function filterActiveOrSelected(items, selectedId, idField) {
 
 .directory-toolbar {
   margin-bottom: 0;
+}
+
+.directory-search-field {
+  flex: 1 1 320px;
 }
 
 .directory-table {
