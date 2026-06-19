@@ -2288,20 +2288,6 @@ function handleDataChannelMessage(payload, participant) {
       return
     }
 
-    if (event?.eventType === 'segment.final.delivered') {
-      console.info('[meetbowl] segment.final.delivered', {
-        meetingId: event.meetingId,
-        sessionId: event.sessionId,
-        segmentId: event.segmentId,
-        sequence: event.sequence,
-        startedAtMs: event.startedAtMs,
-        endedAtMs: event.endedAtMs,
-        deliveredAt: event.deliveredAt,
-        transports: event.transports,
-      })
-      return
-    }
-
     if (event?.eventType === 'chat.message.sent') {
       // DataChannel sender identity와 payload 값이 다를 수 있어 현재 room participant identity를 기준으로 자기 메시지를 판별한다.
       const senderIdentity = normalizeParticipantIdentity(
