@@ -158,6 +158,8 @@ tbody tr:hover { background: rgba(241,244,248,.55); }
 .login-card h2 { margin: 0; font-size: 28px; }
 .login-card p { margin: 0; color: var(--muted-foreground); }
 label { display: grid; gap: 7px; font-size: 13px; font-weight: 700; }
+.checkbox-field { display: inline-flex; align-items: center; gap: 8px; font-weight: 600; }
+.checkbox-field input { width: 16px; height: 16px; margin: 0; accent-color: var(--primary); flex: 0 0 auto; }
 input { width: 100%; height: 40px; border: 1px solid var(--border); border-radius: 8px; padding: 0 12px; background: white; outline: none; }
 input:focus { border-color: var(--primary); box-shadow: 0 0 0 3px rgba(243,115,33,.15); }
 .error-box { border: 1px solid #fecaca; border-radius: 8px; padding: 10px 12px; background: #fef2f2; color: var(--danger); font-size: 13px; }

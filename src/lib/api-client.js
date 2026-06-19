@@ -110,7 +110,9 @@ async function throwIfRequestFailed(response, options, payload = null) {
   if (response.ok && payload?.success !== false) return
 
   // 응답 형식이 달라도 401/403 및 공통 에러 메시지 처리는 기존 API client 규칙을 그대로 따른다.
-  const message = payload?.error?.message || `요청이 실패했습니다. (${response.status})`
+  const firstDetailReason = payload?.error?.details?.[0]?.reason
+  const message =
+    firstDetailReason || payload?.error?.message || `요청이 실패했습니다. (${response.status})`
   const error = new ApiError(message, response.status, payload?.error?.details || [])
 
   if (response.status === 401) {
