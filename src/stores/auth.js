@@ -1,11 +1,11 @@
 import { defineStore } from 'pinia'
-import { getJson, postJson } from '../lib/api-client'
+import { getJson, postJson } from '../lib/api-client.js'
 import {
   clearStoredAuthSession,
   normalizeUser,
   readStoredAuthSession,
   writeStoredAuthSession,
-} from '../lib/auth-session'
+} from '../lib/auth-session.js'
 
 function createState() {
   const session = readStoredAuthSession()
@@ -87,6 +87,11 @@ export const useAuthStore = defineStore('auth', {
         user: data.user,
       })
 
+      // 초기 비밀번호 변경 대상은 로그인 응답만으로도 강제 이동을 결정할 수 있다.
+      if (data.user?.initialPasswordChangeRequired) {
+        return this.user
+      }
+
       return this.fetchCurrentUser()
     },
     async fetchCurrentUser() {
@@ -126,6 +131,12 @@ export const useAuthStore = defineStore('auth', {
         initialPasswordChangeRequired: false,
       })
       this.persistSession()
+    },
+    async refreshSessionWithPassword(password) {
+      if (!this.user?.loginId) return null
+
+      // 비밀번호 변경 직후 새 비밀번호로 다시 로그인해 토큰 claim과 세션 사용자 정보를 함께 갱신한다.
+      return this.login(this.user.loginId, password)
     },
   },
 })

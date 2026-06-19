@@ -208,6 +208,7 @@ async function savePassword() {
   passwordSaving.value = true
 
   try {
+    // 최초 변경과 일반 변경 모두 BE의 MyPasswordChangeRequest 필드명에 맞춰 요청 body를 보낸다.
     await changeMyPassword({
       currentPassword,
       newPassword,
@@ -219,12 +220,13 @@ async function savePassword() {
       newPassword: '',
       newPasswordConfirm: '',
     }
+    await auth.refreshSessionWithPassword(newPassword)
     passwordMessage.value = '비밀번호가 변경되었습니다.'
     // 라우터 가드가 즉시 해제되어야 변경 직후 홈 화면 이동이 막히지 않는다.
     auth.clearInitialPasswordChangeRequired()
 
     if (props.forcePasswordChange) {
-      // 최초 변경 흐름에서는 저장 성공 후 권한별 기본 화면으로 즉시 복귀시킨다.
+      // 성공 후 갱신된 세션 기준으로 권한별 기본 화면으로 이동시킨다.
       await router.replace(auth.homePath)
     }
   } catch (error) {
