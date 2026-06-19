@@ -1,5 +1,26 @@
 <template>
-  <section v-if="inLobby" class="meeting-lobby">
+  <section v-if="meetingEndedScreenVisible" class="meeting-ended-page">
+    <div class="meeting-ended-card">
+      <span class="badge muted">회의 종료</span>
+      <h1>{{ meetingTitle }}</h1>
+      <p>{{ meetingEndedScreenMessage }}</p>
+      <div class="guest-link-actions">
+        <button class="secondary-button" type="button" @click="goToMeetingsPage">
+          회의 목록으로 이동
+        </button>
+        <button
+          v-if="auth.isAuthenticated"
+          class="primary-button"
+          type="button"
+          @click="goToMinutesPage"
+        >
+          회의록 화면으로 이동
+        </button>
+      </div>
+    </div>
+  </section>
+
+  <section v-else-if="inLobby" class="meeting-lobby">
     <header class="meeting-lobby-header">
       <RouterLink to="/app/meetings" class="brand meeting-lobby-brand">
         <span class="brand-mark">M</span>
@@ -9,7 +30,7 @@
         <button class="secondary-button small" type="button" @click="openGuestLinkDialog">
           공유
         </button>
-        <button class="meeting-lobby-close" type="button" @click="router.push('/app/meetings')">
+        <button class="meeting-lobby-close" type="button" @click="closeMeetingPage">
           대기실 나가기
         </button>
       </div>
@@ -221,6 +242,14 @@
           >
             크게 보기 종료
           </button>
+          <button
+            class="danger-button small"
+            type="button"
+            :disabled="meetingEndPending"
+            @click="openMeetingEndConfirm"
+          >
+            {{ meetingEndPending ? '처리 중' : meetingEndButtonLabel }}
+          </button>
         </div>
       </header>
 
@@ -376,7 +405,7 @@
         >
           {{ screenShareButtonLabel }}
         </button>
-        <button class="danger-button" :disabled="meetingEndPending" @click="endMeeting">
+        <button class="danger-button" :disabled="meetingEndPending" @click="openMeetingEndConfirm">
           {{ meetingEndPending ? '처리 중' : meetingEndButtonLabel }}
         </button>
       </footer>
@@ -723,6 +752,34 @@
       </footer>
     </section>
   </div>
+
+  <div v-if="meetingEndConfirmOpen" class="modal-backdrop" @click.self="closeMeetingEndConfirm">
+    <section class="write-modal meeting-end-modal" aria-label="회의 종료 확인">
+      <header>
+        <div>
+          <h2>{{ isCurrentUserHost ? '회의 종료 확인' : '회의 나가기 확인' }}</h2>
+          <p class="guest-link-note">
+            {{ meetingEndConfirmDescription }}
+          </p>
+        </div>
+        <button type="button" @click="closeMeetingEndConfirm">닫기</button>
+      </header>
+
+      <p class="meeting-end-warning">
+        {{ meetingEndConfirmWarning }}
+      </p>
+
+      <footer class="meeting-settings-footer">
+        <span class="guest-link-note">{{ meetingEndPending ? '요청을 처리하는 중입니다.' : '확인을 누르면 바로 진행됩니다.' }}</span>
+        <div class="guest-link-actions">
+          <button class="secondary-button" type="button" :disabled="meetingEndPending" @click="closeMeetingEndConfirm">취소</button>
+          <button class="danger-button" type="button" :disabled="meetingEndPending" @click="confirmMeetingEndAction">
+            {{ meetingEndPending ? '처리 중' : meetingEndButtonLabel }}
+          </button>
+        </div>
+      </footer>
+    </section>
+  </div>
 </template>
 
 <script setup>
@@ -731,7 +788,7 @@ import { Room, RoomEvent, Track, createLocalAudioTrack, createLocalVideoTrack } 
 import { useRoute, useRouter } from 'vue-router'
 import { postJson } from '../../lib/api-client'
 import { displayFinalizedCaptions, latestStreamingCaption, sortedCaptions, upsertCaption } from '../../lib/caption-store'
-import { guestMeetingRoute } from '../../lib/meeting-route'
+import { guestMeetingRoute, openMeetingWindow } from '../../lib/meeting-route'
 import { resolveLiveKitConnection } from '../../lib/livekit-meeting'
 import { useAuthStore } from '../../stores/auth'
 
@@ -796,6 +853,9 @@ const lastDataChannelEventType = ref('')
 const lastMicPublishError = ref('')
 const meetingEndPending = ref(false)
 const meetingEndHandled = ref(false)
+const meetingEndConfirmOpen = ref(false)
+const meetingEndedScreenVisible = ref(false)
+const meetingEndedScreenMessage = ref('해당 회의는 종료되었습니다.')
 const hostTransferDialogOpen = ref(false)
 const hostTransferTargetUserId = ref('')
 const hostTransferStatus = ref('')
@@ -837,6 +897,7 @@ const elapsedSeconds = ref(0)
 const LOCAL_SPEECH_MEASUREMENT_RMS_THRESHOLD = 0.01
 const LOCAL_SPEECH_MEASUREMENT_SILENCE_MS = 160
 const LOCAL_SPEECH_TO_CAPTION_MATCH_WINDOW_MS = 15000
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8080/api/v1'
 
 const meetingTitle = computed(() => {
   const titleFromRoute = typeof route.query.title === 'string' ? route.query.title.trim() : ''
@@ -849,6 +910,15 @@ const guestMeetingLink = computed(() => {
   if (typeof window === 'undefined') return path
   return new URL(path, window.location.origin).toString()
 })
+const isDedicatedMeetingWindow = computed(() => String(route.query.popup || '') === '1')
+const popupReturnPath = computed(() => {
+  const raw = String(route.query.returnTo || '').trim()
+  if (!raw.startsWith('/')) return '/app/meetings'
+  return raw
+})
+const shouldPromoteToDedicatedWindow = computed(() =>
+  route.path.startsWith('/app/meeting/') && !isDedicatedMeetingWindow.value,
+)
 const hasVideoTrack = computed(() => Boolean(previewStream.value?.getVideoTracks().length))
 const hasAudioTrack = computed(() => Boolean(previewStream.value?.getAudioTracks().length))
 const pendingParticipantName = computed(() => displayName.value.trim() || auth.user?.name || '')
@@ -1092,6 +1162,16 @@ const hostTransferCandidates = computed(() =>
 const meetingEndButtonLabel = computed(() =>
   isCurrentUserHost.value ? '회의 종료' : '회의 나가기',
 )
+const meetingEndConfirmDescription = computed(() =>
+  isCurrentUserHost.value
+    ? '관리자가 회의를 종료하면 현재 세션이 닫히고 다른 참석자도 함께 회의에서 나가게 됩니다.'
+    : '회의에서 나가면 현재 참가만 종료되고, 다른 참석자들의 회의는 계속 진행됩니다.',
+)
+const meetingEndConfirmWarning = computed(() =>
+  isCurrentUserHost.value
+    ? '이 작업은 현재 회의 전체를 종료합니다.'
+    : '이 작업은 본인만 회의에서 나가게 됩니다.',
+)
 
 function initialsFromName(name) {
   return (name || '참석자').trim().slice(0, 1) || '참'
@@ -1151,6 +1231,15 @@ function closeHostTransferDialog() {
   hostTransferStatus.value = ''
 }
 
+function openMeetingEndConfirm() {
+  if (meetingEndPending.value) return
+  meetingEndConfirmOpen.value = true
+}
+
+function closeMeetingEndConfirm() {
+  meetingEndConfirmOpen.value = false
+}
+
 async function copyGuestMeetingLink() {
   if (!guestMeetingLink.value) {
     guestLinkCopyStatus.value = '회의 링크를 만들 수 없습니다.'
@@ -1208,6 +1297,89 @@ function stopLocalSpeechLatencyMonitor() {
   localSpeechIsActive = false
   localSpeechLastDetectedAtMs = 0
   pendingSpeechDetectionQueue.length = 0
+}
+
+function buildApiUrl(path) {
+  const normalizedBaseUrl = API_BASE_URL.replace(/\/+$/, '')
+  const normalizedPath = path.startsWith('/') ? path : `/${path}`
+  return `${normalizedBaseUrl}${normalizedPath}`
+}
+
+function showMeetingEndedScreen(message = '해당 회의는 종료되었습니다.') {
+  meetingEndedScreenVisible.value = true
+  meetingEndedScreenMessage.value = message
+  inLobby.value = false
+  meetingConnectionStatus.value = '회의 종료됨'
+  meetingConnectionError.value = ''
+  meetingEndConfirmOpen.value = false
+}
+
+function goToMeetingsPage() {
+  fallbackNavigate('/app/meetings')
+}
+
+function goToMinutesPage() {
+  fallbackNavigate('/app/minutes')
+}
+
+function fallbackNavigate(path) {
+  router.push(path).catch(() => {})
+  window.setTimeout(() => {
+    if (window.location.pathname === path) return
+    window.location.replace(path)
+  }, 60)
+}
+
+function attemptCloseMeetingWindow(fallbackPath) {
+  // 명시적 종료/나가기 버튼은 사용자가 직접 눌렀으므로 창 닫기 허용 가능성이 가장 높다.
+  // 먼저 부모 창을 다시 보이게 하고, 닫기 실패 시에는 즉시 회의 목록/회의록으로 보낸다.
+  try {
+    window.opener?.focus?.()
+  } catch {
+    // no-op
+  }
+
+  try {
+    window.close()
+  } catch {
+    // no-op
+  }
+
+  window.setTimeout(() => {
+    if (window.closed) return
+
+    try {
+      window.opener = null
+      window.open('', '_self')
+      window.close()
+    } catch {
+      // no-op
+    }
+
+    window.setTimeout(() => {
+      if (!window.closed) {
+        fallbackNavigate(fallbackPath)
+      }
+    }, 80)
+  }, 80)
+}
+
+function closeMeetingPage() {
+  if (isDedicatedMeetingWindow.value) {
+    attemptCloseMeetingWindow(popupReturnPath.value)
+    return
+  }
+
+  fallbackNavigate('/app/meetings')
+}
+
+function navigateAfterMeetingExit() {
+  if (isDedicatedMeetingWindow.value) {
+    attemptCloseMeetingWindow(popupReturnPath.value)
+    return
+  }
+
+  fallbackNavigate(auth.isAuthenticated ? '/app/minutes' : '/login')
 }
 
 function prunePendingSpeechDetectionQueue(nowMs = Date.now()) {
@@ -1929,6 +2101,8 @@ function resetMeetingSessionState() {
   screenShareInactiveParticipantIds.value = new Set()
   meetingEndPending.value = false
   meetingEndHandled.value = false
+  meetingEndedScreenVisible.value = false
+  meetingEndedScreenMessage.value = '해당 회의는 종료되었습니다.'
   hostTransferDialogOpen.value = false
   hostTransferTargetUserId.value = ''
   hostTransferStatus.value = ''
@@ -2090,6 +2264,7 @@ async function enterMeeting() {
   if (connectingMeeting.value) return
   connectingMeeting.value = true
   meetingConnectionError.value = ''
+  meetingEndedScreenVisible.value = false
   inLobby.value = false
 
   try {
@@ -2097,9 +2272,13 @@ async function enterMeeting() {
     stopPreview()
   } catch (error) {
     await disconnectMeetingRoom().catch(() => {})
-    meetingConnectionStatus.value = '연결 실패'
-    meetingConnectionError.value = error?.message || '회의 연결에 실패했습니다.'
-    inLobby.value = true
+    if (error?.code === 'MEETING_ALREADY_ENDED') {
+      showMeetingEndedScreen(error?.message || '해당 회의는 종료되었습니다.')
+    } else {
+      meetingConnectionStatus.value = '연결 실패'
+      meetingConnectionError.value = error?.message || '회의 연결에 실패했습니다.'
+      inLobby.value = true
+    }
   } finally {
     connectingMeeting.value = false
   }
@@ -2333,10 +2512,9 @@ async function handleMeetingEndedEvent(event) {
   // 단순한 브라우저 창 닫기와는 의미가 다르므로, 여기서는 room disconnect보다 상위 개념으로 처리한다.
   // 종료 이벤트는 중복 수신될 수 있으므로 먼저 화면 상태를 정리하고, 그 다음 room을 떠난다.
   await disconnectMeetingRoom().catch(() => {})
-  if (event?.reason) {
-    meetingConnectionError.value = String(event.reason)
-  }
-  router.push(auth.isAuthenticated ? '/app/minutes' : '/login')
+  showMeetingEndedScreen(
+    String(event?.reason || '').trim() || '회의가 종료되었습니다.',
+  )
 }
 
 function pushChatMessage(message) {
@@ -2426,11 +2604,67 @@ async function disconnectMeetingRoom() {
   resetMeetingSessionState()
 }
 
+function disconnectMeetingRoomForUnload() {
+  const room = meetingRoom.value
+  meetingRoom.value = null
+  if (!room) {
+    resetMeetingSessionState()
+    return
+  }
+
+  // 페이지가 닫히는 시점에는 비동기 track 정리까지 기다리기 어렵다.
+  // 이 경로는 "최대한 빨리 room 연결을 끊는다"는 목적에 집중한다.
+  room.disconnect()
+  resetMeetingSessionState()
+}
+
+function notifyMeetingEndedDuringUnload(reason) {
+  if (!meetingRoom.value || meetingEndHandled.value) return
+
+  meetingEndHandled.value = true
+
+  // 창 닫기/새로고침 직전에는 일반 fetch보다 keepalive/sendBeacon이 더 성공 가능성이 높다.
+  // 호스트 이탈을 회의 종료로 취급하기 위해 종료 API를 best-effort로 먼저 보낸다.
+  const endUrl = buildApiUrl(`/meetings/${meetingId.value}/end`)
+  const endBody = JSON.stringify({})
+
+  try {
+    const beaconBody = new Blob([endBody], { type: 'application/json' })
+    const sent = navigator.sendBeacon?.(endUrl, beaconBody)
+    if (!sent) {
+      void fetch(endUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: endBody,
+        keepalive: true,
+      }).catch(() => {})
+    }
+  } catch {
+    void fetch(endUrl, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: endBody,
+      keepalive: true,
+    }).catch(() => {})
+  }
+
+  void publishMeetingEndedSignal(reason).catch(() => {})
+  disconnectMeetingRoomForUnload()
+}
+
 function handleBeforeUnload() {
-  // 탭 숨김이나 윈도우 포커스 이동만으로는 회의 이탈로 보지 않는다.
-  // 실제 브라우저 이탈 시점에만 연결 정리를 시도하기 위해 beforeunload만 사용한다.
-  // 브라우저 한계상 새로고침도 같은 훅을 타지만, 탭 전환/백그라운드 전환보다는 훨씬 좁은 조건이다.
-  void disconnectMeetingRoom()
+  if (!meetingRoom.value || meetingEndHandled.value) return
+
+  if (isCurrentUserHost.value) {
+    notifyMeetingEndedDuringUnload('host-unload')
+    return
+  }
+
+  disconnectMeetingRoomForUnload()
 }
 
 async function publishMeetingEndedSignal(reason) {
@@ -2457,16 +2691,29 @@ async function publishMeetingEndedSignal(reason) {
 
 async function leaveMeeting() {
   if (meetingEndPending.value) return
+  if (isCurrentUserHost.value) {
+    await endMeeting()
+    return
+  }
+
   meetingEndPending.value = true
   try {
     hostTransferDialogOpen.value = false
-    // "회의 나가기"는 내 참가만 종료한다.
-    // 호스트가 아닌 사용자는 회의를 끝내지 않고, 호스트라도 이 경로를 타면 meeting.ended를 보내지 않는다.
+    meetingEndConfirmOpen.value = false
+    // "회의 나가기"는 non-host에 한해 내 참가만 종료한다.
     await disconnectMeetingRoom()
-    router.push(auth.isAuthenticated ? '/app/minutes' : '/login')
+    navigateAfterMeetingExit()
   } finally {
     meetingEndPending.value = false
   }
+}
+
+async function confirmMeetingEndAction() {
+  if (isCurrentUserHost.value) {
+    await endMeeting()
+    return
+  }
+  await leaveMeeting()
 }
 
 async function endMeeting() {
@@ -2475,6 +2722,7 @@ async function endMeeting() {
 
   try {
     hostTransferDialogOpen.value = false
+    meetingEndConfirmOpen.value = false
     if (isCurrentUserHost.value) {
       // authoritative 종료 기준은 먼저 BE에 `회의 종료`를 기록하는 것이다.
       // DataChannel은 다른 참가자 화면을 빨리 정리하기 위한 보조 신호이고,
@@ -2486,7 +2734,7 @@ async function endMeeting() {
       })
     }
     await disconnectMeetingRoom()
-    router.push(auth.isAuthenticated ? '/app/minutes' : '/login')
+    showMeetingEndedScreen('회의가 종료되었습니다.')
   } catch (error) {
     meetingConnectionError.value = error?.message || '회의를 종료하지 못했습니다.'
   } finally {
@@ -2589,6 +2837,14 @@ watch(orderedCaptions, () => {
 })
 
 onMounted(() => {
+  if (shouldPromoteToDedicatedWindow.value) {
+    const opened = openMeetingWindow(meetingId.value)
+    if (opened) {
+      router.replace('/app/meetings')
+      return
+    }
+  }
+
   initializeDevices()
   navigator.mediaDevices?.addEventListener?.('devicechange', handleDeviceChange)
   window.addEventListener('beforeunload', handleBeforeUnload)

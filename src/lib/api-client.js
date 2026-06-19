@@ -17,7 +17,10 @@ export async function postJson(path, body) {
   const payload = await response.json().catch(() => null)
   if (!response.ok || !payload?.success) {
     const message = payload?.error?.message || `요청에 실패했습니다. (${response.status})`
-    throw new Error(message)
+    const error = new Error(message)
+    error.code = payload?.error?.code || null
+    error.status = response.status
+    throw error
   }
 
   return payload.data

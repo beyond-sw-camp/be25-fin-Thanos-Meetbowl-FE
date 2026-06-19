@@ -69,7 +69,7 @@ import ModalShell from '../../components/common/ModalShell.vue'
 import Pagination from '../../components/common/Pagination.vue'
 import RoomSchedulePanel from '../../components/rooms/RoomSchedulePanel.vue'
 import { members, myMeetings, rooms, todayReservations } from '../../data/mockData'
-import { meetingRoute } from '../../lib/meeting-route'
+import { openMeetingWindow } from '../../lib/meeting-route'
 import { fromDateTimeInput, meetingEnd, toDateTimeInput } from '../../utils/dateTime'
 
 const router = useRouter()
@@ -136,6 +136,6 @@ function saveMeeting() {
 
 function enterMeeting(meeting) {
   if (meeting.status === 'ended') router.push('/app/minutes')
-  else router.push(meetingRoute(meeting.id))
+  else openMeetingWindow(meeting.id)
 }
 </script>
