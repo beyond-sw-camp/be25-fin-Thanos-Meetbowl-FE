@@ -60,10 +60,12 @@
 import { computed, onMounted, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import Pagination from '../../components/common/Pagination.vue'
-import RoomSchedulePanel from '../../components/rooms/RoomSchedulePanel.vue'
-import { members, myMeetings, rooms, todayReservations } from '../../data/mockData'
+import ReservationModal from '../../components/rooms/ReservationModal.vue'
 import { openMeetingWindow } from '../../lib/meeting-route'
-import { fromDateTimeInput, meetingEnd, toDateTimeInput } from '../../utils/dateTime'
+import { getMeetings, getRooms } from '../../lib/reservations'
+import { useAuthStore } from '../../stores/auth'
+import { useUserNames } from '../../composables/useUserNames'
+import { utcToKstClock, utcToKstDate } from '../../utils/dateTime'
 
 const router = useRouter()
 const auth = useAuthStore()
@@ -210,6 +212,6 @@ function enterMeeting(meeting) {
   // 종료 회의: 회의록 보기. 회의록 팀의 meetingId 라우트 확정 전까지 기존 임시 연결 유지.
   // TODO(회의록 팀 라우트 확정 시): meetingId 전달해 해당 회의 회의록으로 이동.
   if (meeting.status === 'ended') router.push('/app/minutes')
-  else openMeetingWindow(meeting.id)
+  else openMeetingWindow(meeting.id, { scheduledAt: meeting.scheduledAtMs })
 }
 </script>

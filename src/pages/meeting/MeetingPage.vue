@@ -911,6 +911,7 @@ const guestMeetingLink = computed(() => {
   return new URL(path, window.location.origin).toString()
 })
 const isDedicatedMeetingWindow = computed(() => String(route.query.popup || '') === '1')
+const popupSessionId = computed(() => String(route.query.popupSession || '').trim())
 const popupReturnPath = computed(() => {
   const raw = String(route.query.returnTo || '').trim()
   if (!raw.startsWith('/')) return '/app/meetings'
@@ -2274,6 +2275,11 @@ async function enterMeeting() {
     await disconnectMeetingRoom().catch(() => {})
     if (error?.code === 'MEETING_ALREADY_ENDED') {
       showMeetingEndedScreen(error?.message || '해당 회의는 종료되었습니다.')
+    } else if (error?.code === 'MEETING_JOIN_TOO_EARLY') {
+      meetingConnectionStatus.value = '입장 대기'
+      meetingConnectionError.value = error?.message || '회의 시작 15분 전부터 입장할 수 있습니다.'
+      inLobby.value = true
+      window.alert(meetingConnectionError.value)
     } else {
       meetingConnectionStatus.value = '연결 실패'
       meetingConnectionError.value = error?.message || '회의 연결에 실패했습니다.'
@@ -2835,6 +2841,17 @@ watch(orderedCaptions, () => {
     }
   })
 })
+
+watch([meetingId, popupSessionId], () => {
+  if (!isDedicatedMeetingWindow.value) return
+  // 같은 meeting popup 창을 재사용할 때는 이전 room 상태가 남을 수 있으므로
+  // pop-up 진입 토큰이 바뀌면 로비 상태로 다시 정리한다.
+  if (meetingRoom.value) return
+  meetingEndedScreenVisible.value = false
+  meetingConnectionStatus.value = '연결 대기'
+  meetingConnectionError.value = ''
+  inLobby.value = true
+}, { immediate: true })
 
 onMounted(() => {
   if (shouldPromoteToDedicatedWindow.value) {

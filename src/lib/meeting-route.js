@@ -1,6 +1,7 @@
 import { myMeetings } from '../data/mockData'
 
 const defaultMeetingId = myMeetings.find((meeting) => meeting.status === 'live')?.id || myMeetings[0]?.id || ''
+const MEETING_EARLY_JOIN_WINDOW_MINUTES = 15
 
 /**
  * mock 화면 여러 곳에서 회의 입장 링크를 일관되게 만들기 위한 helper다.
@@ -20,6 +21,22 @@ export function guestMeetingRoute(meetingId) {
   return meetingId ? `/guest/meeting/${meetingId}` : '/join'
 }
 
+function parseScheduledAt(value) {
+  if (!value) return null
+  const date = value instanceof Date ? value : new Date(value)
+  const timestamp = date.getTime()
+  return Number.isNaN(timestamp) ? null : timestamp
+}
+
+export function getMeetingJoinBlockedMessage(scheduledAt) {
+  const scheduledAtMs = parseScheduledAt(scheduledAt)
+  if (!scheduledAtMs) return ''
+
+  const earliestJoinAtMs = scheduledAtMs - (MEETING_EARLY_JOIN_WINDOW_MINUTES * 60 * 1000)
+  if (Date.now() >= earliestJoinAtMs) return ''
+  return `회의 시작 ${MEETING_EARLY_JOIN_WINDOW_MINUTES}분 전부터 입장할 수 있습니다.`
+}
+
 function meetingWindowName(meetingId) {
   return `meetbowl-meeting-${meetingId || 'live'}`
 }
@@ -29,16 +46,27 @@ function buildAbsoluteUrl(path) {
   return new URL(path, window.location.origin).toString()
 }
 
-export function openMeetingWindow(meetingId = defaultMeetingId) {
+export function openMeetingWindow(meetingId = defaultMeetingId, options = {}) {
   const path = meetingRoute(meetingId)
   if (!path || typeof window === 'undefined') return false
+
+  const blockedMessage = getMeetingJoinBlockedMessage(options.scheduledAt)
+  if (blockedMessage) {
+    window.alert(blockedMessage)
+    return false
+  }
 
   const currentPath = `${window.location.pathname}${window.location.search}`
   const width = Math.min(window.screen?.availWidth || 1440, 1440)
   const height = Math.min(window.screen?.availHeight || 960, 960)
   const left = Math.max(0, Math.floor(((window.screen?.availWidth || width) - width) / 2))
   const top = Math.max(0, Math.floor(((window.screen?.availHeight || height) - height) / 2))
-  const popupPath = `${path}${path.includes('?') ? '&' : '?'}popup=1&returnTo=${encodeURIComponent(currentPath)}`
+  const popupQuery = new URLSearchParams({
+    popup: '1',
+    returnTo: currentPath,
+    popupSession: `${Date.now()}`,
+  })
+  const popupPath = `${path}?${popupQuery.toString()}`
   const features = [
     'popup=yes',
     `width=${width}`,

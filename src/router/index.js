@@ -32,8 +32,6 @@ const routes = [
   { path: '/login', component: LoginPage, meta: { public: true } },
   { path: '/join/:code', component: JoinPage, meta: { public: true } },
   { path: '/guest/meeting/:meetingId', component: MeetingPage, meta: { public: true } },
-  { path: '/app/meeting', redirect: meetingRoute(), meta: { role: 'user' } },
-  { path: '/app/meeting/:meetingId', component: MeetingPage, meta: { role: 'user' } },
   { path: '/app/meeting', redirect: meetingRoute(), meta: { role: 'USER' } },
   { path: '/app/meeting/:meetingId', component: MeetingPage, meta: { role: 'USER' } },
   {
