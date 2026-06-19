@@ -203,7 +203,7 @@
           <button
             class="primary-button meeting-enter-button"
             type="button"
-            :disabled="loadingDevices || !displayName.trim()"
+            :disabled="loadingDevices"
             @click="enterMeeting"
           >
             회의 입장
@@ -280,10 +280,6 @@ const audioTestMessage = computed(() => {
 })
 
 function joinLobby() {
-  if (!displayName.value.trim()) {
-    nameError.value = '회의에서 사용할 이름을 입력해 주세요.'
-    return
-  }
   step.value = 'lobby'
 }
 

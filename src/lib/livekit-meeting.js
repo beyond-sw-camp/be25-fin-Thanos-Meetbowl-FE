@@ -12,11 +12,7 @@ export async function resolveLiveKitConnection({ meetingId, participantIdentity,
     throw new Error('회의 ID가 없어 접속 정보를 발급받을 수 없습니다.')
   }
 
-  const stored = readStoredConnection()
-  if (stored.meetingId === meetingId && stored.token && stored.url) {
-    return stored
-  }
-
+  // 회의 재입장 때도 BE join을 다시 호출해야 STT 세션 자동 시작과 최신 토큰 발급이 보장된다.
   const connection = await postJson(`/meetings/${meetingId}/join`, {
     displayName,
     participantIdentity,
@@ -27,18 +23,11 @@ export async function resolveLiveKitConnection({ meetingId, participantIdentity,
     roomName: connection.roomName,
     url: connection.livekitUrl,
     token: connection.token,
+    hostUserId: connection.hostUserId,
     participantIdentity: connection.participantIdentity,
     participantName: connection.participantName,
   }
 
   sessionStorage.setItem(CONNECTION_STORAGE_KEY, JSON.stringify(resolved))
   return resolved
-}
-
-function readStoredConnection() {
-  try {
-    return JSON.parse(sessionStorage.getItem(CONNECTION_STORAGE_KEY) || '{}')
-  } catch {
-    return {}
-  }
 }
