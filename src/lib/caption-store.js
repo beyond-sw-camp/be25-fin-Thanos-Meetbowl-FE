@@ -94,6 +94,47 @@ export function sortedCaptions(captionMap) {
 }
 
 /**
+ * [화면 표시용 확정 자막]
+ * FINALIZED만 추려서 인접한 중복/포함 관계를 한 번 더 제거합니다.
+ * STT 쪽에서 같은 의미의 finalized가 다른 segmentId로 한 번 더 생기더라도
+ * 화면에서는 같은 문장이 연달아 보이지 않도록 마지막 방어선을 둡니다.
+ * @param {Map} captionMap 자막 상태 맵
+ * @returns {Array} 화면에 고정해서 보여줄 finalized 자막 배열
+ */
+export function displayFinalizedCaptions(captionMap) {
+  const finalized = sortedCaptions(captionMap).filter((caption) => caption.status === 'FINALIZED')
+  const collapsed = []
+
+  for (const caption of finalized) {
+    const previous = collapsed[collapsed.length - 1]
+    if (!previous) {
+      collapsed.push(caption)
+      continue
+    }
+
+    if (isNearDuplicateCaption(previous, caption)) {
+      collapsed[collapsed.length - 1] = choosePreferredCaption(previous, caption)
+      continue
+    }
+
+    collapsed.push(caption)
+  }
+
+  return collapsed
+}
+
+/**
+ * [현재 말하는 중 preview]
+ * STREAMING은 목록에 여러 개 쌓지 않고 가장 최근 1개만 별도 미리보기로 씁니다.
+ * @param {Map} captionMap 자막 상태 맵
+ * @returns {Object|null} 가장 최근 streaming 자막
+ */
+export function latestStreamingCaption(captionMap) {
+  const streaming = sortedCaptions(captionMap).filter((caption) => caption.status === 'STREAMING')
+  return streaming.at(-1) ?? null
+}
+
+/**
  * [최적 텍스트 선택]
  * 엔진에서 제공하는 여러 텍스트 후보군 중 화면에 표시할 가장 적합한 텍스트를 폴백(Fallback) 패턴으로 찾습니다.
  * @param {Object} payload 수신된 자막 이벤트
@@ -120,4 +161,42 @@ function finiteNumber(value) {
 /** 지원하는 언어 코드로의 정규화 (지원하지 않는 언어는 unknown으로 처리) */
 function normalizeLanguage(value) {
   return value === 'ko' || value === 'en' ? value : 'unknown'
+}
+
+function isNearDuplicateCaption(previous, current) {
+  const previousText = normalizeCaptionText(previous.text)
+  const currentText = normalizeCaptionText(current.text)
+
+  if (!previousText || !currentText) return false
+  if (previousText === currentText) return true
+  if (previousText.includes(currentText) || currentText.includes(previousText)) return true
+
+  const overlapLength = prefixSuffixOverlapLength(previousText, currentText)
+  const shorterLength = Math.min(previousText.length, currentText.length)
+  return shorterLength >= 8 && overlapLength >= Math.floor(shorterLength * 0.7)
+}
+
+function choosePreferredCaption(previous, current) {
+  const previousText = normalizeCaptionText(previous.text)
+  const currentText = normalizeCaptionText(current.text)
+
+  if (currentText.length > previousText.length) return current
+  return previous
+}
+
+function normalizeCaptionText(text) {
+  return String(text || '')
+    .replace(/[.,!?~'"`()[\]{}:;_-]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+}
+
+function prefixSuffixOverlapLength(previousText, currentText) {
+  const maxCandidate = Math.min(previousText.length, currentText.length)
+  for (let length = maxCandidate; length >= 4; length -= 1) {
+    if (previousText.slice(-length) === currentText.slice(0, length)) {
+      return length
+    }
+  }
+  return 0
 }

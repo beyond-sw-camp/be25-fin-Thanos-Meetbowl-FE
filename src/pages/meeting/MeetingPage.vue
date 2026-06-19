@@ -466,23 +466,26 @@
 <!--          </dl>-->
 <!--        </div>-->
 
-        <p v-if="sttStatusHint" class="meeting-caption-hint">
-          {{ sttStatusHint }}
-        </p>
+<!--        <p v-if="sttStatusHint" class="meeting-caption-hint">-->
+<!--          {{ sttStatusHint }}-->
+<!--        </p>-->
+
+
+
         <div
           ref="captionLog"
           class="meeting-caption-scroll"
           @scroll="handleCaptionScroll"
         >
           <p
-            v-for="caption in orderedCaptions"
+            v-for="caption in finalizedCaptions"
             :key="caption.segmentId"
             class="transcript"
-            :class="{ streaming: caption.status === 'STREAMING', finalized: caption.status === 'FINALIZED' }"
+            :class="{ finalized: caption.status === 'FINALIZED' }"
           >
             <small>
               {{ formatCaptionTime(caption.startedAtMs) }}
-              · {{ caption.status === 'FINALIZED' ? '확정' : '말하는 중' }}
+              · 확정
             </small>
             <small class="transcript-debug">
               seq {{ caption.sequence ?? '-' }}
@@ -491,7 +494,22 @@
             </small>
             {{ caption.text }}
           </p>
-          <p v-if="!orderedCaptions.length" class="meeting-caption-empty">
+          <p
+            v-if="streamingCaptionPreview"
+            class="transcript transcript-preview"
+          >
+            <small>
+              {{ formatCaptionTime(streamingCaptionPreview.startedAtMs) }}
+              · 말하는 중
+            </small>
+            <small class="transcript-debug">
+              seq {{ streamingCaptionPreview.sequence ?? '-' }}
+              · {{ streamingCaptionPreview.segmentId.slice(0, 8) }}
+              · {{ streamingCaptionPreview.language }}
+            </small>
+            {{ streamingCaptionPreview.text }}
+          </p>
+          <p v-if="!finalizedCaptions.length && !streamingCaptionPreview" class="meeting-caption-empty">
             {{ sttEmptyStateMessage }}
           </p>
         </div>
@@ -712,7 +730,7 @@ import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { Room, RoomEvent, Track, createLocalAudioTrack, createLocalVideoTrack } from 'livekit-client'
 import { useRoute, useRouter } from 'vue-router'
 import { postJson } from '../../lib/api-client'
-import { sortedCaptions, upsertCaption } from '../../lib/caption-store'
+import { displayFinalizedCaptions, latestStreamingCaption, sortedCaptions, upsertCaption } from '../../lib/caption-store'
 import { guestMeetingRoute } from '../../lib/meeting-route'
 import { resolveLiveKitConnection } from '../../lib/livekit-meeting'
 import { useAuthStore } from '../../stores/auth'
@@ -841,6 +859,8 @@ const currentParticipantName = computed(() => {
 const currentParticipantInitial = computed(() => initialsFromName(currentParticipantName.value))
 const currentUserId = computed(() => String(auth.user?.id || '').trim())
 const orderedCaptions = computed(() => sortedCaptions(captionMap.value))
+const finalizedCaptions = computed(() => displayFinalizedCaptions(captionMap.value))
+const streamingCaptionPreview = computed(() => latestStreamingCaption(captionMap.value))
 const supportsSpeakerSelection = computed(() =>
   typeof HTMLMediaElement !== 'undefined' && 'setSinkId' in HTMLMediaElement.prototype,
 )
@@ -983,7 +1003,7 @@ const elapsedTimeLabel = computed(() => {
 const sttEmptyStateMessage = computed(() => {
   if (meetingConnectionError.value) return meetingConnectionError.value
   if (!meetingRoom.value) return '회의 연결이 완료되면 원문 자막이 여기에 표시됩니다.'
-  if (orderedCaptions.value.length > 0) return ''
+  if (finalizedCaptions.value.length > 0 || streamingCaptionPreview.value) return ''
   if (!mic.value) return '마이크가 꺼져 있어서 자막이 생성되지 않습니다.'
   if (lastCaptionReceivedAt.value) {
     return `마지막 자막 수신: ${formatCaptionReceivedTime(lastCaptionReceivedAt.value)}`
@@ -992,7 +1012,7 @@ const sttEmptyStateMessage = computed(() => {
 })
 const sttStatusHint = computed(() => {
   if (!meetingRoom.value) return ''
-  if (orderedCaptions.value.length > 0) {
+  if (finalizedCaptions.value.length > 0 || streamingCaptionPreview.value) {
     return lastCaptionText.value ? `마지막 수신 문장: ${lastCaptionText.value}` : ''
   }
   if (!mic.value) return '마이크가 꺼져 있으면 STT가 문장을 만들 수 없습니다.'
@@ -1018,8 +1038,11 @@ const localMicPublicationStatus = computed(() => {
     : '발행 이벤트 수신됨'
 })
 const captionReceptionStatus = computed(() => {
-  if (orderedCaptions.value.length > 0) {
-    return `${orderedCaptions.value.length}개 수신`
+  if (finalizedCaptions.value.length > 0) {
+    return `${finalizedCaptions.value.length}개 확정`
+  }
+  if (streamingCaptionPreview.value) {
+    return '말하는 중 자막 수신'
   }
   if (!meetingRoom.value) return '회의 연결 전'
   return '아직 자막 수신 없음'
@@ -2265,6 +2288,20 @@ function handleDataChannelMessage(payload, participant) {
       return
     }
 
+    if (event?.eventType === 'segment.final.delivered') {
+      console.info('[meetbowl] segment.final.delivered', {
+        meetingId: event.meetingId,
+        sessionId: event.sessionId,
+        segmentId: event.segmentId,
+        sequence: event.sequence,
+        startedAtMs: event.startedAtMs,
+        endedAtMs: event.endedAtMs,
+        deliveredAt: event.deliveredAt,
+        transports: event.transports,
+      })
+      return
+    }
+
     if (event?.eventType === 'chat.message.sent') {
       // DataChannel sender identity와 payload 값이 다를 수 있어 현재 room participant identity를 기준으로 자기 메시지를 판별한다.
       const senderIdentity = normalizeParticipantIdentity(
@@ -2401,6 +2438,13 @@ async function disconnectMeetingRoom() {
   await room.localParticipant.setCameraEnabled(false).catch(() => {})
   room.disconnect()
   resetMeetingSessionState()
+}
+
+function handleBeforeUnload() {
+  // 탭 숨김이나 윈도우 포커스 이동만으로는 회의 이탈로 보지 않는다.
+  // 실제 브라우저 이탈 시점에만 연결 정리를 시도하기 위해 beforeunload만 사용한다.
+  // 브라우저 한계상 새로고침도 같은 훅을 타지만, 탭 전환/백그라운드 전환보다는 훨씬 좁은 조건이다.
+  void disconnectMeetingRoom()
 }
 
 async function publishMeetingEndedSignal(reason) {
@@ -2561,10 +2605,12 @@ watch(orderedCaptions, () => {
 onMounted(() => {
   initializeDevices()
   navigator.mediaDevices?.addEventListener?.('devicechange', handleDeviceChange)
+  window.addEventListener('beforeunload', handleBeforeUnload)
 })
 
 onBeforeUnmount(() => {
   navigator.mediaDevices?.removeEventListener?.('devicechange', handleDeviceChange)
+  window.removeEventListener('beforeunload', handleBeforeUnload)
   clearInterval(elapsedTimer)
   stopPreview()
   void disconnectMeetingRoom()
