@@ -71,16 +71,6 @@
       </div>
     </template>
 
-    <ModalShell v-if="detail" modal-class="detail-modal" @close="detail = null">
-      <header><div><h2>{{ detail.title }}</h2><p>{{ detail.start }}-{{ detail.end }} · {{ roomName(detail.roomId) }}</p></div><button @click="detail = null">닫기</button></header>
-      <dl class="detail-list">
-        <div><dt>예약자</dt><dd>{{ detail.owner }}</dd></div>
-        <div><dt>상태</dt><dd>{{ statusLabel[detail.status] }}</dd></div>
-        <div><dt>참석자</dt><dd>{{ detail.attendees.join(', ') || '-' }}</dd></div>
-        <div><dt>검토자</dt><dd>{{ detail.reviewer || '-' }}</dd></div>
-      </dl>
-      <p v-if="detail.content">{{ detail.content }}</p>
-      <div class="modal-actions"><button v-if="detail.status === 'mine'" class="danger-button" @click="cancelReservation(detail.id)">예약 취소</button><button class="primary-button" @click="enterMeetingWindow">회의 입장</button></div>
     <ReservationModal
       v-if="modal"
       :rooms="rooms"
@@ -128,11 +118,6 @@
 import { computed, onMounted, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import ModalShell from '../../components/common/ModalShell.vue'
-import MemberPicker from '../../components/common/MemberPicker.vue'
-import RoomSchedulePanel from '../../components/rooms/RoomSchedulePanel.vue'
-import { members, rooms, todayReservations } from '../../data/mockData'
-import { openMeetingWindow } from '../../lib/meeting-route'
-import { addMinutes, minutesToTime, overlaps, timeToMinutes } from '../../utils/dateTime'
 import RoomTimelineRow from '../../components/rooms/RoomTimelineRow.vue'
 import ReservationModal from '../../components/rooms/ReservationModal.vue'
 import { useAuthStore } from '../../stores/auth'
@@ -339,14 +324,6 @@ function closeDetail() {
   actionError.value = ''
 }
 
-function enterMeetingWindow() {
-  openMeetingWindow()
-}
-
-function reservationStyle(item) {
-  const left = ((timeToMinutes(item.start) - 360) / 60) * roomHourPx
-  const width = ((timeToMinutes(item.end) - timeToMinutes(item.start)) / 60) * roomHourPx
-  return { left: `${left}px`, width: `${Math.max(width, 36)}px` }
 async function cancelReservation(meetingId) {
   if (saving.value) return
   if (!window.confirm('이 예약을 취소하시겠습니까?')) return

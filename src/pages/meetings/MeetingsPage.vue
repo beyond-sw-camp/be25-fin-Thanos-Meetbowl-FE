@@ -60,10 +60,12 @@
 import { computed, onMounted, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import Pagination from '../../components/common/Pagination.vue'
-import RoomSchedulePanel from '../../components/rooms/RoomSchedulePanel.vue'
-import { members, myMeetings, rooms, todayReservations } from '../../data/mockData'
+import ReservationModal from '../../components/rooms/ReservationModal.vue'
 import { openMeetingWindow } from '../../lib/meeting-route'
-import { fromDateTimeInput, meetingEnd, toDateTimeInput } from '../../utils/dateTime'
+import { getMeetings, getRooms } from '../../lib/reservations'
+import { useAuthStore } from '../../stores/auth'
+import { useUserNames } from '../../composables/useUserNames'
+import { utcToKstClock, utcToKstDate } from '../../utils/dateTime'
 
 const router = useRouter()
 const auth = useAuthStore()
