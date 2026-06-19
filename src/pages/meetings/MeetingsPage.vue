@@ -212,6 +212,6 @@ function enterMeeting(meeting) {
   // 종료 회의: 회의록 보기. 회의록 팀의 meetingId 라우트 확정 전까지 기존 임시 연결 유지.
   // TODO(회의록 팀 라우트 확정 시): meetingId 전달해 해당 회의 회의록으로 이동.
   if (meeting.status === 'ended') router.push('/app/minutes')
-  else openMeetingWindow(meeting.id)
+  else openMeetingWindow(meeting.id, { scheduledAt: meeting.scheduledAtMs })
 }
 </script>
