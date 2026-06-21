@@ -18,7 +18,7 @@
 
     <div class="card meeting-list-card">
       <p v-if="loadError" class="warning-text">{{ loadError }}</p>
-      <article v-for="meeting in paged" :key="meeting.id" class="meeting-row">
+      <article v-for="meeting in paged" :key="meeting.id" class="meeting-row meeting-row-clickable" @click="openMeetingDetail(meeting)">
         <div class="meeting-row-main">
           <div class="meeting-title-row">
             <h2>{{ meeting.title }}</h2>
@@ -33,8 +33,8 @@
           </div>
         </div>
         <div class="row-actions">
-          <button v-if="meeting.role === 'host' && meeting.status !== 'ended'" class="secondary-button small" @click="openEdit(meeting)">수정</button>
-          <button class="primary-button small" @click="enterMeeting(meeting)">{{ meeting.status === 'ended' ? '내 회의록 보기' : '입장' }}</button>
+          <button v-if="meeting.role === 'host' && meeting.status !== 'ended'" class="secondary-button small" @click.stop="openEdit(meeting)">수정</button>
+          <button class="primary-button small" @click.stop="enterMeeting(meeting)">{{ meeting.status === 'ended' ? '내 회의록 보기' : '입장' }}</button>
         </div>
       </article>
       <p v-if="!paged.length && !loading" class="empty-text">조건에 맞는 회의가 없습니다.</p>
@@ -53,6 +53,38 @@
       @close="modal = false"
       @saved="onSaved"
     />
+
+    <ModalShell v-if="detailMeeting" modal-class="detail-modal" @close="closeMeetingDetail">
+      <header>
+        <div class="meeting-title-row">
+          <h2>{{ detailMeeting.title }}</h2>
+          <span :class="['badge', detailMeeting.status === 'live' ? 'danger' : detailMeeting.status === 'ended' ? 'muted' : 'primary']">{{ statusLabel[detailMeeting.status] }}</span>
+          <span :class="['badge', detailMeeting.role === 'host' ? 'success' : 'navy']">{{ detailMeeting.role === 'host' ? '주최자' : '참석자' }}</span>
+        </div>
+        <button class="modal-close" type="button" aria-label="닫기" @click="closeMeetingDetail">×</button>
+      </header>
+      <div class="detail-body">
+        <dl class="detail-list">
+          <div><dt>일시</dt><dd>{{ detailMeeting.startLabel }} - {{ detailMeeting.endLabel }}</dd></div>
+          <div><dt>회의실</dt><dd>{{ detailMeeting.room }}</dd></div>
+          <div><dt>주최자</dt><dd>{{ detailHostName }}</dd></div>
+          <div>
+            <dt>참석자</dt>
+            <dd v-if="detailFull && detailAttendeeNames.length" class="detail-chip-group">
+              <span v-for="(name, index) in detailAttendeeNames" :key="index" class="detail-chip">{{ name }}</span>
+            </dd>
+            <dd v-else>-</dd>
+          </div>
+          <div><dt>검토자</dt><dd>{{ detailMeeting.reviewer || '-' }}</dd></div>
+          <div v-if="detailFull && detailFull.description"><dt>회의 내용</dt><dd>{{ detailFull.description }}</dd></div>
+        </dl>
+        <p v-if="detailError" class="detail-note">{{ detailError }}</p>
+      </div>
+      <div class="modal-actions">
+        <button v-if="detailMeeting.role === 'host' && detailMeeting.status !== 'ended'" class="secondary-button" type="button" @click="editFromDetail">수정</button>
+        <button class="primary-button" type="button" @click="enterFromDetail">{{ detailMeeting.status === 'ended' ? '내 회의록 보기' : '입장' }}</button>
+      </div>
+    </ModalShell>
   </section>
 </template>
 
@@ -60,9 +92,10 @@
 import { computed, onMounted, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import Pagination from '../../components/common/Pagination.vue'
+import ModalShell from '../../components/common/ModalShell.vue'
 import ReservationModal from '../../components/rooms/ReservationModal.vue'
 import { openMeetingWindow } from '../../lib/meeting-route'
-import { getMeetings, getRooms } from '../../lib/reservations'
+import { getMeeting, getMeetings, getRooms } from '../../lib/reservations'
 import { useAuthStore } from '../../stores/auth'
 import { useUserNames } from '../../composables/useUserNames'
 import { utcToKstClock, utcToKstDate } from '../../utils/dateTime'
@@ -91,6 +124,16 @@ const modal = ref(false)
 const modalMode = ref('create')
 const editingMeeting = ref(null)
 
+// 회의 상세 모달: 목록 행 클릭 시 GET /meetings/{id}로 전체 정보(참석자 전원·내용)를 받아 표시한다.
+const detailMeeting = ref(null) // 클릭한 목록 항목(라벨/상태/역할 등 표시값 포함)
+const detailFull = ref(null) // getMeeting 응답(attendees 전원·description)
+const detailError = ref('')
+
+const detailHostName = computed(() => nameMap[detailFull.value?.hostUserId] || '-')
+const detailAttendeeNames = computed(() =>
+  (detailFull.value?.attendees || []).map((attendee) => nameMap[attendee.userId] || '이름 미확인'),
+)
+
 // 프론트 탭키 attendee → 백엔드 role 파라미터 invited 로 매핑.
 const roleParam = computed(() => (tab.value === 'attendee' ? 'invited' : tab.value))
 
@@ -110,9 +153,9 @@ const mapped = computed(() =>
     .map((meeting) => {
       const role = meeting.hostUserId === myUserId.value ? 'host' : 'attendee'
       const status = meeting.status === 'IN_PROGRESS' ? 'live' : meeting.status === 'ENDED' ? 'ended' : 'upcoming'
-      // 참석자 = 주최자(HOST) 제외 전원, 검토자 = reviewer 플래그가 붙은 1명을 별도 표기.
-      // 검토자는 신분(role)과 무관한 플래그라 주최자가 검토자일 수도 있다(그 경우 검토자 이름이 주최자가 됨).
-      const participants = (meeting.attendees || []).filter((attendee) => attendee.role !== 'HOST')
+      // 참석자 = 선택한 전원(주최자 본인 포함). 주최자는 HOST 1행으로 저장되므로 그대로 노출한다.
+      // 검토자는 신분(role)과 무관한 reviewer 플래그로 식별한다(주최자가 검토자일 수도 있음).
+      const participants = meeting.attendees || []
       const reviewer = (meeting.attendees || []).find((attendee) => attendee.reviewer)
       return {
         id: meeting.meetingId,
@@ -214,4 +257,46 @@ function enterMeeting(meeting) {
   if (meeting.status === 'ended') router.push('/app/minutes')
   else openMeetingWindow(meeting.id, { scheduledAt: meeting.scheduledAtMs })
 }
+
+async function openMeetingDetail(meeting) {
+  detailMeeting.value = meeting
+  detailFull.value = null
+  detailError.value = ''
+  try {
+    const full = await getMeeting(meeting.meetingId)
+    detailFull.value = full
+    resolveNames([full.hostUserId, ...(full.attendees || []).map((attendee) => attendee.userId)])
+  } catch (error) {
+    detailError.value = error?.message || '회의 상세를 불러오지 못했습니다.'
+  }
+}
+
+function closeMeetingDetail() {
+  detailMeeting.value = null
+  detailFull.value = null
+  detailError.value = ''
+}
+
+// 상세 모달에서 '수정'/'입장' — 모달을 닫고 기존 흐름을 재사용한다.
+function editFromDetail() {
+  const meeting = detailMeeting.value
+  closeMeetingDetail()
+  openEdit(meeting)
+}
+
+function enterFromDetail() {
+  const meeting = detailMeeting.value
+  closeMeetingDetail()
+  enterMeeting(meeting)
+}
 </script>
+
+<style scoped>
+/* 목록 행 전체를 클릭하면 상세 모달이 열린다(액션 버튼은 @click.stop). */
+.meeting-row-clickable {
+  cursor: pointer;
+}
+.meeting-row-clickable:hover {
+  background: var(--muted);
+}
+</style>
