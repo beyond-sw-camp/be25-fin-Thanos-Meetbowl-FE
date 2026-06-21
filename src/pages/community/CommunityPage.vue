@@ -21,12 +21,11 @@ import { Eye, Heart, MessageSquare } from '@lucide/vue'
 export default defineComponent({
   components: { Eye, Heart, MessageSquare },
   setup() {
-    // '전체'는 카테고리가 아니라 필터 미적용. 나머지는 백엔드 enum 라벨과 동일.
-    const categories = ['전체', ...COMMUNITY_CATEGORIES.map((item) => item.label)]
+    // '전체'는 필터 미적용, 'Hot'은 카테고리가 아니라 hot=true(좋아요 N개 이상) 모드. 나머지는 백엔드 enum 라벨.
+    const categories = ['전체', ...COMMUNITY_CATEGORIES.map((item) => item.label), 'Hot']
 
     const posts = ref([])
     const hotPosts = ref([])
-    const tab = ref('latest') // latest(최신순) | hot(인기순) — API sort: latest | popular
     const category = ref('전체')
     const keyword = ref('')
     const loading = ref(false)
@@ -42,9 +41,6 @@ export default defineComponent({
     const editingPost = ref(false) // 상세에서 인라인 수정 중 여부
     const postDraft = ref({ title: '', content: '', category: '자유' }) // 인라인 수정 입력값
 
-    // 인기 점수(목록의 '인기' 뱃지용). 백엔드 CommunityHotScore와 동일 가중치.
-    const score = (post) => post.viewCount * 0.1 + post.likeCount * 2 + post.commentCount * 3
-
     function formatDateTime(instant) {
       if (!instant) return ''
       return `${utcToKstDate(instant)} ${utcToKstClock(instant)}`
@@ -54,11 +50,13 @@ export default defineComponent({
       loading.value = true
       loadError.value = ''
       try {
-        const sort = tab.value === 'hot' ? 'popular' : 'latest'
+        // 'Hot' 탭은 카테고리 필터로 관리되는 게 아니라 hot=true(좋아요 N개 이상) 모드. category 필터는 비운다.
+        const isHot = category.value === 'Hot'
         const data = await listPosts({
-          category: category.value === '전체' ? '' : category.value,
+          category: category.value === '전체' || isHot ? '' : category.value,
           keyword: keyword.value.trim(),
-          sort,
+          sort: 'latest', // 항상 최신순(createdAt DESC). Hot 모드도 백엔드가 최신순 고정.
+          hot: isHot,
           page: 1,
           size: 50,
         })
@@ -79,9 +77,9 @@ export default defineComponent({
       }
     }
 
-    // 탭(정렬)·카테고리 변경은 즉시 재조회. 검색은 버튼/Enter로 명시 실행하되,
+    // 카테고리 변경은 즉시 재조회. 검색은 버튼/Enter로 명시 실행하되,
     // 검색어를 비우면 자동으로 전체 목록으로 복귀한다(loadPosts가 page:1로 조회).
-    watch([tab, category], loadPosts)
+    watch(category, loadPosts)
     watch(keyword, (value) => {
       if (!value.trim()) loadPosts()
     })
@@ -266,7 +264,6 @@ export default defineComponent({
       categories,
       posts,
       hotPosts,
-      tab,
       category,
       keyword,
       loading,
@@ -281,7 +278,6 @@ export default defineComponent({
       postDraft,
       filteredPosts: posts,
       openPost,
-      score,
       formatDateTime,
       loadPosts,
       openPostDetail,
@@ -330,10 +326,6 @@ export default defineComponent({
       </article>
 
       <div class="community-controls">
-        <div class="segmented">
-          <button type="button" :class="{ active: tab === 'latest' }" @click="tab = 'latest'">최신순</button>
-          <button type="button" :class="{ active: tab === 'hot' }" @click="tab = 'hot'">인기순</button>
-        </div>
         <div class="category-row">
           <button v-for="item in categories" :key="item" type="button" class="chip" :class="{ active: category === item }" @click="category = item">{{ item }}</button>
         </div>
@@ -355,7 +347,6 @@ export default defineComponent({
               <div class="community-row-top">
                 <span class="badge">{{ post.categoryLabel }}</span>
                 <span v-if="post.mine" class="community-mine-tag">내 글</span>
-                <span v-if="score(post) > 200" class="hot-dot">인기</span>
               </div>
               <strong>{{ post.title }}</strong>
               <p>{{ post.content }}</p>
@@ -378,7 +369,7 @@ export default defineComponent({
             <button type="button" @click="writing = false">닫기</button>
           </header>
           <select v-model="draft.category">
-            <option v-for="item in categories.filter((item) => item !== '전체')" :key="item">{{ item }}</option>
+            <option v-for="item in categories.filter((item) => item !== '전체' && item !== 'Hot')" :key="item">{{ item }}</option>
           </select>
           <input v-model="draft.title" placeholder="제목">
           <textarea v-model="draft.content" rows="8" placeholder="내용을 입력하세요. 작성자는 익명으로 표시됩니다."></textarea>
@@ -420,7 +411,7 @@ export default defineComponent({
 
         <form v-else class="community-edit-form" @submit.prevent="savePostEdit">
           <select v-model="postDraft.category">
-            <option v-for="item in categories.filter((item) => item !== '전체')" :key="item">{{ item }}</option>
+            <option v-for="item in categories.filter((item) => item !== '전체' && item !== 'Hot')" :key="item">{{ item }}</option>
           </select>
           <input v-model="postDraft.title" placeholder="제목">
           <textarea v-model="postDraft.content" rows="8" placeholder="내용을 입력하세요. 작성자는 익명으로 표시됩니다."></textarea>

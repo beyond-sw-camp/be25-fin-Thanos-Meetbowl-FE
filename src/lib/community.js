@@ -1,4 +1,4 @@
-import { deleteJson, getJson, patchJson, postJson } from './api-client'
+import { deleteJson, getJson, patchJson, postJson } from './api-client.js'
 
 // 익명 커뮤니티(게시판) API. 모든 엔드포인트는 로그인(User) 필수이며 /api/v1/community/posts 하위다.
 // 응답은 api-client가 ApiResponse 엔벨로프를 풀어 data만 반환한다.
@@ -24,12 +24,13 @@ export const COMMUNITY_CATEGORIES = [
 ]
 
 // 게시글 목록. sort: latest(최신순) | popular(인기순), category 미지정 시 전체, keyword는 제목+내용 부분일치.
+// hot=true면 "Hot 게시글"(좋아요 N개 이상)만 — category/keyword는 함께 적용되나 정렬은 백엔드가 최신순 고정(sort 무시).
 // 응답: { items, page, size, totalElements, totalPages } (items는 mine/liked 포함)
-export function listPosts({ category, keyword, sort = 'latest', page = 1, size = 20 } = {}) {
-  return getJson(`/community/posts${query({ category, keyword, sort, page, size })}`)
+export function listPosts({ category, keyword, sort = 'latest', hot = false, page = 1, size = 20 } = {}) {
+  return getJson(`/community/posts${query({ category, keyword, sort, hot: hot || undefined, page, size })}`)
 }
 
-// Hot 게시글. 최근 48시간 내 인기 점수 상위 3개(목록 상단 노출용). 응답: PostListItemResponse[]
+// Hot 게시글. 최근 24시간 내 인기 점수 상위 4개(캐러셀 상단 노출용). 응답: PostListItemResponse[]
 export function getHotPosts() {
   return getJson('/community/posts/hot')
 }
