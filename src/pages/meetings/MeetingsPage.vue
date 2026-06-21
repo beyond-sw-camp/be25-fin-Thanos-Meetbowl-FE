@@ -110,10 +110,10 @@ const mapped = computed(() =>
     .map((meeting) => {
       const role = meeting.hostUserId === myUserId.value ? 'host' : 'attendee'
       const status = meeting.status === 'IN_PROGRESS' ? 'live' : meeting.status === 'ENDED' ? 'ended' : 'upcoming'
-      // 참석자 = 주최자(HOST) 제외 전원(PARTICIPANT + REVIEWER), 검토자 = REVIEWER 1명을 별도 표기.
-      // 검토자도 참석 대상이므로 참석자 목록에 포함한다(검토자만 초대된 회의도 참석자가 보이도록).
+      // 참석자 = 주최자(HOST) 제외 전원, 검토자 = reviewer 플래그가 붙은 1명을 별도 표기.
+      // 검토자는 신분(role)과 무관한 플래그라 주최자가 검토자일 수도 있다(그 경우 검토자 이름이 주최자가 됨).
       const participants = (meeting.attendees || []).filter((attendee) => attendee.role !== 'HOST')
-      const reviewer = (meeting.attendees || []).find((attendee) => attendee.role === 'REVIEWER')
+      const reviewer = (meeting.attendees || []).find((attendee) => attendee.reviewer)
       return {
         id: meeting.meetingId,
         meetingId: meeting.meetingId,
