@@ -602,36 +602,36 @@ input:focus { border-color: var(--primary); box-shadow: 0 0 0 3px rgba(243,115,3
 .workspace-event-form-body label { display: grid; gap: 6px; color: var(--muted-foreground); font-size: 12px; font-weight: 800; }
 .workspace-event-form-body input, .workspace-event-form-body textarea { width: 100%; border: 1px solid var(--border); border-radius: 8px; background: white; padding: 10px 12px; color: var(--foreground); font: inherit; }
 .workspace-event-form-body textarea { resize: vertical; line-height: 1.6; }
-.shared-page { max-width: 1500px; padding-bottom: 90px; }
+.shared-page { max-width: 1500px; padding-bottom: 90px; font-size: 14px; }
 .shared-header { display: flex; justify-content: space-between; gap: 18px; align-items: start; }
 .shared-header-actions { display: flex; flex-wrap: wrap; gap: 8px; }
 .shared-header-actions button:disabled { opacity: .45; cursor: not-allowed; }
 .shared-layout { display: grid; gap: 18px; }
 .shared-projects { align-self: start; padding: 16px; }
-.shared-section-title { display: inline-flex; align-items: center; gap: 6px; margin-bottom: 10px; color: var(--muted-foreground); font-size: 11px; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; }
+.shared-section-title { display: inline-flex; align-items: center; gap: 6px; margin-bottom: 10px; color: var(--foreground); font-size: 13px; font-weight: 700; letter-spacing: 0; }
 .shared-project-row { width: 100%; min-height: 43px; display: flex; align-items: center; justify-content: space-between; gap: 10px; border: 0; border-radius: 8px; background: white; padding: 7px 10px; text-align: left; color: var(--foreground); }
 .shared-project-row:hover { background: rgba(241,244,248,.8); }
 .shared-project-row.active { background: var(--primary); color: white; }
 .shared-project-row span { min-width: 0; }
 .shared-project-row strong, .shared-project-row small { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.shared-project-row strong { font-size: 13px; }
-.shared-project-row small { margin-top: 2px; color: var(--muted-foreground); font-size: 11px; }
+.shared-project-row strong { font-size: 14px; font-weight: 700; letter-spacing: 0; }
+.shared-project-row small { margin-top: 2px; color: var(--muted-foreground); font-size: 12px; }
 .shared-project-row.active small { color: rgba(255,255,255,.72); }
-.shared-project-row em { color: var(--muted-foreground); font-style: normal; font-size: 12px; }
+.shared-project-row em { color: var(--muted-foreground); font-style: normal; font-size: 12px; font-weight: 700; }
 .shared-project-row.active em { color: rgba(255,255,255,.8); }
 .shared-main { min-width: 0; }
 .shared-toolbar { display: flex; justify-content: space-between; align-items: center; gap: 12px; margin-bottom: 14px; }
-.shared-toolbar small { color: var(--muted-foreground); }
+.shared-toolbar small { color: var(--muted-foreground); font-size: 13px; }
 .shared-search { width: min(380px, 100%); position: relative; display: flex; align-items: center; gap: 0; font-size: 0; }
 .shared-search span { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
 .shared-search svg { position: absolute; left: 11px; color: var(--muted-foreground); pointer-events: none; }
-.shared-search input { width: 100%; height: 38px; border: 1px solid var(--border); border-radius: 8px; background: white; padding: 0 12px 0 34px; outline: none; }
+.shared-search input { width: 100%; height: 38px; border: 1px solid var(--border); border-radius: 8px; background: white; padding: 0 12px 0 34px; outline: none; font-size: 13px; }
 .shared-search input:focus { border-color: rgba(243,115,33,.5); box-shadow: 0 0 0 3px rgba(243,115,33,.12); }
 .shared-table-card table tr { cursor: pointer; }
 .shared-doc-cell { display: flex; align-items: center; gap: 11px; min-width: 0; }
 .shared-doc-cell div { display: grid; gap: 4px; min-width: 0; }
-.shared-doc-cell strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.shared-doc-cell small { color: var(--muted-foreground); }
+.shared-doc-cell strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13px; font-weight: 700; letter-spacing: 0; }
+.shared-doc-cell small { color: var(--muted-foreground); font-size: 12px; }
 .shared-doc-icon { min-width: 34px; width: 34px; height: 34px; display: inline-grid; place-items: center; border-radius: 8px; font-size: 11px; font-weight: 800; }
 .shared-type-doc { background: #fff3ea; color: var(--primary-dark); }
 .shared-type-sheet { background: #ecfdf5; color: #047857; }
@@ -643,16 +643,17 @@ input:focus { border-color: var(--primary); box-shadow: 0 0 0 3px rgba(243,115,3
 .shared-drawer { position: absolute; right: 0; top: 0; bottom: 0; width: min(680px, 100%); display: grid; grid-template-rows: auto 1fr; background: white; border-left: 1px solid var(--border); box-shadow: -20px 0 50px rgba(15,23,42,.22); }
 .shared-drawer header { display: flex; align-items: center; gap: 12px; min-height: 64px; border-bottom: 1px solid var(--border); padding: 12px 18px; }
 .shared-drawer header div { flex: 1; min-width: 0; display: grid; gap: 4px; }
-.shared-drawer header strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.shared-drawer header small { color: var(--muted-foreground); }
+.shared-drawer header strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 14px; font-weight: 700; letter-spacing: 0; }
+.shared-drawer header small { color: var(--muted-foreground); font-size: 12px; }
 .drawer-close { border: 0; border-radius: 8px; background: transparent; color: var(--muted-foreground); padding: 8px; }
 .drawer-close:hover { background: var(--muted); color: var(--foreground); }
 .shared-drawer section { overflow: auto; padding: 18px; }
-.shared-drawer section h2 { margin: 0 0 14px; font-size: 15px; }
+.shared-drawer section h2 { margin: 0 0 14px; font-size: 15px; font-weight: 700; letter-spacing: 0; }
 .version-card { border: 1px solid var(--border); border-radius: 8px; background: white; padding: 13px; margin-bottom: 9px; cursor: pointer; }
 .version-card:hover, .version-card.active { border-color: rgba(243,115,33,.45); background: #fff7ed; }
 .version-card div { display: flex; align-items: center; gap: 9px; }
-.version-card div small { margin-left: auto; color: var(--muted-foreground); }
+.version-card strong { font-size: 13px; font-weight: 700; letter-spacing: 0; }
+.version-card div small { margin-left: auto; color: var(--muted-foreground); font-size: 12px; }
 .version-card p { margin: 8px 0 0; color: var(--muted-foreground); font-size: 12px; }
 .shared-version-preview { margin-top: 16px; border: 1px solid var(--border); border-radius: 10px; background: #f8fafc; padding: 14px; }
 .shared-version-preview pre { max-height: 260px; overflow: auto; white-space: pre-wrap; margin: 12px 0 0; color: var(--foreground); font: inherit; font-size: 12.5px; line-height: 1.65; }
@@ -665,10 +666,10 @@ input:focus { border-color: var(--primary); box-shadow: 0 0 0 3px rgba(243,115,3
 .participant-results button { display: grid; gap: 3px; border: 0; border-radius: 8px; background: white; padding: 8px; text-align: left; }
 .participant-results button:hover, .participant-results button.selected { background: var(--muted); }
 .participant-results span, .participant-results small { color: var(--muted-foreground); }
-.upload-mode-grid { display: grid; grid-template-columns: repeat(2, minmax(0,1fr)); gap: 8px; }
-.upload-mode-grid button { display: grid; gap: 4px; border: 1px solid var(--border); border-radius: 8px; background: white; padding: 10px; text-align: left; }
-.upload-mode-grid button.active { border-color: var(--primary); background: #fff7ed; box-shadow: 0 0 0 1px var(--primary); }
-.upload-mode-grid span { color: var(--muted-foreground); font-size: 12px; }
+.shared-create-modal { width: min(560px, calc(100vw - 32px)); }
+.shared-selected-members { min-height: 34px; align-items: center; border: 1px solid var(--border); border-radius: 8px; background: #f8fafc; padding: 8px; }
+.shared-selected-members > small { color: var(--muted-foreground); font-size: 12px; }
+.shared-upload-note { margin: 0; color: var(--muted-foreground); font-size: 13px; line-height: 1.5; }
 .write-modal select { width: 100%; height: 40px; border: 1px solid var(--border); border-radius: 8px; background: white; padding: 0 12px; }
 .write-modal label small { margin-top: 5px; color: var(--muted-foreground); font-weight: 400; }
 .shared-upload-zone { width: 100%; display: grid; gap: 7px; place-items: center; border: 2px dashed var(--border); border-radius: 10px; background: #f8fafc; padding: 30px; color: var(--foreground); }
@@ -1057,7 +1058,6 @@ input:focus { border-color: var(--primary); box-shadow: 0 0 0 3px rgba(243,115,3
   .workspace-event-form-grid { grid-template-columns: 1fr; }
   .workspace-colleague-card { left: 0; right: auto; top: 100%; }
   .shared-header, .shared-toolbar, .shared-header-actions, .version-card div { flex-direction: column; align-items: stretch; }
-  .upload-mode-grid { grid-template-columns: 1fr; }
   .settings-form-grid { grid-template-columns: 1fr; }
   .meeting-stage-layout, .meeting-stage-layout-focus, .meeting-stage-layout-screen-share { grid-template-columns: 1fr; }
   .meeting-filmstrip { grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); overflow-x: auto; overflow-y: visible; }
