@@ -164,9 +164,32 @@
     <div v-if="uploadOpen" class="modal-backdrop" @click="uploadOpen = false">
       <form class="write-modal" @submit.prevent="submitUpload" @click.stop>
         <header><h2>파일 업로드</h2><button type="button" @click="uploadOpen = false">닫기</button></header>
-        <p class="shared-upload-note">선택한 공유 프로젝트에 새 파일로 등록합니다.</p>
-        <input ref="uploadInput" type="file" @change="uploadDraft.file = $event.target.files?.[0] || null">
-        <footer><button type="button" class="ghost-button" @click="uploadOpen = false">취소</button><button type="submit" class="primary-button small" :disabled="!uploadDraft.file">업로드</button></footer>
+        <p class="shared-upload-note">선택한 공유 프로젝트에 새 파일로 등록합니다. 여러 개를 한 번에 올릴 수 있습니다.</p>
+        <button
+          type="button"
+          class="shared-upload-zone"
+          @click="uploadInput?.click()"
+          @dragover.prevent
+          @drop.prevent="addUploadFiles($event.dataTransfer?.files)"
+        >
+          <Upload :size="22" />
+          <strong>파일을 끌어다 놓거나 클릭해 선택</strong>
+          <span>여러 파일 동시 업로드 지원</span>
+        </button>
+        <input ref="uploadInput" class="hidden-file-input" type="file" multiple @change="addUploadFiles($event.target.files)">
+        <ul v-if="uploadDraft.files.length" class="shared-upload-list">
+          <li v-for="(file, index) in uploadDraft.files" :key="file.name + index">
+            <span>{{ file.name }}</span>
+            <small>{{ formatSize(file.size) }}</small>
+            <button type="button" @click="removeUploadFile(index)" aria-label="제거">×</button>
+          </li>
+        </ul>
+        <footer>
+          <button type="button" class="ghost-button" @click="uploadOpen = false">취소</button>
+          <button type="submit" class="primary-button small" :disabled="!uploadDraft.files.length || uploadLoading">
+            {{ uploadLoading ? '업로드 중...' : `업로드 (${uploadDraft.files.length})` }}
+          </button>
+        </footer>
       </form>
     </div>
 
@@ -275,8 +298,9 @@ const createOpen = ref(false)
 const uploadOpen = ref(false)
 const inviteOpen = ref(false)
 const uploadInput = ref(null)
+const uploadLoading = ref(false)
 const spaceDraft = ref({ name: '' })
-const uploadDraft = ref({ file: null })
+const uploadDraft = ref({ files: [] })
 const createMemberKeyword = ref('')
 const createMemberCandidates = ref([])
 const createSelectedMembers = ref([])
@@ -438,10 +462,20 @@ async function createSpace() {
 }
 
 function openUpload() {
-  uploadDraft.value = {
-    file: null,
-  }
+  uploadDraft.value = { files: [] }
   uploadOpen.value = true
+}
+
+// 드롭/선택 파일을 누적한다(여러 번 나눠 골라도 합쳐지도록).
+function addUploadFiles(fileList) {
+  const selected = Array.from(fileList || [])
+  if (!selected.length) return
+  uploadDraft.value.files = [...uploadDraft.value.files, ...selected]
+  if (uploadInput.value) uploadInput.value.value = ''
+}
+
+function removeUploadFile(index) {
+  uploadDraft.value.files = uploadDraft.value.files.filter((_, i) => i !== index)
 }
 
 function openMemberManage() {
@@ -454,8 +488,21 @@ function openMemberManage() {
 }
 
 async function submitUpload() {
-  if (!activeSpaceId.value || !uploadDraft.value.file) return
-  await uploadSharedWorkspaceFile(activeSpaceId.value, uploadDraft.value.file)
+  if (!activeSpaceId.value || !uploadDraft.value.files.length || uploadLoading.value) return
+  uploadLoading.value = true
+  const targetFiles = [...uploadDraft.value.files]
+  try {
+    // BE는 단일 파일 엔드포인트라, 선택한 파일을 순차로 각각 업로드한다.
+    for (const file of targetFiles) {
+      await uploadSharedWorkspaceFile(activeSpaceId.value, file)
+    }
+  } catch (error) {
+    // 실패를 조용히 삼키지 않고 사용자에게 알린다(모달은 유지해 재시도 가능).
+    showToast('파일 업로드 실패', error?.message || '업로드 중 문제가 발생했습니다.')
+    return
+  } finally {
+    uploadLoading.value = false
+  }
   uploadOpen.value = false
   filesBySpace.value.delete(activeSpaceId.value)
   await selectSpace(activeSpaceId.value)
@@ -463,7 +510,7 @@ async function submitUpload() {
     const refreshed = files.value.find((file) => file.fileId === openDoc.value.fileId)
     if (refreshed) await openFile(refreshed)
   }
-  showToast('파일 업로드 완료', '공유 파일을 업로드했습니다.')
+  showToast('파일 업로드 완료', `공유 파일 ${targetFiles.length}개를 업로드했습니다.`)
 }
 
 function toggleFileActionMenu(fileId) {

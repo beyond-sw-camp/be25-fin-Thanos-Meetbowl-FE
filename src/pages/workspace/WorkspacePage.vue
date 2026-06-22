@@ -147,12 +147,18 @@
     <article v-else class="card workspace-panel">
       <div class="workspace-panel-head">
         <h2>개인 드라이브</h2>
-        <button type="button" @click="driveInput?.click()"><Upload :size="14" /> 업로드</button>
+        <button type="button" :disabled="driveUploading" @click="driveInput?.click()"><Upload :size="14" /> {{ driveUploading ? '업로드 중...' : '업로드' }}</button>
       </div>
-      <input ref="driveInput" class="hidden-file-input" type="file" @change="uploadPersonalFile">
-      <button type="button" class="workspace-upload-zone" @click="driveInput?.click()">
-        <strong>파일을 선택해 업로드</strong>
-        <span>원본은 Object Storage에 저장되고 DB에는 메타데이터만 저장됩니다.</span>
+      <input ref="driveInput" class="hidden-file-input" type="file" multiple @change="uploadPersonalFiles($event.target.files)">
+      <button
+        type="button"
+        class="workspace-upload-zone"
+        @click="driveInput?.click()"
+        @dragover.prevent
+        @drop.prevent="uploadPersonalFiles($event.dataTransfer?.files)"
+      >
+        <strong>파일을 끌어다 놓거나 클릭해 업로드</strong>
+        <span>여러 파일 동시 업로드 지원 · 원본은 Object Storage, DB에는 메타데이터만 저장됩니다.</span>
       </button>
       <div class="table-card">
         <table>
@@ -325,6 +331,7 @@ const backups = ref([])
 const backupKeyword = ref('')
 const driveFiles = ref([])
 const driveInput = ref(null)
+const driveUploading = ref(false)
 const driveActionFileId = ref('')
 const drivePreviewOpen = ref(false)
 const drivePreviewFile = ref(null)
@@ -567,11 +574,19 @@ function removeFavoriteMinute(minuteId) {
   minuteFavorites.value = toggleMinuteFavorite(minuteId)
 }
 
-async function uploadPersonalFile(event) {
-  const file = event.target.files?.[0]
-  if (!file) return
-  await uploadDriveFile(file)
-  event.target.value = ''
+async function uploadPersonalFiles(fileList) {
+  const files = Array.from(fileList || [])
+  if (!files.length || driveUploading.value) return
+  driveUploading.value = true
+  try {
+    // 업로드 API는 단일 파일이라 선택/드롭한 파일을 순차로 각각 올린다.
+    for (const file of files) {
+      await uploadDriveFile(file)
+    }
+  } finally {
+    driveUploading.value = false
+    if (driveInput.value) driveInput.value.value = ''
+  }
   await loadDriveFiles()
 }
 
