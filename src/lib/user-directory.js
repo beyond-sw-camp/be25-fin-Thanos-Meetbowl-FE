@@ -17,7 +17,7 @@ export function searchUsers(params = {}) {
   if (params.positionId) searchParams.set('positionId', params.positionId)
 
   const status = `${params.status || ''}`.trim().toUpperCase()
-  if (status) searchParams.set('status', status)
+  if (status && status !== 'ALL') searchParams.set('status', status)
 
   if (Number(params.page) > 0) searchParams.set('page', String(params.page))
   if (Number(params.size) > 0) searchParams.set('size', String(params.size))
