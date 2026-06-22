@@ -2,7 +2,7 @@ import assert from 'node:assert/strict'
 import test from 'node:test'
 
 import { writeStoredAuthSession } from '../src/lib/auth-session.js'
-import { getAllAdminUsers, resetAdminUserPassword } from '../src/lib/admin-users.js'
+import { deleteAdminUser, getAllAdminUsers, resetAdminUserPassword } from '../src/lib/admin-users.js'
 
 function createStorage() {
   const values = new Map()
@@ -124,4 +124,44 @@ test('resetAdminUserPassword calls the admin password reset endpoint', async () 
     },
   ])
   assert.equal(result.temporaryPassword, '1234')
+})
+
+test('deleteAdminUser calls the admin user delete endpoint', async () => {
+  globalThis.localStorage = createStorage()
+
+  writeStoredAuthSession({
+    accessToken: 'admin-user-token',
+    user: { role: 'ADMIN', name: 'Admin', loginId: 'admin' },
+  })
+
+  const requests = []
+
+  globalThis.fetch = async (url, options) => {
+    requests.push({
+      url,
+      method: options?.method,
+      auth: options?.headers?.Authorization,
+    })
+
+    return {
+      ok: true,
+      async json() {
+        return {
+          success: true,
+          data: null,
+        }
+      },
+    }
+  }
+
+  const result = await deleteAdminUser('user-123')
+
+  assert.deepEqual(requests, [
+    {
+      url: '/api/v1/admin/users/user-123',
+      method: 'DELETE',
+      auth: 'Bearer admin-user-token',
+    },
+  ])
+  assert.equal(result, null)
 })

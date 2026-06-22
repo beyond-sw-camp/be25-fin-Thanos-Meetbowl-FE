@@ -1,4 +1,4 @@
-import { getBlob, getJson, patchJson, postForm, postJson } from './api-client.js'
+import { deleteJson, getBlob, getJson, patchJson, postForm, postJson } from './api-client.js'
 
 const adminRequestOptions = {
   // 조직 관리 화면은 자체적으로 권한 오류 메시지를 렌더링하므로 전역 403 핸들러는 건너뛴다.
@@ -45,6 +45,10 @@ export function updateAdminDepartmentStatus(departmentId, status) {
   )
 }
 
+export function deleteDepartment(departmentId) {
+  return deleteJson(`/admin/organizations/departments/${departmentId}`, adminRequestOptions)
+}
+
 export function getAdminTeams() {
   return getJson('/admin/organizations/teams', adminRequestOptions)
 }
@@ -59,6 +63,10 @@ export function updateAdminTeam(teamId, payload) {
 
 export function updateAdminTeamStatus(teamId, status) {
   return patchJson(`/admin/organizations/teams/${teamId}/status`, { status }, adminRequestOptions)
+}
+
+export function deleteTeam(teamId) {
+  return deleteJson(`/admin/organizations/teams/${teamId}`, adminRequestOptions)
 }
 
 export function getAdminPositions() {
@@ -79,6 +87,10 @@ export function updateAdminPositionStatus(positionId, status) {
     { status },
     adminRequestOptions,
   )
+}
+
+export function deletePosition(positionId) {
+  return deleteJson(`/admin/organizations/positions/${positionId}`, adminRequestOptions)
 }
 
 export async function downloadOrganizationMembersExcel() {

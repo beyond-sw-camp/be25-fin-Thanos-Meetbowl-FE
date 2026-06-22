@@ -1,4 +1,4 @@
-import { getJson, patchJson, postJson } from './api-client.js'
+import { deleteJson, getJson, patchJson, postJson } from './api-client.js'
 
 const adminRequestOptions = {
   skipForbiddenHandler: true,
@@ -73,6 +73,10 @@ export function updateAdminUser(userId, payload) {
 
 export function updateAdminUserStatus(userId, status) {
   return patchJson(`/admin/users/${userId}/status`, { status }, adminRequestOptions)
+}
+
+export function deleteAdminUser(userId) {
+  return deleteJson(`/admin/users/${userId}`, adminRequestOptions)
 }
 
 export function resetAdminUserPassword(userId) {

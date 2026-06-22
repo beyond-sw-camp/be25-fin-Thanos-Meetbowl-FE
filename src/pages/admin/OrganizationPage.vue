@@ -2,8 +2,11 @@
 import { computed, onMounted, ref, watch } from 'vue'
 import {
   createAdminDepartment,
+  deleteDepartment,
   createAdminPosition,
+  deletePosition,
   createAdminTeam,
+  deleteTeam,
   downloadOrganizationMembersExcel,
   getAdminAffiliates,
   getAdminDepartments,
@@ -39,6 +42,7 @@ const TAB_OPTIONS = [
 const activeTab = ref('organization')
 const loading = ref(true)
 const saving = ref(false)
+const deleteLoading = ref(false)
 const forbidden = ref(false)
 const errorMessage = ref('')
 const actionError = ref('')
@@ -48,6 +52,7 @@ const excelValidationErrors = ref([])
 const showAllExcelErrors = ref(false)
 const modalOpen = ref(false)
 const importConfirmOpen = ref(false)
+const deleteConfirmOpen = ref(false)
 const editingItem = ref(null)
 const userSummaryOpen = ref(false)
 const userSummaryLoading = ref(false)
@@ -275,10 +280,12 @@ function switchTab(tabKey) {
   actionError.value = ''
   successMessage.value = ''
   modalOpen.value = false
+  deleteConfirmOpen.value = false
 }
 
 function openCreateModal() {
   editingItem.value = null
+  deleteConfirmOpen.value = false
   actionError.value = ''
   successMessage.value = ''
   form.value = createEmptyForm()
@@ -293,6 +300,7 @@ function openCreateModal() {
 
 function openEditModal(item) {
   editingItem.value = item
+  deleteConfirmOpen.value = false
   actionError.value = ''
   successMessage.value = ''
 
@@ -337,7 +345,55 @@ function openEditModal(item) {
 
 function closeModal() {
   modalOpen.value = false
+  deleteConfirmOpen.value = false
   saving.value = false
+}
+
+function openDeleteConfirm() {
+  if (!editingItem.value || deleteLoading.value) return
+  deleteConfirmOpen.value = true
+}
+
+function closeDeleteConfirm() {
+  if (deleteLoading.value) return
+  deleteConfirmOpen.value = false
+}
+
+async function confirmDeleteItem() {
+  if (!editingItem.value || deleteLoading.value) return
+
+  deleteLoading.value = true
+  actionError.value = ''
+  successMessage.value = ''
+
+  try {
+    // 삭제 확인 모달은 탭별 안내 문구만 바꾸고, 실제 삭제 호출/로딩/성공 처리는 공통 흐름으로 묶는다.
+    if (activeTab.value === 'organization' || activeTab.value === 'department') {
+      await deleteDepartment(editingItem.value.departmentId)
+    } else if (activeTab.value === 'team') {
+      await deleteTeam(editingItem.value.teamId)
+    } else {
+      await deletePosition(editingItem.value.positionId)
+    }
+
+    deleteConfirmOpen.value = false
+    closeModal()
+    successMessage.value = deleteTargetLabel() + '가 삭제되었습니다.'
+    // 삭제 성공 후에는 현재 탭뿐 아니라 조직/팀/직급 요약과 사용자 수까지 함께 맞춰야 하므로 전체 데이터를 다시 불러온다.
+    await reloadAllData()
+  } catch (error) {
+    if (error?.status === 403) {
+      forbidden.value = true
+      deleteConfirmOpen.value = false
+      closeModal()
+      return
+    }
+
+    // 삭제 실패 시에는 BE message/details를 화면에 그대로 이어 붙여 운영자가 막힌 조건을 바로 확인할 수 있게 한다.
+    actionError.value = formatActionError(error, deleteTargetLabel() + ' 삭제에 실패했습니다.')
+  } finally {
+    deleteLoading.value = false
+  }
 }
 
 async function saveItem() {
@@ -593,6 +649,39 @@ function actionLabel() {
   if (activeTab.value === 'organization' || activeTab.value === 'department') return '부서'
   if (activeTab.value === 'team') return '팀'
   return '직급'
+}
+
+function deleteTargetLabel() {
+  return actionLabel()
+}
+
+function deleteConfirmDescription() {
+  if (activeTab.value === 'organization' || activeTab.value === 'department') {
+    return '하위 팀이나 소속 회원이 있는 부서는 삭제할 수 없습니다.'
+  }
+
+  if (activeTab.value === 'team') {
+    return '소속 회원이 있는 팀은 삭제할 수 없습니다.'
+  }
+
+  return '해당 직급을 사용하는 회원이 있으면 삭제할 수 없습니다.'
+}
+
+function formatActionError(error, fallbackMessage) {
+  const messages = []
+  const baseMessage = (error?.message || fallbackMessage).trim()
+  if (baseMessage) messages.push(baseMessage)
+
+  if (Array.isArray(error?.details)) {
+    for (const detail of error.details) {
+      const reason = (detail?.reason || '').trim()
+      if (reason && !messages.includes(reason)) {
+        messages.push(reason)
+      }
+    }
+  }
+
+  return messages.join('\n') || fallbackMessage
 }
 
 function createButtonLabel() {
@@ -1155,13 +1244,44 @@ const remainingExcelValidationErrorCount = computed(() =>
 
             <div class="modal-actions">
               <button type="button" class="secondary-button" @click="closeModal">취소</button>
-              <button class="primary-button" :disabled="saving">
+              <button
+                v-if="editingItem"
+                type="button"
+                class="danger-button"
+                :disabled="saving || deleteLoading"
+                @click="openDeleteConfirm"
+              >
+                {{ deleteLoading ? '삭제 중...' : deleteTargetLabel() + ' 삭제' }}
+              </button>
+              <button class="primary-button" :disabled="saving || deleteLoading">
                 {{ saving ? '저장 중...' : '저장' }}
               </button>
             </div>
           </form>
         </article>
       </div>
+
+      <ModalShell v-if="deleteConfirmOpen" modal-class="organization-delete-modal" @close="closeDeleteConfirm">
+        <header>
+          <h2>{{ deleteTargetLabel() }} 삭제</h2>
+          <button type="button" @click="closeDeleteConfirm">닫기</button>
+        </header>
+
+        <div class="organization-delete-body">
+          <p>정말 이 {{ deleteTargetLabel() }}을 삭제하시겠습니까?</p>
+          <p>{{ deleteConfirmDescription() }}</p>
+          <p class="organization-delete-target">{{ editingItem?.name || '-' }}</p>
+        </div>
+
+        <div class="modal-actions">
+          <button type="button" class="secondary-button" :disabled="deleteLoading" @click="closeDeleteConfirm">
+            취소
+          </button>
+          <button type="button" class="danger-button" :disabled="deleteLoading" @click="confirmDeleteItem">
+            {{ deleteLoading ? '삭제 중...' : deleteTargetLabel() + ' 삭제' }}
+          </button>
+        </div>
+      </ModalShell>
 
       <ModalShell v-if="importConfirmOpen" modal-class="excel-confirm-modal" @close="closeImportConfirm">
         <header>
@@ -1286,6 +1406,30 @@ const remainingExcelValidationErrorCount = computed(() =>
 
 .excel-confirm-modal {
   max-width: 520px;
+}
+
+.organization-delete-modal {
+  max-width: 520px;
+}
+
+.organization-delete-body {
+  display: grid;
+  gap: 10px;
+  margin: 16px 0 20px;
+}
+
+.organization-delete-body p {
+  margin: 0;
+  line-height: 1.6;
+}
+
+.organization-delete-target {
+  color: var(--muted-foreground);
+  font-size: 13px;
+}
+
+.action-feedback {
+  white-space: pre-line;
 }
 
 .excel-confirm-body {
