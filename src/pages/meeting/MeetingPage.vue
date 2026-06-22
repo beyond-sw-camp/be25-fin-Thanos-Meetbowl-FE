@@ -786,7 +786,7 @@
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { Room, RoomEvent, Track, createLocalAudioTrack, createLocalVideoTrack } from 'livekit-client'
 import { useRoute, useRouter } from 'vue-router'
-import { postJson } from '../../lib/api-client'
+import { API_BASE_URL, postJson } from '../../lib/api-client'
 import { displayFinalizedCaptions, latestStreamingCaption, sortedCaptions, upsertCaption } from '../../lib/caption-store'
 import { guestMeetingRoute, openMeetingWindow } from '../../lib/meeting-route'
 import { resolveLiveKitConnection } from '../../lib/livekit-meeting'
@@ -897,8 +897,6 @@ const elapsedSeconds = ref(0)
 const LOCAL_SPEECH_MEASUREMENT_RMS_THRESHOLD = 0.01
 const LOCAL_SPEECH_MEASUREMENT_SILENCE_MS = 160
 const LOCAL_SPEECH_TO_CAPTION_MATCH_WINDOW_MS = 15000
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8080/api/v1'
-
 const meetingTitle = computed(() => {
   const titleFromRoute = typeof route.query.title === 'string' ? route.query.title.trim() : ''
   return titleFromRoute || 'Q2 캠페인 킥오프'

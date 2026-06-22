@@ -1,6 +1,6 @@
 import { clearStoredAuthSession, readStoredAuthSession } from './auth-session.js'
 
-const DEFAULT_API_BASE_URL = import.meta.env?.VITE_API_BASE_URL || '/api/v1'
+export const API_BASE_URL = import.meta.env.VITE_API_BASE_URL
 
 let onUnauthorized = null
 let onForbidden = null
@@ -133,7 +133,7 @@ async function throwIfRequestFailed(response, options, payload = null) {
 }
 
 function buildApiUrl(path) {
-  const normalizedBaseUrl = DEFAULT_API_BASE_URL.replace(/\/+$/, '')
+  const normalizedBaseUrl = API_BASE_URL.replace(/\/+$/, '')
   const normalizedPath = path.startsWith('/') ? path : `/${path}`
   return `${normalizedBaseUrl}${normalizedPath}`
 }
