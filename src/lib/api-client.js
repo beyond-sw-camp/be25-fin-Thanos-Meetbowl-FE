@@ -24,7 +24,7 @@ export function getJson(path, options = {}) {
 }
 
 export function getBlob(path, options = {}) {
-  // 엑셀 다운로드처럼 JSON 대신 바이너리 본문과 응답 헤더를 함께 써야 할 때 사용한다.
+  // 파일 다운로드처럼 JSON 대신 바이너리 본문과 응답 헤더를 함께 써야 할 때 사용한다.
   return requestBlob(path, { ...options, method: 'GET' })
 }
 
@@ -55,13 +55,6 @@ export async function requestJson(path, options = {}) {
 export async function request(path, options = {}) {
   const response = await fetch(buildApiUrl(path), buildRequestInit(options))
   const payload = await response.json().catch(() => null)
-  if (!response.ok || !payload?.success) {
-    const message = payload?.error?.message || `요청에 실패했습니다. (${response.status})`
-    const error = new Error(message)
-    error.code = payload?.error?.code || null
-    error.status = response.status
-    throw error
-  }
 
   await throwIfRequestFailed(response, options, payload)
 
@@ -73,7 +66,7 @@ export async function requestBlob(path, options = {}) {
   const contentType = response.headers.get('Content-Type') || ''
 
   let errorPayload = null
-  // 파일 응답이어도 실패 시에는 JSON 에러 본문이 올 수 있어 공통 에러 처리용으로 한 번 더 읽는다.
+  // 파일 응답이어도 실패 시에는 JSON 에러 본문이 올 수 있어 공통 에러 처리로 넘긴다.
   if (!response.ok || contentType.includes('application/json')) {
     errorPayload = await response.clone().json().catch(() => null)
   }
@@ -116,7 +109,7 @@ function buildRequestInit(options) {
 async function throwIfRequestFailed(response, options, payload = null) {
   if (response.ok && payload?.success !== false) return
 
-  // 응답 형식이 달라도 401/403 및 공통 에러 메시지 처리는 기존 API client 규칙을 그대로 따른다.
+  // 401/403과 validation details를 한 경로에서 처리해야 로그인 이동과 메시지 표시가 일관된다.
   const firstDetailReason = payload?.error?.details?.[0]?.reason
   const message =
     firstDetailReason || payload?.error?.message || `요청이 실패했습니다. (${response.status})`

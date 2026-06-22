@@ -158,7 +158,6 @@ test('organization mutation APIs send the expected request body and skip the glo
       createAdminDepartment({
         affiliateId: '00000000-0000-0000-0000-000000000001',
         name: 'Platform',
-        code: 'PLATFORM',
         status: 'ACTIVE',
         sortOrder: 2,
       }),
@@ -173,7 +172,6 @@ test('organization mutation APIs send the expected request body and skip the glo
   assert.deepEqual(JSON.parse(requestOptions?.body || '{}'), {
     affiliateId: '00000000-0000-0000-0000-000000000001',
     name: 'Platform',
-    code: 'PLATFORM',
     status: 'ACTIVE',
     sortOrder: 2,
   })

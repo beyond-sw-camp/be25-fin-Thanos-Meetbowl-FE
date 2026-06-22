@@ -20,6 +20,15 @@ import {
   updateAdminTeam,
   updateAdminTeamStatus,
 } from '../../lib/admin-organizations'
+import {
+  buildDepartmentPayload,
+  buildPositionPayload,
+  buildTeamPayload,
+  createDepartmentForm,
+  createEmptyOrganizationForm,
+  createPositionForm,
+  createTeamForm,
+} from '../../lib/admin-organization-form'
 import { getAllAdminUsers } from '../../lib/admin-users'
 import { getOrganizationUserSummary } from '../../lib/user-directory'
 import { useAuthStore } from '../../stores/auth'
@@ -69,7 +78,7 @@ const teams = ref([])
 const positions = ref([])
 const users = ref([])
 
-const form = ref(createEmptyForm())
+const form = ref(createEmptyOrganizationForm())
 
 const isAdmin = computed(() => auth.user?.role === 'ADMIN')
 
@@ -288,7 +297,7 @@ function openCreateModal() {
   deleteConfirmOpen.value = false
   actionError.value = ''
   successMessage.value = ''
-  form.value = createEmptyForm()
+  form.value = createEmptyOrganizationForm()
 
   if (activeTab.value === 'organization' || activeTab.value === 'department' || activeTab.value === 'team') {
     form.value.affiliateId =
@@ -305,14 +314,7 @@ function openEditModal(item) {
   successMessage.value = ''
 
   if (activeTab.value === 'organization' || activeTab.value === 'department') {
-    form.value = {
-      name: item.name || '',
-      code: item.code || '',
-      sortOrder: item.sortOrder ?? 0,
-      status: item.status || 'ACTIVE',
-      affiliateId: item.affiliateId || '',
-      departmentId: '',
-    }
+    form.value = createDepartmentForm(item)
     modalOpen.value = true
     return
   }
@@ -320,26 +322,12 @@ function openEditModal(item) {
   if (activeTab.value === 'team') {
     const department = departments.value.find((candidate) => candidate.departmentId === item.departmentId)
 
-    form.value = {
-      name: item.name || '',
-      code: item.code || '',
-      sortOrder: item.sortOrder ?? 0,
-      status: item.status || 'ACTIVE',
-      affiliateId: department?.affiliateId || '',
-      departmentId: item.departmentId || '',
-    }
+    form.value = createTeamForm(item, department?.affiliateId || '')
     modalOpen.value = true
     return
   }
 
-  form.value = {
-    name: item.name || '',
-    code: item.code || '',
-    sortOrder: item.sortOrder ?? 0,
-    status: item.status || 'ACTIVE',
-    affiliateId: '',
-    departmentId: '',
-  }
+  form.value = createPositionForm(item)
   modalOpen.value = true
 }
 
@@ -406,13 +394,8 @@ async function saveItem() {
   try {
     if (activeTab.value === 'organization' || activeTab.value === 'department') {
       // 현재 "조직 관리" 탭은 대표 계열사 관점의 부서 뷰이므로 실제 저장 대상은 department 마스터다.
-      const payload = {
-        name: form.value.name.trim(),
-        code: form.value.code.trim(),
-        status: form.value.status,
-        sortOrder: normalizeSortOrder(form.value.sortOrder),
-        affiliateId: form.value.affiliateId,
-      }
+      // 조직/직급 관리에서는 코드가 사용자 입력값이 아니라서 부서 저장 요청에서 제외한다.
+      const payload = buildDepartmentPayload(form.value, normalizeSortOrder)
 
       if (editingItem.value?.departmentId) {
         await updateAdminDepartment(editingItem.value.departmentId, payload)
@@ -422,13 +405,8 @@ async function saveItem() {
         successMessage.value = '부서를 추가했습니다.'
       }
     } else if (activeTab.value === 'team') {
-      const payload = {
-        name: form.value.name.trim(),
-        code: form.value.code.trim(),
-        status: form.value.status,
-        sortOrder: normalizeSortOrder(form.value.sortOrder),
-        departmentId: form.value.departmentId,
-      }
+      // 조직/직급 관리에서는 코드가 사용자 입력값이 아니라서 팀 저장 요청에서 제외한다.
+      const payload = buildTeamPayload(form.value, normalizeSortOrder)
 
       if (editingItem.value?.teamId) {
         await updateAdminTeam(editingItem.value.teamId, payload)
@@ -438,12 +416,8 @@ async function saveItem() {
         successMessage.value = '팀을 추가했습니다.'
       }
     } else {
-      const payload = {
-        name: form.value.name.trim(),
-        code: form.value.code.trim(),
-        status: form.value.status,
-        sortOrder: normalizeSortOrder(form.value.sortOrder),
-      }
+      // 조직/직급 관리에서는 코드가 사용자 입력값이 아니라서 직급 저장 요청에서 제외한다.
+      const payload = buildPositionPayload(form.value, normalizeSortOrder)
 
       if (editingItem.value?.positionId) {
         await updateAdminPosition(editingItem.value.positionId, payload)
@@ -516,17 +490,6 @@ async function openUserSummary(userId) {
     userSummaryError.value = error?.message || '회원 요약 정보를 불러오지 못했습니다.'
   } finally {
     userSummaryLoading.value = false
-  }
-}
-
-function createEmptyForm() {
-  return {
-    name: '',
-    code: '',
-    sortOrder: 1,
-    status: 'ACTIVE',
-    affiliateId: '',
-    departmentId: '',
   }
 }
 
@@ -1221,11 +1184,6 @@ const remainingExcelValidationErrorCount = computed(() =>
             <label>
               이름
               <input v-model="form.name" required />
-            </label>
-
-            <label>
-              코드
-              <input v-model="form.code" required />
             </label>
 
             <label>

@@ -80,19 +80,17 @@ const routes = [
       },
       {
         path: 'admin/mail-policy',
-        component: PolicyPage,
-        // 기존 관리자 메일 정책 라우트는 유지하고, 내부 화면만 실제 보관 정책 API에 연결한다.
-        props: {
-          title: '메일 정책 관리',
-          description: '관리자 메일 보관 정책을 조회하고 수정합니다.',
-          kind: 'mail',
-        },
+        // 기존 메일 정책 URL은 북마크 호환을 위해 유지하되, 실제 화면은 통합된 보관 정책 관리로 보낸다.
+        redirect: '/admin/minutes-policy',
         meta: { role: 'ADMIN' },
       },
       {
         path: 'admin/minutes-policy',
         component: PolicyPage,
-        props: { title: '보관 정책 관리', description: '회의록과 녹음 파일의 보관 기간과 알림 정책을 관리합니다.', kind: 'minute' },
+        props: {
+          title: '보관 정책 관리',
+          description: '회의록, 녹음 파일, 메일 데이터의 보관 정책을 한 화면에서 관리합니다.',
+        },
         meta: { role: 'ADMIN' },
       },
       {

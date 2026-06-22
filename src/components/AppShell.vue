@@ -140,7 +140,6 @@ const navSections = [
       { to: '/admin/members', label: '회원 관리', icon: '⌕' },
       { to: '/admin/organization', label: '조직/직급 관리', icon: '▧' },
       { to: '/admin/rooms', label: '회의실 관리', icon: '□' },
-      { to: '/admin/mail-policy', label: '메일 정책 관리', icon: '✉' },
       { to: '/admin/minutes-policy', label: '보관 정책 관리', icon: '◫' },
       { to: '/admin/logs', label: '관리자 작업 로그', icon: '≣' },
     ],
