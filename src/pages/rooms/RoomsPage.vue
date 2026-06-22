@@ -107,7 +107,7 @@
       <p v-if="detailEnded" class="detail-note">이미 종료된 회의입니다.</p>
       <div class="modal-actions">
         <button v-if="detail.mine" class="danger-button" :disabled="saving || detailEnded" @click="cancelReservation(detail.meetingId)">예약 취소</button>
-        <RouterLink v-if="!detailEnded" :to="meetingRoute(detail.meetingId)" class="primary-button">회의 입장</RouterLink>
+        <button v-if="!detailEnded" class="primary-button" type="button" @click="enterMeeting(detail.meetingId)">회의 입장</button>
         <button v-else class="primary-button" type="button" disabled>회의 입장</button>
       </div>
     </ModalShell>
@@ -122,7 +122,7 @@ import RoomTimelineRow from '../../components/rooms/RoomTimelineRow.vue'
 import ReservationModal from '../../components/rooms/ReservationModal.vue'
 import { useAuthStore } from '../../stores/auth'
 import { cancelMeeting, getMeeting, getMyReservations, getRoomReservations, getRooms } from '../../lib/reservations'
-import { meetingRoute } from '../../lib/meeting-route'
+import { meetingRoute, openMeetingWindow } from '../../lib/meeting-route'
 import { useUserNames } from '../../composables/useUserNames'
 import { kstDayRangeUtc, shiftDateKst, todayKst, utcToKstClock, utcToKstDate } from '../../utils/dateTime'
 import { TIMELINE, timelineHours } from '../../utils/timeline'
@@ -322,6 +322,21 @@ function closeDetail() {
   detailFull.value = null
   detailRestricted.value = false
   actionError.value = ''
+}
+
+function enterMeeting(targetMeetingId) {
+  const normalizedMeetingId = String(targetMeetingId || '').trim()
+  if (!normalizedMeetingId) return
+
+  closeDetail()
+  const opened = openMeetingWindow(normalizedMeetingId, {
+    scheduledAt: detailFull.value?.scheduledAt || detail.value?.scheduledAt,
+  })
+  if (!opened) {
+    if (!detailFull.value?.scheduledAt && !detail.value?.scheduledAt) {
+      window.location.assign(meetingRoute(normalizedMeetingId))
+    }
+  }
 }
 
 async function cancelReservation(meetingId) {

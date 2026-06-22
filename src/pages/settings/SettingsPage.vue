@@ -78,7 +78,7 @@ const canEditProfile = computed(() => Boolean(auth.user))
 
 onMounted(() => {
   if (props.forcePasswordChange) {
-    // 강제 변경 모드에서는 프로필/개인설정 조회 없이 비밀번호 폼만 바로 보여준다.
+    // 강제 변경 모드에서는 프로필/개인설정 조회 없이 비밀번호 섹션만 바로 보여준다.
     loading.value = false
     return
   }
@@ -186,16 +186,16 @@ async function savePassword() {
   passwordMessage.value = ''
   passwordError.value = ''
 
-  const currentPassword = passwordForm.value.currentPassword.trim()
-  const newPassword = passwordForm.value.newPassword.trim()
-  const newPasswordConfirm = passwordForm.value.newPasswordConfirm.trim()
+  const currentPassword = passwordForm.value.currentPassword
+  const newPassword = passwordForm.value.newPassword
+  const newPasswordConfirm = passwordForm.value.newPasswordConfirm
 
-  if (!currentPassword) {
+  if (!currentPassword.trim()) {
     passwordError.value = '현재 비밀번호를 입력해 주세요.'
     return
   }
 
-  if (!newPassword) {
+  if (!newPassword.trim()) {
     passwordError.value = '새 비밀번호를 입력해 주세요.'
     return
   }
@@ -220,17 +220,18 @@ async function savePassword() {
       newPassword: '',
       newPasswordConfirm: '',
     }
+    // 비밀번호 변경 직후 새 비밀번호로 세션을 다시 받아 initialPasswordChangeRequired와 사용자 정보를 함께 갱신한다.
     await auth.refreshSessionWithPassword(newPassword)
     passwordMessage.value = '비밀번호가 변경되었습니다.'
-    // 라우터 가드가 즉시 해제되어야 변경 직후 홈 화면 이동이 막히지 않는다.
     auth.clearInitialPasswordChangeRequired()
 
     if (props.forcePasswordChange) {
-      // 성공 후 갱신된 세션 기준으로 권한별 기본 화면으로 이동시킨다.
+      // 강제 변경 흐름에서는 갱신된 세션의 역할을 기준으로 ADMIN/USER 기본 화면으로 바로 보낸다.
       await router.replace(auth.homePath)
     }
   } catch (error) {
-    passwordError.value = error?.message || '비밀번호 변경에 실패했습니다.'
+    // BE validation details가 내려오면 첫 번째 reason을 우선 노출하고, 없으면 공통 message를 그대로 사용한다.
+    passwordError.value = error?.details?.[0]?.reason || error?.message || '비밀번호 변경에 실패했습니다.'
   } finally {
     passwordSaving.value = false
   }
@@ -251,7 +252,9 @@ function statusLabel(status) {
   <section class="page settings-page">
     <header class="page-header">
       <h1>{{ forcePasswordChange ? '비밀번호 변경' : '설정' }}</h1>
-      <p v-if="forcePasswordChange">초기 비밀번호를 변경해 주세요. 계정 보안을 위해 최초 로그인 후 비밀번호 변경이 필요합니다.</p>
+      <p v-if="forcePasswordChange">
+        초기 비밀번호를 변경해 주세요. 계정 보안을 위해 최초 로그인 후 비밀번호 변경이 필요합니다.
+      </p>
       <p v-else>내 정보와 개인 설정을 관리합니다.</p>
     </header>
 
@@ -259,7 +262,7 @@ function statusLabel(status) {
       <h2>최초 로그인 안내</h2>
       <p>초기 비밀번호를 변경하기 전에는 주요 서비스에 진입할 수 없습니다.</p>
       <div class="settings-alert">
-        계정 보안을 위해 현재 비밀번호와 새 비밀번호를 입력한 뒤 비밀번호를 변경해 주세요.
+        계정 보안을 위해 현재 비밀번호와 새 비밀번호를 입력하고 비밀번호를 변경해 주세요.
       </div>
     </article>
 
@@ -292,8 +295,7 @@ function statusLabel(status) {
             {{ passwordSaving ? '저장 중...' : '비밀번호 변경' }}
           </button>
         </div>
-        <!-- 일반 설정 화면과 최초 로그인 강제 변경 화면이 같은 폼을 재사용하도록 분기한다. -->
-        <p v-if="forcePasswordChange">초기 비밀번호는 반드시 새 비밀번호로 변경해 주세요.</p>
+        <p v-if="forcePasswordChange">초기 비밀번호를 반드시 새 비밀번호로 변경해 주세요.</p>
         <p v-else>본인 확인을 위해 현재 비밀번호를 입력한 뒤 새 비밀번호로 변경해 주세요.</p>
         <div class="settings-form-grid password-form-grid">
           <label>

@@ -55,6 +55,13 @@ export async function requestJson(path, options = {}) {
 export async function request(path, options = {}) {
   const response = await fetch(buildApiUrl(path), buildRequestInit(options))
   const payload = await response.json().catch(() => null)
+  if (!response.ok || !payload?.success) {
+    const message = payload?.error?.message || `요청에 실패했습니다. (${response.status})`
+    const error = new Error(message)
+    error.code = payload?.error?.code || null
+    error.status = response.status
+    throw error
+  }
 
   await throwIfRequestFailed(response, options, payload)
 
