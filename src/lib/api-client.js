@@ -55,6 +55,14 @@ export async function requestJson(path, options = {}) {
 export async function request(path, options = {}) {
   const response = await fetch(buildApiUrl(path), buildRequestInit(options))
   const payload = await response.json().catch(() => null)
+
+  if (response.status === 401 && !options._retriedAfterUnauthorized) {
+    const recovered = await handleUnauthorized(response, options, payload)
+    if (recovered) {
+      return request(path, { ...options, _retriedAfterUnauthorized: true })
+    }
+  }
+
   if (!response.ok || !payload?.success) {
     const message = payload?.error?.message || `요청에 실패했습니다. (${response.status})`
     const error = new Error(message)
@@ -76,6 +84,13 @@ export async function requestBlob(path, options = {}) {
   // 파일 응답이어도 실패 시에는 JSON 에러 본문이 올 수 있어 공통 에러 처리용으로 한 번 더 읽는다.
   if (!response.ok || contentType.includes('application/json')) {
     errorPayload = await response.clone().json().catch(() => null)
+  }
+
+  if (response.status === 401 && !options._retriedAfterUnauthorized) {
+    const recovered = await handleUnauthorized(response, options, errorPayload)
+    if (recovered) {
+      return requestBlob(path, { ...options, _retriedAfterUnauthorized: true })
+    }
   }
 
   await throwIfRequestFailed(response, options, errorPayload)
@@ -110,6 +125,7 @@ function buildRequestInit(options) {
     method: options.method || 'GET',
     headers: buildHeaders(options),
     body: options.body,
+    keepalive: Boolean(options.keepalive),
   }
 }
 
@@ -130,6 +146,18 @@ async function throwIfRequestFailed(response, options, payload = null) {
   }
 
   throw error
+}
+
+async function handleUnauthorized(response, options, payload = null) {
+  if (response.status !== 401 || options.skipUnauthorizedHandler) {
+    return false
+  }
+
+  const firstDetailReason = payload?.error?.details?.[0]?.reason
+  const message =
+    firstDetailReason || payload?.error?.message || `요청이 실패했습니다. (${response.status})`
+  const error = new ApiError(message, response.status, payload?.error?.details || [])
+  return Boolean(await onUnauthorized?.(error))
 }
 
 function buildApiUrl(path) {
