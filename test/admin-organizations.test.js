@@ -6,6 +6,9 @@ import { writeStoredAuthSession } from '../src/lib/auth-session.js'
 import {
   buildOrganizationNameMaps,
   createAdminDepartment,
+  deleteDepartment,
+  deletePosition,
+  deleteTeam,
   downloadOrganizationMembersExcel,
   getAdminAffiliates,
   importOrganizationMembersExcel,
@@ -30,6 +33,57 @@ function createStorage() {
     },
   }
 }
+
+test('organization delete APIs call the expected endpoints', async () => {
+  globalThis.localStorage = createStorage()
+
+  writeStoredAuthSession({
+    accessToken: 'admin-org-token',
+    user: { role: 'ADMIN', name: 'Admin', loginId: 'admin' },
+  })
+
+  const requests = []
+
+  globalThis.fetch = async (url, options) => {
+    requests.push({
+      url,
+      method: options?.method,
+      auth: options?.headers?.Authorization,
+    })
+
+    return {
+      ok: true,
+      async json() {
+        return {
+          success: true,
+          data: null,
+        }
+      },
+    }
+  }
+
+  await deleteDepartment('department-1')
+  await deleteTeam('team-1')
+  await deletePosition('position-1')
+
+  assert.deepEqual(requests, [
+    {
+      url: '/api/v1/admin/organizations/departments/department-1',
+      method: 'DELETE',
+      auth: 'Bearer admin-org-token',
+    },
+    {
+      url: '/api/v1/admin/organizations/teams/team-1',
+      method: 'DELETE',
+      auth: 'Bearer admin-org-token',
+    },
+    {
+      url: '/api/v1/admin/organizations/positions/position-1',
+      method: 'DELETE',
+      auth: 'Bearer admin-org-token',
+    },
+  ])
+})
 
 test('organization APIs use the stored access token and actual affiliate list path', async () => {
   globalThis.localStorage = createStorage()
