@@ -28,7 +28,7 @@ import SharedDocsPage from '../pages/shared-docs/SharedDocsPage.vue'
 import WorkspacePage from '../pages/workspace/WorkspacePage.vue'
 
 const routes = [
-  { path: '/', redirect: '/app/dashboard' },
+  { path: '/', redirect: '/login' },
   { path: '/login', component: LoginPage, meta: { public: true } },
   { path: '/join/:code', component: JoinPage, meta: { public: true } },
   { path: '/guest/meeting/:meetingId', component: MeetingPage, meta: { public: true } },
@@ -103,7 +103,7 @@ const routes = [
       { path: 'admin/logs', component: AdminLogsPage, meta: { role: 'ADMIN' } },
     ],
   },
-  { path: '/:pathMatch(.*)*', redirect: '/app/dashboard' },
+  { path: '/:pathMatch(.*)*', redirect: '/login' },
 ]
 
 const router = createRouter({
