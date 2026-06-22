@@ -38,12 +38,9 @@
           <div v-if="message.role === 'assistant'" class="chatbot-avatar"><Sparkles :size="15" /></div>
           <div class="chatbot-bubble">
             <p>{{ message.content }}</p>
-            <div v-if="message.sources?.length" class="chatbot-sources">
-              <button v-for="source in message.sources" :key="source.displayOrder + source.sourceId" type="button">
-                <FileText :size="14" />
-                <span>{{ source.title || source.type }}</span>
-                <small>{{ source.snippet }}</small>
-              </button>
+            <div v-if="sourceLabel(message.sources)" class="chatbot-source-line">
+              <FileText :size="14" />
+              <span>{{ sourceLabel(message.sources) }}</span>
             </div>
           </div>
         </div>
@@ -131,5 +128,11 @@ function handleComposerEnter(event) {
 async function scrollToBottom() {
   await nextTick()
   if (messageScroll.value) messageScroll.value.scrollTop = messageScroll.value.scrollHeight
+}
+
+function sourceLabel(sources = []) {
+  if (!sources.length) return ''
+  const primarySource = [...sources].sort((sourceA, sourceB) => (sourceA.displayOrder ?? 0) - (sourceB.displayOrder ?? 0))[0]
+  return `출처: ${primarySource.title || primarySource.type || '자료'}`
 }
 </script>
