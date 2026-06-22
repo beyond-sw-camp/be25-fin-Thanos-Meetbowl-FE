@@ -542,10 +542,11 @@
             {{ sttEmptyStateMessage }}
           </p>
         </div>
-        <div class="ai-box">
-          <strong>AI 실시간 피드백</strong>
-          <p>{{ feedbackMessage }}</p>
-        </div>
+        <RealtimeFeedbackPanel
+          class="meeting-realtime-feedback"
+          :feedbacks="realtimeFeedbacks"
+          :connected="Boolean(meetingRoom)"
+        />
       </div>
 
       <div v-else-if="tab === 'people'" class="side-body meeting-people-body">
@@ -786,8 +787,10 @@
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { Room, RoomEvent, Track, createLocalAudioTrack, createLocalVideoTrack } from 'livekit-client'
 import { useRoute, useRouter } from 'vue-router'
+import RealtimeFeedbackPanel from '../../components/meeting/RealtimeFeedbackPanel.vue'
 import { API_BASE_URL, postJson } from '../../lib/api-client'
 import { displayFinalizedCaptions, latestStreamingCaption, sortedCaptions, upsertCaption } from '../../lib/caption-store'
+import { sortedFeedbacks, upsertFeedback } from '../../lib/feedback-store'
 import { guestMeetingRoute, openMeetingWindow } from '../../lib/meeting-route'
 import { resolveLiveKitConnection } from '../../lib/livekit-meeting'
 import { useAuthStore } from '../../stores/auth'
@@ -827,7 +830,8 @@ const connectingMeeting = ref(false)
 const meetingRoom = ref(null)
 const meetingConnectionStatus = ref('연결 대기')
 const meetingConnectionError = ref('')
-const feedbackMessage = ref('실시간 피드백이 도착하면 여기에 표시됩니다.')
+const feedbackMap = ref(new Map())
+const feedbackSessionId = ref('')
 const lastCaptionReceivedAt = ref(null)
 const lastCaptionText = ref('')
 const lastCaptionPublishedAtMs = ref(null)
@@ -930,6 +934,7 @@ const currentUserId = computed(() => String(auth.user?.id || '').trim())
 const orderedCaptions = computed(() => sortedCaptions(captionMap.value))
 const finalizedCaptions = computed(() => displayFinalizedCaptions(captionMap.value))
 const streamingCaptionPreview = computed(() => latestStreamingCaption(captionMap.value))
+const realtimeFeedbacks = computed(() => sortedFeedbacks(feedbackMap.value))
 const supportsSpeakerSelection = computed(() =>
   typeof HTMLMediaElement !== 'undefined' && 'setSinkId' in HTMLMediaElement.prototype,
 )
@@ -2067,9 +2072,10 @@ function clearRemoteAudioBindings() {
 
 function resetMeetingSessionState() {
   captionMap.value = new Map()
+  feedbackMap.value = new Map()
+  feedbackSessionId.value = ''
   participantStateMap.value = new Map()
   chatMessages.value = []
-  feedbackMessage.value = '실시간 피드백이 도착하면 여기에 표시됩니다.'
   lastCaptionReceivedAt.value = null
   lastCaptionText.value = ''
   lastCaptionPublishedAtMs.value = null
@@ -2390,8 +2396,8 @@ function bindMeetingRoomEvents(room) {
     }
     syncParticipantsFromRoom(room)
   })
-  room.on(RoomEvent.DataReceived, (payload, participant) => {
-    handleDataChannelMessage(payload, participant)
+  room.on(RoomEvent.DataReceived, (payload, participant, _kind, topic) => {
+    handleDataChannelMessage(payload, participant, topic)
   })
   room.on(RoomEvent.Reconnecting, () => {
     meetingConnectionStatus.value = '재연결 중'
@@ -2409,7 +2415,7 @@ function bindMeetingRoomEvents(room) {
   })
 }
 
-function handleDataChannelMessage(payload, participant) {
+function handleDataChannelMessage(payload, participant, topic) {
   try {
     const event = JSON.parse(textDecoder.decode(payload))
     lastDataChannelReceivedAt.value = Date.now()
@@ -2489,8 +2495,19 @@ function handleDataChannelMessage(payload, participant) {
       return
     }
 
-    if (event?.eventType === 'feedback.generated' || event?.eventType === 'meeting.feedback.generated') {
-      feedbackMessage.value = event.payload?.message || event.message || feedbackMessage.value
+    if (event?.eventType === 'feedback.generated') {
+      if (topic && topic !== 'feedback.generated') return
+
+      const nextFeedbackMap = upsertFeedback(feedbackMap.value, event, {
+        meetingId: meetingId.value,
+        sessionId: feedbackSessionId.value,
+      })
+      if (nextFeedbackMap === feedbackMap.value) return
+
+      feedbackMap.value = nextFeedbackMap
+      if (!feedbackSessionId.value) {
+        feedbackSessionId.value = sortedFeedbacks(nextFeedbackMap)[0]?.sessionId || ''
+      }
       return
     }
 
