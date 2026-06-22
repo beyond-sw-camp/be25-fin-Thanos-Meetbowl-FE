@@ -69,8 +69,19 @@ const routes = [
         props: { forcePasswordChange: false },
         meta: { role: ['USER', 'ADMIN'] },
       },
+      {
+        path: 'app/users',
+        // 기존 사용자 검색 URL로 들어와도 관리자 화면 권한 기준으로만 연결한다.
+        redirect: '/admin/members',
+        meta: { role: 'ADMIN' },
+      },
+      {
+        path: 'app/user-search',
+        redirect: '/admin/members',
+        meta: { role: 'ADMIN' },
+      },
       { path: 'admin/dashboard', component: AdminDashboardPage, meta: { role: 'ADMIN' } },
-      { path: 'admin/members', component: MembersPage, meta: { role: ['USER', 'ADMIN'] } },
+      { path: 'admin/members', component: MembersPage, meta: { role: 'ADMIN' } },
       { path: 'admin/organization', component: OrganizationPage, meta: { role: 'ADMIN' } },
       { path: 'admin/rooms', component: AdminRoomsPage, meta: { role: 'ADMIN' } },
       {
@@ -100,6 +111,12 @@ const routes = [
       },
       { path: 'admin/logs', component: AdminLogsPage, meta: { role: 'ADMIN' } },
     ],
+  },
+  {
+    path: '/users/search',
+    // USER가 직접 주소를 입력해도 접근 권한 없음 화면 대신 홈으로 되돌아가도록 관리자 권한으로 묶는다.
+    redirect: '/admin/members',
+    meta: { role: 'ADMIN' },
   },
   { path: '/:pathMatch(.*)*', redirect: '/app/dashboard' },
 ]
