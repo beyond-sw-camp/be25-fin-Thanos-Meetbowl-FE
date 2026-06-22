@@ -32,6 +32,12 @@ export default defineComponent({
     const loadError = ref('')
     const actionError = ref('')
 
+    // 목록 페이지네이션 상태. PAGE_SIZE는 백엔드 size 파라미터(허용 1~100)로 그대로 전달한다.
+    const PAGE_SIZE = 10
+    const page = ref(1)
+    const totalPages = ref(1)
+    const totalElements = ref(0)
+
     const openPost = ref(null) // 상세(getPost 결과 + comments 배열)
     const writing = ref(false)
     const commentText = ref('')
@@ -57,13 +63,17 @@ export default defineComponent({
           keyword: keyword.value.trim(),
           sort: 'latest', // 항상 최신순(createdAt DESC). Hot 모드도 백엔드가 최신순 고정.
           hot: isHot,
-          page: 1,
-          size: 50,
+          page: page.value,
+          size: PAGE_SIZE,
         })
         posts.value = data?.items || []
+        totalPages.value = data?.totalPages || 1
+        totalElements.value = data?.totalElements || 0
       } catch (err) {
         loadError.value = err?.message || '게시글을 불러오지 못했습니다.'
         posts.value = []
+        totalPages.value = 1
+        totalElements.value = 0
       } finally {
         loading.value = false
       }
@@ -77,11 +87,24 @@ export default defineComponent({
       }
     }
 
+    // 필터(카테고리/검색)가 바뀌면 항상 1페이지부터 다시 조회한다.
+    function applyFilters() {
+      page.value = 1
+      loadPosts()
+    }
+
+    // 특정 페이지로 이동. 범위를 벗어나거나 같은 페이지면 무시한다.
+    function goToPage(target) {
+      if (target < 1 || target > totalPages.value || target === page.value) return
+      page.value = target
+      loadPosts()
+    }
+
     // 카테고리 변경은 즉시 재조회. 검색은 버튼/Enter로 명시 실행하되,
-    // 검색어를 비우면 자동으로 전체 목록으로 복귀한다(loadPosts가 page:1로 조회).
-    watch(category, loadPosts)
+    // 검색어를 비우면 자동으로 전체 목록으로 복귀한다. 셋 다 1페이지로 리셋한다.
+    watch(category, applyFilters)
     watch(keyword, (value) => {
-      if (!value.trim()) loadPosts()
+      if (!value.trim()) applyFilters()
     })
 
     onMounted(() => {
@@ -198,6 +221,7 @@ export default defineComponent({
       try {
         await createPost({ category: draft.value.category, title, content })
         writing.value = false
+        page.value = 1 // 새 글은 최신순 맨 앞이므로 1페이지로 돌아가 보이게 한다.
         await Promise.all([loadPosts(), loadHot()])
       } catch (err) {
         actionError.value = err?.message || '게시글 저장에 실패했습니다.'
@@ -277,6 +301,11 @@ export default defineComponent({
       editingPost,
       postDraft,
       filteredPosts: posts,
+      page,
+      totalPages,
+      totalElements,
+      goToPage,
+      applyFilters,
       openPost,
       formatDateTime,
       loadPosts,
@@ -332,8 +361,8 @@ export default defineComponent({
         <label class="community-search">
           <span>검색</span>
           <div class="community-search-box">
-            <input v-model="keyword" placeholder="제목·내용 검색" @keydown.enter="loadPosts">
-            <button type="button" @click="loadPosts">검색</button>
+            <input v-model="keyword" placeholder="제목·내용 검색" @keydown.enter="applyFilters">
+            <button type="button" @click="applyFilters">검색</button>
           </div>
         </label>
       </div>
@@ -361,6 +390,19 @@ export default defineComponent({
           <div v-if="filteredPosts.length === 0" class="empty-state">게시글이 없습니다.</div>
         </template>
       </article>
+
+      <nav v-if="!loading && !loadError && totalPages > 1" class="community-pagination" aria-label="게시글 페이지">
+        <button type="button" class="page-btn" :disabled="page <= 1" @click="goToPage(page - 1)">이전</button>
+        <button
+          v-for="p in totalPages"
+          :key="p"
+          type="button"
+          class="page-btn"
+          :class="{ active: p === page }"
+          @click="goToPage(p)"
+        >{{ p }}</button>
+        <button type="button" class="page-btn" :disabled="page >= totalPages" @click="goToPage(page + 1)">다음</button>
+      </nav>
 
       <div v-if="writing" class="modal-backdrop" @click="writing = false">
         <form class="write-modal" @submit.prevent="savePost" @click.stop>
@@ -474,4 +516,10 @@ export default defineComponent({
 .community-search-box input { font-size: 14px; flex: 1; min-width: 0; }
 .community-search-box button { flex: 0 0 auto; height: 40px; padding: 0 14px; border: 0; border-radius: 8px; background: var(--primary); color: #fff; font-weight: 700; font-size: 14px; cursor: pointer; white-space: nowrap; }
 .community-mine-tag { margin-left: 6px; padding: 4px 9px; border-radius: 999px; background: #eef2ff; color: var(--primary-dark); font-size: 11px; font-weight: 700; vertical-align: middle; white-space: nowrap; }
+/* 목록 페이지네이션: 가운데 정렬된 페이지 버튼 줄. active는 현재 페이지 강조. */
+.community-pagination { display: flex; justify-content: center; align-items: center; gap: 6px; margin-top: 16px; flex-wrap: wrap; }
+.community-pagination .page-btn { min-width: 36px; height: 36px; padding: 0 10px; border: 1px solid var(--border); border-radius: 8px; background: var(--background); color: var(--foreground); font-size: 14px; font-weight: 600; cursor: pointer; }
+.community-pagination .page-btn:hover:not(:disabled) { background: var(--muted); }
+.community-pagination .page-btn.active { background: var(--primary); border-color: var(--primary); color: #fff; }
+.community-pagination .page-btn:disabled { opacity: 0.45; cursor: default; }
 </style>
