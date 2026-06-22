@@ -1,4 +1,5 @@
 const STORAGE_KEY = 'meetbowl.auth.session'
+const REMEMBERED_LOGIN_ID_KEY = 'meetbowl.auth.rememberedLoginId'
 
 function toUpperRole(role) {
   return typeof role === 'string' ? role.toUpperCase() : ''
@@ -70,4 +71,28 @@ export function writeStoredAuthSession(session) {
 
 export function clearStoredAuthSession() {
   localStorage.removeItem(STORAGE_KEY)
+}
+
+export function readRememberedLoginId() {
+  try {
+    return localStorage.getItem(REMEMBERED_LOGIN_ID_KEY) || ''
+  } catch {
+    return ''
+  }
+}
+
+export function writeRememberedLoginId(loginId) {
+  const normalizedLoginId = `${loginId || ''}`.trim()
+  if (!normalizedLoginId) {
+    clearRememberedLoginId()
+    return ''
+  }
+
+  // 아이디 저장은 loginId만 남기고 비밀번호나 토큰류는 기존 세션 저장소와 분리한다.
+  localStorage.setItem(REMEMBERED_LOGIN_ID_KEY, normalizedLoginId)
+  return normalizedLoginId
+}
+
+export function clearRememberedLoginId() {
+  localStorage.removeItem(REMEMBERED_LOGIN_ID_KEY)
 }

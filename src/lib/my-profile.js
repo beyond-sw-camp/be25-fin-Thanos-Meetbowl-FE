@@ -16,3 +16,7 @@ export function getMySettings() {
 export function updateMySettings(payload) {
   return patchJson('/users/me/settings', payload)
 }
+
+export function changeMyPassword(payload) {
+  return patchJson('/users/me/password', payload)
+}

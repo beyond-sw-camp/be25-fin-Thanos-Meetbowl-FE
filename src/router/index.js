@@ -21,6 +21,7 @@ import MeetingsPage from '../pages/meetings/MeetingsPage.vue'
 import MinutesPage from '../pages/minutes/MinutesPage.vue'
 import BackupDetailPage from '../pages/backup/BackupDetailPage.vue'
 import MyReservationsPage from '../pages/reservations/MyReservationsPage.vue'
+import MyAttendingPage from '../pages/reservations/MyAttendingPage.vue'
 import RoomsPage from '../pages/rooms/RoomsPage.vue'
 import SettingsPage from '../pages/settings/SettingsPage.vue'
 import SharedDocsPage from '../pages/shared-docs/SharedDocsPage.vue'
@@ -30,6 +31,7 @@ const routes = [
   { path: '/', redirect: '/app/dashboard' },
   { path: '/login', component: LoginPage, meta: { public: true } },
   { path: '/join/:code', component: JoinPage, meta: { public: true } },
+  { path: '/guest/meeting/:meetingId', component: MeetingPage, meta: { public: true } },
   { path: '/app/meeting', redirect: meetingRoute(), meta: { role: 'USER' } },
   { path: '/app/meeting/:meetingId', component: MeetingPage, meta: { role: 'USER' } },
   {
@@ -40,6 +42,7 @@ const routes = [
       { path: 'app/dashboard', component: DashboardPage, meta: { role: 'USER' } },
       { path: 'app/rooms', component: RoomsPage, meta: { role: 'USER' } },
       { path: 'app/my-reservations', component: MyReservationsPage, meta: { role: 'USER' } },
+      { path: 'app/my-attending', component: MyAttendingPage, meta: { role: 'USER' } },
       { path: 'app/meetings', component: MeetingsPage, meta: { role: 'USER' } },
       { path: 'app/livekit-test', component: LiveKitTestPage, meta: { role: 'USER' } },
       { path: 'app/mail', component: MailPage, meta: { role: 'USER' } },
@@ -54,8 +57,16 @@ const routes = [
         meta: { role: 'USER' },
       },
       {
+        path: 'password/change',
+        component: SettingsPage,
+        // 최초 로그인 사용자는 일반 설정 화면이 아니라 이 강제 변경 경로로만 진입시킨다.
+        props: { forcePasswordChange: true },
+        meta: { role: ['USER', 'ADMIN'], allowWhenPasswordChangeRequired: true },
+      },
+      {
         path: 'app/settings',
         component: SettingsPage,
+        props: { forcePasswordChange: false },
         meta: { role: ['USER', 'ADMIN'] },
       },
       { path: 'admin/dashboard', component: AdminDashboardPage, meta: { role: 'ADMIN' } },
@@ -70,7 +81,12 @@ const routes = [
       {
         path: 'admin/mail-policy',
         component: PolicyPage,
-        props: { title: '메일 정책 관리', description: '내부 메일 보관, 백업, 삭제 정책을 관리합니다.', kind: 'mail' },
+        // 기존 관리자 메일 정책 라우트는 유지하고, 내부 화면만 실제 보관 정책 API에 연결한다.
+        props: {
+          title: '메일 정책 관리',
+          description: '관리자 메일 보관 정책을 조회하고 수정합니다.',
+          kind: 'mail',
+        },
         meta: { role: 'ADMIN' },
       },
       {
@@ -98,10 +114,17 @@ const router = createRouter({
 router.beforeEach((to) => {
   const auth = useAuthStore()
   if (to.meta.public) {
-    if (to.path === '/login' && auth.isAuthenticated) return auth.homePath
+    if (to.path === '/login' && auth.isAuthenticated) return auth.postLoginPath
     return true
   }
   if (!auth.isAuthenticated) return '/login'
+  if (auth.requiresInitialPasswordChange) {
+    // 초기 비밀번호 변경 전에는 다른 화면으로 이동하지 못하게 강제한다.
+    if (to.path !== '/password/change') return '/password/change'
+  } else if (to.path === '/password/change') {
+    // 이미 비밀번호를 바꿨다면 강제 변경 화면에 다시 머물지 않도록 기본 홈으로 돌린다.
+    return auth.homePath
+  }
   const requiredRole = to.meta.role
   const requiredRoles = Array.isArray(requiredRole) ? requiredRole : requiredRole ? [requiredRole] : []
   if (to.path === '/admin/dashboard' && requiredRoles.length === 1 && requiredRoles[0] === 'ADMIN') return true

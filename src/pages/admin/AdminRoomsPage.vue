@@ -27,7 +27,7 @@ const rooms = ref([])
 const sites = ref([])
 const buildings = ref([])
 
-const siteFilter = ref('all')
+const buildingFilter = ref('all')
 const roomModal = ref(false)
 const siteModal = ref(false)
 const editingRoom = ref(null)
@@ -38,10 +38,23 @@ const siteForm = ref({ siteName: '', buildingName: '' })
 const isAdmin = computed(() => auth.user?.role === 'ADMIN')
 
 const filteredRooms = computed(() =>
-  siteFilter.value === 'all'
+  buildingFilter.value === 'all'
     ? rooms.value
-    : rooms.value.filter((room) => room.siteId === siteFilter.value),
+    : rooms.value.filter((room) => room.buildingId === buildingFilter.value),
 )
+
+// "사이트 - 건물" 목록(건물 단위). 데이터상 사이트는 1개여도 건물 수만큼 줄이 나온다(사이트명 반복).
+const siteBuildingList = computed(() => {
+  const siteNameOf = (siteId) => sites.value.find((site) => site.siteId === siteId)?.name || '-'
+  return buildings.value
+    .map((building) => ({
+      buildingId: building.buildingId,
+      siteId: building.siteId,
+      siteName: siteNameOf(building.siteId),
+      name: building.name,
+    }))
+    .sort((a, b) => a.siteName.localeCompare(b.siteName, 'ko') || a.name.localeCompare(b.name, 'ko'))
+})
 
 // 회의실 폼에서 선택한 사이트에 속한 건물 목록(직접 입력 시 자동완성/안내용).
 const formBuildings = computed(() =>
@@ -132,8 +145,8 @@ async function fetchAllRooms() {
   return all
 }
 
-function roomCountBySite(siteId) {
-  return rooms.value.filter((room) => room.siteId === siteId).length
+function roomCountByBuilding(buildingId) {
+  return rooms.value.filter((room) => room.buildingId === buildingId).length
 }
 
 function openCreateRoom() {
@@ -305,10 +318,8 @@ async function saveSite() {
 
   const siteName = siteForm.value.siteName.trim()
   const buildingName = siteForm.value.buildingName.trim()
-
-  // 백엔드가 사이트명 중복을 허용하므로, 이미 있는 이름은 프론트에서 먼저 막는다(대소문자 무시).
-  if (sites.value.some((site) => site.name.trim().toLowerCase() === siteName.toLowerCase())) {
-    actionError.value = `이미 '${siteName}' 사이트가 있습니다. 다른 이름을 사용해 주세요.`
+  if (!siteName || !buildingName) {
+    actionError.value = '사이트명과 건물명을 입력해 주세요.'
     return
   }
 
@@ -317,8 +328,18 @@ async function saveSite() {
   successMessage.value = ''
 
   try {
-    await createSiteWithBuilding({ siteName, buildingName })
-    successMessage.value = '사이트와 건물을 추가했습니다.'
+    // 같은 이름의 사이트가 이미 있으면 그 사이트를 재사용하고 건물만 추가한다(중복 사이트 생성 방지).
+    // 없으면 사이트+건물을 한 번에 새로 만든다.
+    const existingSite = sites.value.find(
+      (site) => site.name.trim().toLowerCase() === siteName.toLowerCase(),
+    )
+    if (existingSite) {
+      await createMeetingBuilding({ siteId: existingSite.siteId, name: buildingName })
+      successMessage.value = `'${existingSite.name}' 사이트에 '${buildingName}' 건물을 추가했습니다.`
+    } else {
+      await createSiteWithBuilding({ siteName, buildingName })
+      successMessage.value = '사이트와 건물을 추가했습니다.'
+    }
     closeSiteModal()
     await reloadAllData()
   } catch (error) {
@@ -409,18 +430,18 @@ function normalizeBuilding(item) {
       <article class="card admin-site-filter">
         <strong>사이트 / 건물</strong>
         <div class="toolbar">
-          <button class="chip" :class="{ active: siteFilter === 'all' }" type="button" @click="siteFilter = 'all'">
+          <button class="chip" :class="{ active: buildingFilter === 'all' }" type="button" @click="buildingFilter = 'all'">
             전체 ({{ rooms.length }}실)
           </button>
           <button
-            v-for="site in sites"
-            :key="site.siteId"
+            v-for="building in siteBuildingList"
+            :key="building.buildingId"
             class="chip"
-            :class="{ active: siteFilter === site.siteId }"
+            :class="{ active: buildingFilter === building.buildingId }"
             type="button"
-            @click="siteFilter = siteFilter === site.siteId ? 'all' : site.siteId"
+            @click="buildingFilter = buildingFilter === building.buildingId ? 'all' : building.buildingId"
           >
-            {{ site.name }} ({{ roomCountBySite(site.siteId) }}실)
+            {{ building.siteName }} - {{ building.name }} ({{ roomCountByBuilding(building.buildingId) }}실)
           </button>
         </div>
       </article>

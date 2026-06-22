@@ -1,22 +1,34 @@
 <script setup>
-import { computed, onMounted, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import {
+  createAdminUser,
+  getAdminUser,
+  getAdminUsers,
+  resetAdminUserPassword,
+  searchAdminUserSuggestions,
+  updateAdminUser,
+} from '../../lib/admin-users'
+import {
+  getAdminAffiliates,
+  getAdminDepartments,
+  getAdminPositions,
+  getAdminTeams,
+} from '../../lib/admin-organizations'
+import { useUserSuggestions } from '../../composables/useUserSuggestions.js'
+import { getOrganizationUserSummary } from '../../lib/user-directory'
 import Pagination from './Pagination.vue'
-import { getAdminAffiliates, getAdminDepartments, getAdminPositions, getAdminTeams } from '../../lib/admin-organizations'
-import { createAdminUser, getAdminUser, updateAdminUser } from '../../lib/admin-users'
-import { getOrganizationUserSummary, searchUsers } from '../../lib/user-directory'
 
 const props = defineProps({
   title: { type: String, default: '사용자 검색' },
   description: {
     type: String,
-    default: '이름, 이메일, 로그인 ID로 사용자를 찾고 회원 요약 정보를 확인합니다.',
+    default: '이름, 이메일, 로그인 ID로 사용자를 찾고 조직 요약 정보를 확인합니다.',
   },
   pageSize: { type: Number, default: 20 },
   editable: { type: Boolean, default: false },
 })
 
 defineExpose({
-  // 부모 페이지에서 "회원 추가" 버튼을 눌렀을 때 이 패널의 생성 모달을 열 수 있도록 노출한다.
   openCreate,
 })
 
@@ -24,6 +36,7 @@ const loading = ref(true)
 const detailLoading = ref(false)
 const editLoading = ref(false)
 const saving = ref(false)
+const resetPasswordLoading = ref(false)
 const organizationLoading = ref(false)
 const forbidden = ref(false)
 const errorMessage = ref('')
@@ -44,6 +57,32 @@ const affiliates = ref([])
 const departments = ref([])
 const teams = ref([])
 const positions = ref([])
+const suggestionFieldRef = ref(null)
+
+const {
+  suggestions,
+  suggestionLoading,
+  suggestionError,
+  activeSuggestionIndex,
+  showSuggestionDropdown,
+  selectSuggestion,
+  setActiveSuggestion,
+  closeSuggestions,
+  handleSuggestionInput,
+  handleSuggestionKeydown,
+} = useUserSuggestions({
+  keyword,
+  rootRef: suggestionFieldRef,
+  maxItems: 5,
+  debounceMs: 250,
+  fetchSuggestions: (trimmedKeyword) =>
+    searchAdminUserSuggestions({
+      keyword: trimmedKeyword,
+      size: 5,
+    }),
+})
+
+let keywordSearchTimer = null
 
 const statusFilterOptions = [
   { value: 'ALL', label: '전체 상태' },
@@ -52,8 +91,11 @@ const statusFilterOptions = [
 ]
 
 const hasUsers = computed(() => users.value.length > 0)
+const isEditMode = computed(() => Boolean(editForm.value.userId))
 
-const availableAffiliates = computed(() => filterActiveOrSelected(affiliates.value, editForm.value.affiliateId, 'affiliateId'))
+const availableAffiliates = computed(() =>
+  filterActiveOrSelected(affiliates.value, editForm.value.affiliateId, 'affiliateId'),
+)
 const availableDepartments = computed(() =>
   filterActiveOrSelected(
     departments.value.filter((item) => !editForm.value.affiliateId || item.affiliateId === editForm.value.affiliateId),
@@ -68,10 +110,16 @@ const availableTeams = computed(() =>
     'teamId',
   ),
 )
-const availablePositions = computed(() => filterActiveOrSelected(positions.value, editForm.value.positionId, 'positionId'))
+const availablePositions = computed(() =>
+  filterActiveOrSelected(positions.value, editForm.value.positionId, 'positionId'),
+)
 
 onMounted(() => {
   loadUsers()
+})
+
+onBeforeUnmount(() => {
+  clearTimeout(keywordSearchTimer)
 })
 
 watch(pageNo, () => {
@@ -79,18 +127,21 @@ watch(pageNo, () => {
 })
 
 watch(keyword, () => {
+  clearTimeout(keywordSearchTimer)
+
   if (pageNo.value !== 1) {
-    // 검색어가 바뀌면 첫 페이지부터 다시 보이도록 페이징을 초기화한다.
     pageNo.value = 1
     return
   }
 
-  loadUsers()
+  // 목록 조회도 debounce로 묶어 추천 검색과 타이밍을 맞춘다.
+  keywordSearchTimer = setTimeout(() => {
+    loadUsers()
+  }, 250)
 })
 
 watch(status, () => {
   if (pageNo.value !== 1) {
-    // 상태 필터 변경도 검색 조건이므로 첫 페이지로 되돌린다.
     pageNo.value = 1
     return
   }
@@ -103,7 +154,6 @@ watch(
   (affiliateId, previousAffiliateId) => {
     if (affiliateId === previousAffiliateId) return
 
-    // 상위 조직이 바뀌면 더 이상 맞지 않는 부서는 비운다.
     const departmentStillValid = departments.value.some(
       (item) => item.departmentId === editForm.value.departmentId && item.affiliateId === affiliateId,
     )
@@ -116,7 +166,6 @@ watch(
   (departmentId, previousDepartmentId) => {
     if (departmentId === previousDepartmentId) return
 
-    // 부서가 바뀌면 연결된 팀도 함께 정리해 잘못된 조합을 막는다.
     const teamStillValid = teams.value.some(
       (item) => item.teamId === editForm.value.teamId && item.departmentId === departmentId,
     )
@@ -125,14 +174,13 @@ watch(
 )
 
 async function loadUsers() {
-  // 검색어, 상태, 페이징을 합쳐 사용자 목록을 다시 불러온다.
   loading.value = true
   forbidden.value = false
   errorMessage.value = ''
   actionError.value = ''
 
   try {
-    const data = await searchUsers({
+    const data = await getAdminUsers({
       keyword: keyword.value,
       status: status.value === 'ALL' ? '' : status.value,
       page: pageNo.value,
@@ -154,8 +202,12 @@ async function loadUsers() {
   }
 }
 
+function applySuggestion(user) {
+  keyword.value = user?.name || ''
+  closeSuggestions()
+}
+
 async function openDetail(user) {
-  // 목록 응답이 아니라 요약 API를 다시 호출해 최신 정보를 보여준다.
   detailOpen.value = true
   detailLoading.value = true
   selectedUser.value = null
@@ -171,7 +223,7 @@ async function openDetail(user) {
       return
     }
 
-    detailErrorMessage.value = error?.message || '회원 요약 정보를 불러오지 못했습니다.'
+    detailErrorMessage.value = error?.message || '사용자 요약 정보를 불러오지 못했습니다.'
   } finally {
     detailLoading.value = false
   }
@@ -214,7 +266,6 @@ async function openEdit(user) {
 }
 
 async function loadOrganizationOptions() {
-  // 계열사/부서/팀/직급 마스터는 수정 폼에서 공통으로 쓰므로 한 번만 불러온다.
   if (organizationLoading.value) return
   if (affiliates.value.length && departments.value.length && teams.value.length && positions.value.length) return
 
@@ -240,7 +291,6 @@ async function loadOrganizationOptions() {
 async function saveMember() {
   if (saving.value) return
 
-  // userId 유무로 생성과 수정을 같은 저장 흐름에서 분기한다.
   saving.value = true
   actionError.value = ''
   successMessage.value = ''
@@ -256,7 +306,8 @@ async function saveMember() {
       successMessage.value = '사용자 정보를 수정했습니다.'
     } else {
       const created = await createAdminUser(buildUserCreatePayload(editForm.value))
-      const normalized = normalizeUserSummary(created?.user)
+      const normalized = normalizeUserSummary(created?.user || created)
+
       if (pageNo.value !== 1) {
         pageNo.value = 1
         await loadUsers()
@@ -265,7 +316,9 @@ async function saveMember() {
         totalElements.value += 1
         totalPages.value = Math.max(1, Math.ceil(totalElements.value / props.pageSize))
       }
-      successMessage.value = '사용자 계정을 생성했습니다.'
+
+      // BE가 내려준 temporaryPassword를 그대로 안내하되, 없더라도 초기 비밀번호 정책값 1234를 보여준다.
+      successMessage.value = `계정이 생성되었습니다. 초기 비밀번호는 ${created?.temporaryPassword || '1234'}입니다.`
     }
 
     editOpen.value = false
@@ -279,6 +332,34 @@ async function saveMember() {
     actionError.value = error?.message || '사용자 저장에 실패했습니다.'
   } finally {
     saving.value = false
+  }
+}
+
+async function handleResetPassword(targetUser = selectedUser.value) {
+  if (resetPasswordLoading.value || !targetUser?.userId) return
+
+  // 초기화 결과가 항상 1234 정책으로 연결되므로 확인 문구도 고정값 기준으로 보여준다.
+  const confirmed = window.confirm('해당 사용자의 비밀번호를 1234로 초기화하시겠습니까?')
+  if (!confirmed) return
+
+  resetPasswordLoading.value = true
+  actionError.value = ''
+  successMessage.value = ''
+
+  try {
+    const result = await resetAdminUserPassword(targetUser.userId)
+    successMessage.value = `비밀번호가 ${result?.temporaryPassword || '1234'}로 초기화되었습니다.`
+  } catch (error) {
+    if (error?.status === 403) {
+      forbidden.value = true
+      detailOpen.value = false
+      editOpen.value = false
+      return
+    }
+
+    actionError.value = error?.message || '비밀번호 초기화에 실패했습니다.'
+  } finally {
+    resetPasswordLoading.value = false
   }
 }
 
@@ -386,7 +467,6 @@ function toInstantFromDateInput(value) {
 }
 
 function filterActiveOrSelected(items, selectedId, idField) {
-  // 비활성 값이라도 현재 선택된 값이면 수정 폼에서 계속 유지한다.
   return items.filter((item) => item.status === 'ACTIVE' || item[idField] === selectedId)
 }
 </script>
@@ -402,7 +482,40 @@ function filterActiveOrSelected(items, selectedId, idField) {
     </div>
 
     <div class="admin-toolbar directory-toolbar">
-      <input v-model="keyword" placeholder="이름, 로그인 ID, 이메일, 부서, 팀 검색" />
+      <div ref="suggestionFieldRef" class="user-suggestion-field directory-search-field">
+        <input
+          v-model="keyword"
+          @input="handleSuggestionInput"
+          @compositionupdate="handleSuggestionInput"
+          @compositionend="handleSuggestionInput"
+          placeholder="이름, 로그인 ID, 이메일, 부서로 검색"
+          @keydown="handleSuggestionKeydown($event, applySuggestion)"
+        />
+        <div v-if="showSuggestionDropdown" class="user-suggestion-dropdown">
+          <div v-if="suggestionLoading" class="user-suggestion-status">검색 중...</div>
+          <div v-else-if="suggestionError" class="user-suggestion-status">{{ suggestionError }}</div>
+          <div v-else-if="!suggestions.length" class="user-suggestion-status">검색 결과가 없습니다.</div>
+          <button
+            v-for="(user, index) in suggestions"
+            v-else
+            :key="user.userId"
+            type="button"
+            class="user-suggestion-item"
+            :class="{ active: activeSuggestionIndex === index }"
+            @mouseenter="setActiveSuggestion(index)"
+            @click="selectSuggestion(user, applySuggestion)"
+          >
+            <div class="user-suggestion-main">
+              <strong>{{ user.name || '-' }}</strong>
+              <span>{{ user.email || '-' }}</span>
+              <!-- 관리자 회원 관리 화면에서만 로그인 ID를 노출한다. -->
+              <small>{{ user.loginId || '-' }}</small>
+              <small>{{ [user.affiliate, user.department, user.team, user.position].filter(Boolean).join(' · ') || '-' }}</small>
+            </div>
+            <span class="badge navy">{{ roleLabel(user.role) }}</span>
+          </button>
+        </div>
+      </div>
       <div class="toolbar">
         <button
           v-for="option in statusFilterOptions"
@@ -442,7 +555,7 @@ function filterActiveOrSelected(items, selectedId, idField) {
               <th>계열사</th>
               <th>부서</th>
               <th>팀</th>
-              <th>직급</th>
+              <th>직책</th>
               <th>권한</th>
               <th>상태</th>
               <th v-if="editable">액션</th>
@@ -481,13 +594,13 @@ function filterActiveOrSelected(items, selectedId, idField) {
       <article class="card write-modal detail-modal">
         <header>
           <div>
-            <h2>{{ detailLoading ? '회원 요약 조회 중' : selectedUser?.name || '-' }}</h2>
+            <h2>{{ detailLoading ? '사용자 요약 조회 중' : selectedUser?.name || '-' }}</h2>
             <p v-if="!detailLoading">{{ selectedUser?.department || '-' }} · {{ selectedUser?.position || '-' }}</p>
           </div>
           <button @click="detailOpen = false">닫기</button>
         </header>
 
-        <div v-if="detailLoading" class="empty-state">회원 요약 정보를 불러오는 중입니다.</div>
+        <div v-if="detailLoading" class="empty-state">사용자 요약 정보를 불러오는 중입니다.</div>
         <div v-else-if="detailErrorMessage" class="error-box">{{ detailErrorMessage }}</div>
         <template v-else-if="selectedUser">
           <dl class="detail-list">
@@ -496,10 +609,21 @@ function filterActiveOrSelected(items, selectedId, idField) {
             <div><dt>계열사</dt><dd>{{ selectedUser.affiliate }}</dd></div>
             <div><dt>부서</dt><dd>{{ selectedUser.department }}</dd></div>
             <div><dt>팀</dt><dd>{{ selectedUser.team }}</dd></div>
-            <div><dt>직급</dt><dd>{{ selectedUser.position }}</dd></div>
+            <div><dt>직책</dt><dd>{{ selectedUser.position }}</dd></div>
             <div><dt>권한</dt><dd>{{ roleLabel(selectedUser.role) }}</dd></div>
             <div><dt>상태</dt><dd>{{ statusLabel(selectedUser.status) }}</dd></div>
           </dl>
+          <div class="modal-actions">
+            <button
+              type="button"
+              class="secondary-button"
+              :disabled="resetPasswordLoading"
+              @click="handleResetPassword(selectedUser)"
+            >
+              {{ resetPasswordLoading ? '초기화 중...' : '비밀번호 초기화' }}
+            </button>
+            <button type="button" class="primary-button" @click="openEdit(selectedUser)">수정</button>
+          </div>
         </template>
       </article>
     </div>
@@ -508,7 +632,7 @@ function filterActiveOrSelected(items, selectedId, idField) {
       <article class="card write-modal admin-modal">
         <header>
           <div>
-            <h2>{{ editForm.userId ? '사용자 수정' : '회원 추가' }}</h2>
+            <h2>{{ isEditMode ? '사용자 수정' : '회원 추가' }}</h2>
             <p>{{ editForm.loginId || '새 사용자 정보를 입력하세요.' }}</p>
           </div>
           <button @click="editOpen = false">닫기</button>
@@ -518,7 +642,13 @@ function filterActiveOrSelected(items, selectedId, idField) {
         <form v-else class="form-grid" @submit.prevent="saveMember">
           <label>
             로그인 ID
-            <input v-model="editForm.loginId" :readonly="Boolean(editForm.userId)" :disabled="Boolean(editForm.userId)" :class="{ readonly: Boolean(editForm.userId) }" required />
+            <input
+              v-model="editForm.loginId"
+              :readonly="isEditMode"
+              :disabled="isEditMode"
+              :class="{ readonly: isEditMode }"
+              required
+            />
           </label>
           <label>
             이름
@@ -536,7 +666,7 @@ function filterActiveOrSelected(items, selectedId, idField) {
                 <option value="ADMIN">ADMIN</option>
               </select>
             </label>
-            <label v-if="!editForm.userId">
+            <label v-if="!isEditMode">
               상태
               <select v-model="editForm.status">
                 <option value="ACTIVE">활성</option>
@@ -575,7 +705,7 @@ function filterActiveOrSelected(items, selectedId, idField) {
               </select>
             </label>
             <label>
-              직급
+              직책
               <select v-model="editForm.positionId" :disabled="organizationLoading">
                 <option value="">선택 안 함</option>
                 <option v-for="position in availablePositions" :key="position.positionId" :value="position.positionId">
@@ -594,8 +724,20 @@ function filterActiveOrSelected(items, selectedId, idField) {
               <input v-model="editForm.activeUntil" type="date" />
             </label>
           </div>
+          <div v-if="isEditMode" class="settings-alert">
+            비밀번호 초기화가 필요하면 아래 버튼을 눌러 1234로 초기화할 수 있습니다.
+          </div>
           <div class="modal-actions">
             <button type="button" class="secondary-button" @click="editOpen = false">취소</button>
+            <button
+              v-if="isEditMode"
+              type="button"
+              class="secondary-button"
+              :disabled="resetPasswordLoading"
+              @click="handleResetPassword(editForm)"
+            >
+              {{ resetPasswordLoading ? '초기화 중...' : '비밀번호 초기화' }}
+            </button>
             <button class="primary-button" :disabled="saving">
               {{ saving ? '저장 중...' : '저장' }}
             </button>
@@ -631,6 +773,10 @@ function filterActiveOrSelected(items, selectedId, idField) {
 
 .directory-toolbar {
   margin-bottom: 0;
+}
+
+.directory-search-field {
+  flex: 1 1 320px;
 }
 
 .directory-table {

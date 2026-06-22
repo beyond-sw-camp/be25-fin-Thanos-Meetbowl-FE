@@ -52,7 +52,10 @@
     </div>
     <footer>
       <small>수신자 {{ recipients.length }}명</small>
-      <div><button class="secondary-button" type="button" @click="$emit('close')">취소</button><button class="primary-button" type="button" :disabled="!canSend" @click="send">전송</button></div>
+      <div>
+        <button class="secondary-button" type="button" @click="$emit('close')">취소</button>
+        <button class="primary-button" type="button" :disabled="!canSend" @click="send">전송</button>
+      </div>
     </footer>
   </ModalShell>
 </template>
@@ -113,6 +116,11 @@ function addRecipient(member) {
   pickerOpen.value = false
 }
 
+function selectRecipientSuggestion(member) {
+  // 추천에서 고른 회원은 즉시 수신자로 확정하고 다음 검색을 위해 입력값을 비운다.
+  addRecipient(member)
+}
+
 function removeRecipient(userId) {
   recipients.value = recipients.value.filter((member) => userKey(member) !== userId)
 }
@@ -126,6 +134,7 @@ function send() {
     attachments: draft.value.attachments.map(({ file, ...metadata }) => metadata),
   })
   recipients.value = []
+  recipientQuery.value = ''
   draft.value = { subject: '', body: '', attachments: [] }
   if (fileInput.value) fileInput.value.value = ''
 }

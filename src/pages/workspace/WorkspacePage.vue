@@ -73,11 +73,11 @@
         <div class="workspace-colleagues">
           <div class="workspace-colleague-title"><strong>동료 일정 구독</strong><small>{{ subscriptions.length }}명</small></div>
           <div v-for="subscription in subscriptions" :key="subscription.subscriptionId" class="workspace-colleague-wrap">
-            <button type="button" class="workspace-colleague-row">
+            <div class="workspace-colleague-row">
               <span class="workspace-check">✓</span>
               <span>{{ userName(subscription.targetUserId) }}</span>
               <button type="button" class="danger-text" @click.stop="removeSubscription(subscription.subscriptionId)">해제</button>
-            </button>
+            </div>
           </div>
           <button type="button" class="dashed-button" @click="subscriptionOpen = true">동료 구독 추가</button>
         </div>

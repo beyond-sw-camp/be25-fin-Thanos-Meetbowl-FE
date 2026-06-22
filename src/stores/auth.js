@@ -1,11 +1,11 @@
 import { defineStore } from 'pinia'
-import { getJson, postJson } from '../lib/api-client'
+import { getJson, postJson } from '../lib/api-client.js'
 import {
   clearStoredAuthSession,
   normalizeUser,
   readStoredAuthSession,
   writeStoredAuthSession,
-} from '../lib/auth-session'
+} from '../lib/auth-session.js'
 
 function createState() {
   const session = readStoredAuthSession()
@@ -20,11 +20,19 @@ function createState() {
   }
 }
 
+function getRoleHomePath(role) {
+  return role === 'ADMIN' ? '/admin/dashboard' : '/app/dashboard'
+}
+
 export const useAuthStore = defineStore('auth', {
   state: createState,
   getters: {
     isAuthenticated: (state) => Boolean(state.accessToken && state.user),
-    homePath: (state) => (state.user?.role === 'ADMIN' ? '/admin/dashboard' : '/app/dashboard'),
+    homePath: (state) => getRoleHomePath(state.user?.role),
+    requiresInitialPasswordChange: (state) => Boolean(state.user?.initialPasswordChangeRequired),
+    postLoginPath() {
+      return this.requiresInitialPasswordChange ? '/password/change' : this.homePath
+    },
   },
   actions: {
     persistSession() {
@@ -79,6 +87,11 @@ export const useAuthStore = defineStore('auth', {
         user: data.user,
       })
 
+      // 초기 비밀번호 변경 대상은 로그인 응답만으로도 강제 이동을 결정할 수 있다.
+      if (data.user?.initialPasswordChangeRequired) {
+        return this.user
+      }
+
       return this.fetchCurrentUser()
     },
     async fetchCurrentUser() {
@@ -86,6 +99,7 @@ export const useAuthStore = defineStore('auth', {
       this.user = normalizeUser({
         ...this.user,
         ...profile,
+        // 로그인 응답에서 받은 최초 변경 필요 여부는 /users/me 응답이 없더라도 유지해야 한다.
         initialPasswordChangeRequired: this.user?.initialPasswordChangeRequired,
       })
       this.persistSession()
@@ -107,6 +121,22 @@ export const useAuthStore = defineStore('auth', {
 
       this.user = normalizeUser({ ...this.user, ...profile })
       this.persistSession()
+    },
+    clearInitialPasswordChangeRequired() {
+      if (!this.user) return
+
+      this.user = normalizeUser({
+        ...this.user,
+        // 비밀번호 변경 성공 직후에는 다음 라우팅 판단이 바로 풀리도록 세션 플래그를 즉시 내린다.
+        initialPasswordChangeRequired: false,
+      })
+      this.persistSession()
+    },
+    async refreshSessionWithPassword(password) {
+      if (!this.user?.loginId) return null
+
+      // 비밀번호 변경 직후 새 비밀번호로 다시 로그인해 토큰 claim과 세션 사용자 정보를 함께 갱신한다.
+      return this.login(this.user.loginId, password)
     },
   },
 })

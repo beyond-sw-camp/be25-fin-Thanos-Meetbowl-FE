@@ -1,6 +1,6 @@
 <script>
 import { computed, defineComponent, ref } from 'vue'
-import { meetingRoute } from '../../lib/meeting-route'
+import { meetingRoute, openMeetingWindow } from '../../lib/meeting-route'
 import { useAuthStore } from '../../stores/auth'
 import { mails, myMeetings, minutes, todayReservations } from '../../data/mockData'
 
@@ -25,7 +25,12 @@ export default defineComponent({
       { label: '최근 내 회의록', value: minutes.length, to: '/app/minutes' },
       { label: '현재 진행 중', value: myMeetings.filter((meeting) => meeting.status === 'live').length, to: liveMeetingPath.value },
     ]
-    return { user: auth.user, todays, selectedId, selected, kpis, myMeetings, todayReservations, statusLabel, meetingRoute }
+    const openSelectedMeeting = () => {
+      if (selected.value?.status !== 'live') return
+      openMeetingWindow(selected.value.id)
+    }
+
+    return { user: auth.user, todays, selectedId, selected, kpis, myMeetings, todayReservations, statusLabel, meetingRoute, openSelectedMeeting }
   },
   template: `
     <section class="page">
@@ -54,7 +59,7 @@ export default defineComponent({
               <div><dt>장소</dt><dd>{{ selected.room }}</dd></div>
               <div><dt>참여자</dt><dd>{{ selected.attendees.join(', ') }} ({{ selected.attendees.length }}명)</dd></div>
             </dl>
-            <RouterLink v-if="selected.status === 'live'" :to="meetingRoute(selected.id)" class="primary-button small">회의 입장</RouterLink>
+            <button v-if="selected.status === 'live'" class="primary-button small" @click="openSelectedMeeting">회의 입장</button>
           </article>
           <article class="card"><div class="card-head"><h2>개인 일정</h2></div>
             <ul class="compact-list"><li v-for="meeting in myMeetings.slice(0, 5)" :key="meeting.id"><strong>{{ meeting.title }}</strong><span>{{ meeting.start }}</span></li></ul>
