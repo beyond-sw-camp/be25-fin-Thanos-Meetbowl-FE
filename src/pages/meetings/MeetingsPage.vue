@@ -57,11 +57,11 @@
 </template>
 
 <script setup>
-import { computed, onMounted, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import Pagination from '../../components/common/Pagination.vue'
 import ReservationModal from '../../components/rooms/ReservationModal.vue'
-import { openMeetingWindow } from '../../lib/meeting-route'
+import { getMeetingJoinBlockedMessage, openMeetingWindow } from '../../lib/meeting-route'
 import { getMeetings, getRooms } from '../../lib/reservations'
 import { useAuthStore } from '../../stores/auth'
 import { useUserNames } from '../../composables/useUserNames'
@@ -120,7 +120,10 @@ const mapped = computed(() =>
         title: meeting.title,
         role,
         status,
+        scheduledAt: meeting.scheduledAt,
+        scheduledEndAt: meeting.scheduledEndAt,
         scheduledAtMs: new Date(meeting.scheduledAt).getTime(),
+        scheduledEndAtMs: new Date(meeting.scheduledEndAt).getTime(),
         startLabel: `${utcToKstDate(meeting.scheduledAt)} ${utcToKstClock(meeting.scheduledAt)}`,
         endLabel: utcToKstClock(meeting.scheduledEndAt),
         room: meeting.meetingRoomId ? roomNameMap.value[meeting.meetingRoomId] || '회의실' : '원격',
@@ -179,6 +182,13 @@ async function loadRooms() {
 onMounted(() => {
   loadRooms()
   loadMeetings()
+  window.addEventListener('focus', handleWindowFocus)
+  document.addEventListener('visibilitychange', handleVisibilityChange)
+})
+
+onBeforeUnmount(() => {
+  window.removeEventListener('focus', handleWindowFocus)
+  document.removeEventListener('visibilitychange', handleVisibilityChange)
 })
 
 // 탭(역할)·기간이 바뀌면 서버에서 다시 조회한다.
@@ -211,7 +221,28 @@ async function onSaved() {
 function enterMeeting(meeting) {
   // 종료 회의: 회의록 보기. 회의록 팀의 meetingId 라우트 확정 전까지 기존 임시 연결 유지.
   // TODO(회의록 팀 라우트 확정 시): meetingId 전달해 해당 회의 회의록으로 이동.
-  if (meeting.status === 'ended') router.push('/app/minutes')
-  else openMeetingWindow(meeting.id, { scheduledAt: meeting.scheduledAtMs })
+  if (meeting.status === 'ended') {
+    router.push('/app/minutes')
+    return
+  }
+
+  const blockedMessage = getMeetingJoinBlockedMessage(meeting.scheduledAt)
+  if (blockedMessage) {
+    window.alert(blockedMessage)
+    return
+  }
+
+  openMeetingWindow(meeting.id, {
+    scheduledAt: meeting.scheduledAt,
+  })
+}
+
+function handleWindowFocus() {
+  void loadMeetings()
+}
+
+function handleVisibilityChange() {
+  if (document.visibilityState !== 'visible') return
+  void loadMeetings()
 }
 </script>

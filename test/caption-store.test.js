@@ -3,6 +3,7 @@ import test from 'node:test'
 
 import {
   parseCaptionPayload,
+  selectCaptionTextByMode,
   sortedCaptions,
   upsertCaption,
 } from '../src/lib/caption-store.js'
@@ -55,6 +56,36 @@ test('upserts streaming captions and keeps finalized state', () => {
   assert.equal(captions.size, 1)
   assert.equal(captions.get('segment').status, 'FINALIZED')
   assert.equal(captions.get('segment').text, '안녕하세요')
+})
+
+test('preserves source and translation fields in caption payloads', () => {
+  const caption = parseCaptionPayload({
+    eventType: 'caption.updated',
+    segmentId: 'segment',
+    text: '원문',
+    sourceText: '원문',
+    koText: '한국어 번역',
+    enText: 'English translation',
+    sourceTranscript: 'raw transcript',
+  })
+
+  assert.equal(caption.sourceText, '원문')
+  assert.equal(caption.koText, '한국어 번역')
+  assert.equal(caption.enText, 'English translation')
+})
+
+test('translation tabs only use their dedicated translation fields', () => {
+  const caption = parseCaptionPayload({
+    eventType: 'caption.updated',
+    segmentId: 'segment',
+    text: '원문',
+    sourceText: '원문',
+    sourceTranscript: 'raw transcript',
+  })
+
+  assert.equal(selectCaptionTextByMode(caption, 'source'), 'raw transcript')
+  assert.equal(selectCaptionTextByMode(caption, 'ko'), '')
+  assert.equal(selectCaptionTextByMode(caption, 'en'), '')
 })
 
 test('sorts by sequence and falls back to startedAtMs', () => {

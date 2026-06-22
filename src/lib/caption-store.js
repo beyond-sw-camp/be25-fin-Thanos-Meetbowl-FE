@@ -17,9 +17,17 @@ export function parseCaptionPayload(payload) {
 
   const segmentId = String(payload.segmentId || '').trim()
   const text = selectCaptionText(payload)
+  const sourceText = normalizeCaptionField(payload.sourceText) || text
+  const koText = normalizeCaptionField(payload.koText)
+  const enText = normalizeCaptionField(payload.enText)
+  const sourceTranscript = normalizeCaptionField(payload.sourceTranscript)
   
-  // 식별자나 텍스트가 없는 비정상 데이터는 무시합니다.
-  if (!segmentId || !text) return null
+  const hasAnyDisplayText = Boolean(
+    text || sourceText || koText || enText || sourceTranscript,
+  )
+
+  // 식별자나 어떤 탭에도 표시할 텍스트가 없는 비정상 데이터는 무시합니다.
+  if (!segmentId || !hasAnyDisplayText) return null
 
   return {
     eventType: 'caption.updated',
@@ -30,6 +38,10 @@ export function parseCaptionPayload(payload) {
     status: CAPTION_STATUSES.has(payload.status) ? payload.status : 'STREAMING',
     language: normalizeLanguage(payload.language ?? payload.sourceLanguage),
     text,
+    sourceText,
+    koText,
+    enText,
+    sourceTranscript,
     startedAtMs: finiteNumber(payload.startedAtMs) ?? 0,
     startedAtEpochMs: finiteNumber(payload.startedAtEpochMs),
     endedAtMs: finiteNumber(payload.endedAtMs),
@@ -134,6 +146,24 @@ export function latestStreamingCaption(captionMap) {
   return streaming.at(-1) ?? null
 }
 
+export function selectCaptionTextByMode(caption, mode = 'source') {
+  if (!caption) return ''
+
+  if (mode === 'ko') {
+    return firstCaptionText([caption.koText])
+  }
+
+  if (mode === 'en') {
+    return firstCaptionText([caption.enText])
+  }
+
+  return firstCaptionText([
+    caption.sourceTranscript,
+    caption.sourceText,
+    caption.text,
+  ])
+}
+
 /**
  * [최적 텍스트 선택]
  * 엔진에서 제공하는 여러 텍스트 후보군 중 화면에 표시할 가장 적합한 텍스트를 폴백(Fallback) 패턴으로 찾습니다.
@@ -144,8 +174,7 @@ export function selectCaptionText(payload) {
   // 우선순위: 1. 가공 완료된 최적 텍스트(text) -> 2. 원문 텍스트(sourceText) -> 3. 원시 전사 텍스트(sourceTranscript)
   const candidates = [payload.text, payload.sourceText, payload.sourceTranscript]
   for (const candidate of candidates) {
-    if (typeof candidate !== 'string') continue
-    const normalized = candidate.trim()
+    const normalized = normalizeCaptionField(candidate)
     if (normalized) return normalized
   }
   return ''
@@ -156,6 +185,19 @@ function finiteNumber(value) {
   if (value === null || value === undefined || value === '') return null
   const number = Number(value)
   return Number.isFinite(number) ? number : null
+}
+
+function firstCaptionText(candidates) {
+  for (const candidate of candidates) {
+    const normalized = normalizeCaptionField(candidate)
+    if (normalized) return normalized
+  }
+  return ''
+}
+
+function normalizeCaptionField(value) {
+  if (typeof value !== 'string') return ''
+  return value.trim()
 }
 
 /** 지원하는 언어 코드로의 정규화 (지원하지 않는 언어는 unknown으로 처리) */
