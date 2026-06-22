@@ -26,8 +26,6 @@ function feedbackPayload(overrides = {}) {
       snippet: 'A안으로 진행하기로 결정',
       score: 0.91,
     }],
-    fromSequence: 8,
-    toSequence: 12,
     generatedAt: '2026-06-22T01:10:00Z',
     ...overrides,
   }
@@ -55,8 +53,15 @@ test('rejects the Redis Stream envelope and malformed UI events', () => {
   assert.equal(parseFeedbackPayload(feedbackPayload({ message: ' '.repeat(5) })), null)
   assert.equal(parseFeedbackPayload(feedbackPayload({ feedbackType: 'UNKNOWN' })), null)
   assert.equal(parseFeedbackPayload(feedbackPayload({ sources: null })), null)
-  assert.equal(parseFeedbackPayload(feedbackPayload({ fromSequence: 13, toSequence: 12 })), null)
   assert.equal(parseFeedbackPayload(feedbackPayload({ generatedAt: '2026-06-22T01:10:00' })), null)
+})
+
+test('accepts the exact LiveKit UI contract without internal sequence fields', () => {
+  const feedback = parseFeedbackPayload(feedbackPayload(), { meetingId, sessionId })
+
+  assert.equal(feedback.feedbackId, '4aff1ad9-e0ff-4848-a18e-85a309c72094')
+  assert.equal('fromSequence' in feedback, false)
+  assert.equal('toSequence' in feedback, false)
 })
 
 test('rejects feedback for a different meeting or session', () => {

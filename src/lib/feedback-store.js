@@ -19,14 +19,11 @@ export function parseFeedbackPayload(payload, context = {}) {
   const feedbackType = String(payload.feedbackType || '').trim()
   const message = typeof payload.message === 'string' ? payload.message.trim() : ''
   const generatedAt = normalizeIsoDateTime(payload.generatedAt)
-  const fromSequence = nonNegativeInteger(payload.fromSequence)
-  const toSequence = nonNegativeInteger(payload.toSequence)
 
   if (!feedbackId || !meetingId || !sessionId) return null
   if (!FEEDBACK_TYPES.has(feedbackType)) return null
   if (!message || message.length > 500 || !generatedAt) return null
   if (!Array.isArray(payload.sources)) return null
-  if (fromSequence === null || toSequence === null || toSequence < fromSequence) return null
 
   const expectedMeetingId = String(context.meetingId || '').trim()
   const expectedSessionId = String(context.sessionId || '').trim()
@@ -41,8 +38,6 @@ export function parseFeedbackPayload(payload, context = {}) {
     feedbackType,
     message,
     sources: payload.sources.map(normalizeSource).filter(Boolean),
-    fromSequence,
-    toSequence,
     generatedAt,
     generatedAtMs: Date.parse(generatedAt),
   }
@@ -120,9 +115,4 @@ function normalizeDate(value) {
 
 function normalizeText(value) {
   return typeof value === 'string' ? value.trim() : ''
-}
-
-function nonNegativeInteger(value) {
-  const normalized = Number(value)
-  return Number.isInteger(normalized) && normalized >= 0 ? normalized : null
 }
