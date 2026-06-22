@@ -10,6 +10,9 @@ const app = createApp(App)
 const auth = useAuthStore(pinia)
 
 setApiClientAuthHandlers({
+  onSessionRefreshed(session) {
+    auth.applySession(session)
+  },
   async onUnauthorized() {
     auth.clearSession()
     if (router.currentRoute.value.path !== '/login') {

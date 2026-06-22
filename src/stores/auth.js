@@ -73,10 +73,14 @@ export const useAuthStore = defineStore('auth', {
       }
     },
     async login(loginId, password) {
-      const data = await postJson('/auth/login', {
-        loginId: loginId.trim(),
-        password,
-      })
+      const data = await postJson(
+        '/auth/login',
+        {
+          loginId: loginId.trim(),
+          password,
+        },
+        { skipAuth: true, skipAuthRefresh: true },
+      )
 
       this.applySession({
         accessToken: data.accessToken,
@@ -110,7 +114,7 @@ export const useAuthStore = defineStore('auth', {
         if (this.accessToken && this.refreshToken) {
           await postJson('/auth/logout', {
             refreshToken: this.refreshToken,
-          })
+          }, { skipAuthRefresh: true })
         }
       } finally {
         this.clearSession()
