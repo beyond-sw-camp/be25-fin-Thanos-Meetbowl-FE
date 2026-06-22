@@ -95,7 +95,11 @@ async function prefillFromMeeting() {
   loading.value = true
   try {
     const full = await getMeeting(props.meeting.meetingId)
-    const participants = (full.attendees || []).filter((attendee) => attendee.role !== 'HOST')
+    // 참석자 칩은 주최자(HOST)를 제외하지만, 주최자가 검토자로 지정된 경우엔
+    // 검토자 드롭다운(참석자 기반)에 떠야 하므로 포함한다.
+    const participants = (full.attendees || []).filter(
+      (attendee) => attendee.role !== 'HOST' || attendee.reviewer,
+    )
     await resolveNames(participants.map((attendee) => attendee.userId))
     form.value = {
       title: full.title || '',
@@ -109,7 +113,7 @@ async function prefillFromMeeting() {
         userId: attendee.userId,
         name: nameMap[attendee.userId] || '이름 미확인',
       })),
-      reviewerUserId: full.attendees?.find((attendee) => attendee.role === 'REVIEWER')?.userId || '',
+      reviewerUserId: full.attendees?.find((attendee) => attendee.reviewer)?.userId || '',
       content: full.description || '',
     }
   } catch (error) {
