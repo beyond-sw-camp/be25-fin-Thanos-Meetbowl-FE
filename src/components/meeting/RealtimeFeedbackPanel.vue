@@ -1,13 +1,31 @@
 <template>
-  <section class="realtime-feedback-panel" aria-labelledby="realtime-feedback-title">
+  <section
+    class="realtime-feedback-panel"
+    :class="{ 'feedback-height-expanded': expanded }"
+    aria-labelledby="realtime-feedback-title"
+  >
     <header class="realtime-feedback-header">
-      <div>
+      <div class="realtime-feedback-title">
         <span class="realtime-feedback-eyebrow">Meetbowl AI</span>
         <h2 id="realtime-feedback-title">실시간 피드백</h2>
       </div>
-      <span v-if="feedbacks.length" class="realtime-feedback-count">
-        {{ feedbacks.length }}건
-      </span>
+      <div class="realtime-feedback-header-actions">
+        <span v-if="feedbacks.length" class="realtime-feedback-count">
+          {{ feedbacks.length }}건
+        </span>
+        <div class="realtime-feedback-height-controls" aria-label="피드백 영역 높이 조절">
+          <button
+            type="button"
+            :aria-label="expanded ? '피드백 영역 기본 높이로 줄이기' : '피드백 영역 높이 늘리기'"
+            :aria-expanded="expanded"
+            :title="expanded ? '기본 높이로 줄이기' : '높이 늘리기'"
+            @click="expanded = !expanded"
+          >
+            <ChevronDown v-if="expanded" :size="16" aria-hidden="true" />
+            <ChevronUp v-else :size="16" aria-hidden="true" />
+          </button>
+        </div>
+      </div>
     </header>
 
     <div
@@ -62,6 +80,8 @@
 </template>
 
 <script setup>
+import { ref } from 'vue'
+import { ChevronDown, ChevronUp } from '@lucide/vue'
 import { formatKstTime } from '../../utils/dateTime'
 
 defineProps({
@@ -74,6 +94,8 @@ const FEEDBACK_TYPE_LABELS = {
   DUPLICATE_DISCUSSION: '유사 논의',
   RESOLVED_TOPIC: '해결된 안건',
 }
+
+const expanded = ref(false)
 
 function feedbackTypeLabel(type) {
   return FEEDBACK_TYPE_LABELS[type] || '회의 참고'
@@ -89,6 +111,11 @@ function feedbackTypeLabel(type) {
   border: 1px solid rgba(243, 115, 33, .34);
   border-radius: 12px;
   background: linear-gradient(180deg, rgba(243, 115, 33, .12), rgba(255, 255, 255, .04));
+  transition: height .2s ease;
+}
+
+.realtime-feedback-panel.feedback-height-expanded {
+  height: min(560px, 68vh);
 }
 
 .realtime-feedback-header {
@@ -100,9 +127,46 @@ function feedbackTypeLabel(type) {
   padding: 12px 14px;
 }
 
-.realtime-feedback-header div {
+.realtime-feedback-title {
   display: grid;
   gap: 2px;
+}
+
+.realtime-feedback-header-actions,
+.realtime-feedback-height-controls {
+  display: flex;
+  align-items: center;
+}
+
+.realtime-feedback-header-actions {
+  gap: 8px;
+}
+
+.realtime-feedback-height-controls {
+  overflow: hidden;
+  border: 1px solid rgba(255, 255, 255, .1);
+  border-radius: 8px;
+}
+
+.realtime-feedback-height-controls button {
+  width: 28px;
+  height: 28px;
+  display: grid;
+  place-items: center;
+  border: 0;
+  background: rgba(255, 255, 255, .05);
+  color: rgba(255, 255, 255, .75);
+  cursor: pointer;
+}
+
+.realtime-feedback-height-controls button:hover:not(:disabled) {
+  background: rgba(243, 115, 33, .2);
+  color: white;
+}
+
+.realtime-feedback-height-controls button:focus-visible {
+  outline: 2px solid #fdba74;
+  outline-offset: -2px;
 }
 
 .realtime-feedback-eyebrow {
