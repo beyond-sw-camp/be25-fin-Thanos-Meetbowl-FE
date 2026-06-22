@@ -6,7 +6,7 @@
         <p>공유 자료, 멤버, 버전 이력을 워크스페이스 단위로 관리합니다.</p>
       </div>
       <div class="shared-header-actions">
-        <button type="button" class="ghost-button icon-action" @click="openCreate"><FolderKanban :size="16" /> 스페이스 생성</button>
+        <button type="button" class="ghost-button icon-action" @click="openCreate"><FolderKanban :size="16" /> 프로젝트 생성</button>
         <button type="button" class="ghost-button icon-action" :disabled="!activeSpaceId" @click="openMemberManage"><Plus :size="15" /> 멤버 관리</button>
         <button type="button" class="primary-button small" :disabled="!activeSpaceId" @click="openUpload"><Upload :size="15" /> 파일 업로드</button>
       </div>
@@ -16,7 +16,7 @@
 
     <div class="shared-layout">
       <aside class="card shared-projects">
-        <div class="shared-section-title"><FolderKanban :size="14" /> 공유 스페이스</div>
+        <div class="shared-section-title"><FolderKanban :size="14" /> 공유 프로젝트</div>
         <button
           v-for="space in spaces"
           :key="space.workspaceId"
@@ -31,7 +31,7 @@
           </span>
           <em>{{ filesBySpace.get(space.workspaceId)?.length || 0 }}</em>
         </button>
-        <div v-if="spaces.length === 0" class="empty-state">공유 스페이스가 없습니다.</div>
+        <div v-if="spaces.length === 0" class="empty-state">공유 프로젝트가 없습니다.</div>
       </aside>
 
       <main class="shared-main">
@@ -108,7 +108,7 @@
 
     <div v-if="createOpen" class="modal-backdrop" @click="createOpen = false">
       <form class="write-modal" @submit.prevent="createSpace" @click.stop>
-        <header><h2>스페이스 생성</h2><button type="button" @click="createOpen = false">닫기</button></header>
+        <header><h2>프로젝트 생성</h2><button type="button" @click="createOpen = false">닫기</button></header>
         <label>이름<input v-model="spaceDraft.name" placeholder="예: Q3 신제품 TF"></label>
         <label>설명<textarea v-model="spaceDraft.description" rows="3" placeholder="공유 목적과 범위"></textarea></label>
         <footer><button type="button" class="ghost-button" @click="createOpen = false">취소</button><button type="submit" class="primary-button small">생성</button></footer>
@@ -136,7 +136,7 @@
         <header>
           <div>
             <h2>멤버 관리</h2>
-            <p>{{ activeSpace?.name || '공유 스페이스' }} 멤버를 확인하고 초대합니다.</p>
+            <p>{{ activeSpace?.name || '공유 프로젝트' }} 멤버를 확인하고 초대합니다.</p>
           </div>
           <button type="button" @click="inviteOpen = false">닫기</button>
         </header>
@@ -338,9 +338,9 @@ async function createSpace() {
     spaces.value.unshift(created)
     createOpen.value = false
     await selectSpace(created.workspaceId)
-    showToast('스페이스 생성 완료', created.name)
+    showToast('프로젝트 생성 완료', created.name)
   } catch (error) {
-    errorMessage.value = error?.message || '공유 스페이스 생성에 실패했습니다.'
+    errorMessage.value = error?.message || '공유 프로젝트 생성에 실패했습니다.'
   }
 }
 
@@ -409,7 +409,7 @@ async function inviteMember() {
   userCandidates.value = []
   inviteSearchOpen.value = false
   if (!mocked) await selectSpace(activeSpaceId.value)
-  showToast('멤버 초대 완료', '공유 스페이스 멤버를 추가했습니다.')
+  showToast('멤버 초대 완료', '공유 프로젝트 멤버를 추가했습니다.')
 }
 
 function selectInviteUser(user) {
@@ -443,7 +443,7 @@ async function removeMember(userId) {
   } catch {
     members.value = members.value.filter((member) => member.userId !== userId)
   }
-  showToast('멤버 삭제 완료', '공유 스페이스 멤버를 삭제했습니다.')
+  showToast('멤버 삭제 완료', '공유 프로젝트 멤버를 삭제했습니다.')
 }
 
 function addMockMember(userId) {
