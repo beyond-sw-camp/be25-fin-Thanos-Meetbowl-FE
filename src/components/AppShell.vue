@@ -127,7 +127,7 @@ const navSections = [
       { to: '/app/minutes', label: '내 회의록', icon: '≡' },
       { to: '/app/mail', label: '메일', icon: '✉' },
       { to: '/app/workspace', label: '개인 워크스페이스', icon: '▣' },
-      { to: '/admin/members', label: '사용자 검색', icon: '⌕' },
+      // USER는 메일/회의에서 공용 사용자 검색을 쓰더라도 전용 사용자 검색 메뉴는 노출하지 않는다.
       { to: '/app/shared-docs', label: '공유 워크스페이스', icon: '▤' },
       { to: '/app/community', label: '도파민', icon: '◇' },
     ],
@@ -140,7 +140,6 @@ const navSections = [
       { to: '/admin/members', label: '회원 관리', icon: '⌕' },
       { to: '/admin/organization', label: '조직/직급 관리', icon: '▧' },
       { to: '/admin/rooms', label: '회의실 관리', icon: '□' },
-      { to: '/admin/mail-policy', label: '메일 정책 관리', icon: '✉' },
       { to: '/admin/minutes-policy', label: '보관 정책 관리', icon: '◫' },
       { to: '/admin/logs', label: '관리자 작업 로그', icon: '≣' },
     ],

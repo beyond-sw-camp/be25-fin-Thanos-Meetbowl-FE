@@ -38,7 +38,8 @@ async function runSearch(keyword) {
     if (current !== seq) return // 더 최근 입력의 응답만 반영한다.
     const selected = new Set(props.modelValue.map((attendee) => attendee.userId))
     results.value = (data?.items || [])
-      .filter((user) => user.userId !== props.excludeUserId && !selected.has(user.userId))
+      // 관리자(ADMIN)는 회의 참석자로 지정할 수 없으므로 검색 결과에서 제외한다.
+      .filter((user) => user.role !== 'ADMIN' && user.userId !== props.excludeUserId && !selected.has(user.userId))
       .map((user) => ({
         userId: user.userId,
         name: user.name || '-',

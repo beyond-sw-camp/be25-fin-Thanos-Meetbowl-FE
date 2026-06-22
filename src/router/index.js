@@ -69,8 +69,19 @@ const routes = [
         props: { forcePasswordChange: false },
         meta: { role: ['USER', 'ADMIN'] },
       },
+      {
+        path: 'app/users',
+        // 기존 사용자 검색 URL로 들어와도 관리자 화면 권한 기준으로만 연결한다.
+        redirect: '/admin/members',
+        meta: { role: 'ADMIN' },
+      },
+      {
+        path: 'app/user-search',
+        redirect: '/admin/members',
+        meta: { role: 'ADMIN' },
+      },
       { path: 'admin/dashboard', component: AdminDashboardPage, meta: { role: 'ADMIN' } },
-      { path: 'admin/members', component: MembersPage, meta: { role: ['USER', 'ADMIN'] } },
+      { path: 'admin/members', component: MembersPage, meta: { role: 'ADMIN' } },
       { path: 'admin/organization', component: OrganizationPage, meta: { role: 'ADMIN' } },
       { path: 'admin/rooms', component: AdminRoomsPage, meta: { role: 'ADMIN' } },
       {
@@ -80,19 +91,17 @@ const routes = [
       },
       {
         path: 'admin/mail-policy',
-        component: PolicyPage,
-        // 기존 관리자 메일 정책 라우트는 유지하고, 내부 화면만 실제 보관 정책 API에 연결한다.
-        props: {
-          title: '메일 정책 관리',
-          description: '관리자 메일 보관 정책을 조회하고 수정합니다.',
-          kind: 'mail',
-        },
+        // 기존 메일 정책 URL은 북마크 호환을 위해 유지하되, 실제 화면은 통합된 보관 정책 관리로 보낸다.
+        redirect: '/admin/minutes-policy',
         meta: { role: 'ADMIN' },
       },
       {
         path: 'admin/minutes-policy',
         component: PolicyPage,
-        props: { title: '보관 정책 관리', description: '회의록과 녹음 파일의 보관 기간과 알림 정책을 관리합니다.', kind: 'minute' },
+        props: {
+          title: '보관 정책 관리',
+          description: '회의록, 녹음 파일, 메일 데이터의 보관 정책을 한 화면에서 관리합니다.',
+        },
         meta: { role: 'ADMIN' },
       },
       {
@@ -102,6 +111,12 @@ const routes = [
       },
       { path: 'admin/logs', component: AdminLogsPage, meta: { role: 'ADMIN' } },
     ],
+  },
+  {
+    path: '/users/search',
+    // USER가 직접 주소를 입력해도 접근 권한 없음 화면 대신 홈으로 되돌아가도록 관리자 권한으로 묶는다.
+    redirect: '/admin/members',
+    meta: { role: 'ADMIN' },
   },
   { path: '/:pathMatch(.*)*', redirect: '/app/dashboard' },
 ]

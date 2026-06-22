@@ -23,7 +23,7 @@
       <label>종료 시간<input type="time" v-model="form.end"></label>
     </div>
 
-    <UserSearchPicker v-model="form.attendees" :exclude-user-id="myUserId" />
+    <UserSearchPicker v-model="form.attendees" />
 
     <label>
       회의록 검토자
