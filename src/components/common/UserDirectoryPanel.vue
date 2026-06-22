@@ -25,6 +25,7 @@ const props = defineProps({
     default: '이름, 이메일, 로그인 ID로 사용자를 찾고 조직 요약 정보를 확인합니다.',
   },
   pageSize: { type: Number, default: 20 },
+  editable: { type: Boolean, default: false },
 })
 
 defineExpose({
@@ -229,6 +230,8 @@ async function openDetail(user) {
 }
 
 async function openCreate() {
+  if (!props.editable) return
+  // 생성 모달은 빈 폼으로 시작하고, 조직 옵션은 미리 준비해 둔다.
   actionError.value = ''
   successMessage.value = ''
   await loadOrganizationOptions()
@@ -237,6 +240,8 @@ async function openCreate() {
 }
 
 async function openEdit(user) {
+  if (!props.editable) return
+  // 수정 모달은 상세 조회 후 받은 원본 데이터로 폼을 채운다.
   actionError.value = ''
   successMessage.value = ''
   editLoading.value = true
@@ -553,12 +558,12 @@ function filterActiveOrSelected(items, selectedId, idField) {
               <th>직책</th>
               <th>권한</th>
               <th>상태</th>
-              <th>액션</th>
+              <th v-if="editable">액션</th>
             </tr>
           </thead>
           <tbody>
             <tr v-if="!hasUsers">
-              <td colspan="10"><div class="empty-state">검색 결과가 없습니다.</div></td>
+              <td :colspan="editable ? 10 : 9"><div class="empty-state">검색 결과가 없습니다.</div></td>
             </tr>
             <tr v-for="user in users" :key="user.userId" class="directory-row" @click="openDetail(user)">
               <td><span class="table-avatar">{{ user.name?.[0] || '?' }}</span>{{ user.name }}</td>
@@ -574,7 +579,7 @@ function filterActiveOrSelected(items, selectedId, idField) {
                   {{ statusLabel(user.status) }}
                 </span>
               </td>
-              <td>
+              <td v-if="editable">
                 <button class="icon-text" @click.stop="openEdit(user)">수정</button>
               </td>
             </tr>

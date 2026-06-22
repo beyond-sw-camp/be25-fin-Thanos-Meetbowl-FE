@@ -50,7 +50,7 @@
       :meeting="editingMeeting"
       :allow-remote="true"
       :initial-remote="true"
-      @close="modal = false"
+      @close="closeModal"
       @saved="onSaved"
     />
   </section>
@@ -58,7 +58,7 @@
 
 <script setup>
 import { computed, onMounted, ref, watch } from 'vue'
-import { useRouter } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import Pagination from '../../components/common/Pagination.vue'
 import ReservationModal from '../../components/rooms/ReservationModal.vue'
 import { openMeetingWindow } from '../../lib/meeting-route'
@@ -68,6 +68,7 @@ import { useUserNames } from '../../composables/useUserNames'
 import { utcToKstClock, utcToKstDate } from '../../utils/dateTime'
 
 const router = useRouter()
+const route = useRoute()
 const auth = useAuthStore()
 const myUserId = computed(() => auth.user?.userId || '')
 const { nameMap, resolveNames } = useUserNames()
@@ -139,6 +140,9 @@ const filtered = computed(() => {
 const totalPages = computed(() => Math.max(1, Math.ceil(filtered.value.length / pageSize)))
 const paged = computed(() => filtered.value.slice((pageNo.value - 1) * pageSize, pageNo.value * pageSize))
 
+// 워크스페이스 달력에서 editMeetingId/from=workspace로 진입한 경우, 닫을 때 워크스페이스로 되돌린다.
+const shouldReturnWorkspace = computed(() => route.query.from === 'workspace' || Boolean(route.query.editMeetingId))
+
 // 기간(최근 N개월)은 scheduledAt 하한(from)만 둔다. 상한 없이 예정 회의까지 보이게 한다.
 function rangeToFromTo() {
   if (range.value === 'all') return {}
@@ -176,9 +180,10 @@ async function loadRooms() {
   }
 }
 
-onMounted(() => {
+onMounted(async () => {
   loadRooms()
-  loadMeetings()
+  await loadMeetings()
+  openMeetingFromQuery()
 })
 
 // 탭(역할)·기간이 바뀌면 서버에서 다시 조회한다.
@@ -186,6 +191,9 @@ watch([tab, range], () => {
   pageNo.value = 1
   loadMeetings()
 })
+
+// 워크스페이스에서 회의 수정으로 직접 진입하는 쿼리 변화를 감시한다.
+watch(() => route.query.editMeetingId, openMeetingFromQuery)
 
 function changeTab(value) {
   tab.value = value
@@ -203,9 +211,24 @@ function openEdit(meeting) {
   modal.value = true
 }
 
+// 워크스페이스 달력에서 넘어온 editMeetingId를 찾아 수정 모달을 연다(내가 주최한 종료 전 회의만).
+function openMeetingFromQuery() {
+  const editMeetingId = route.query.editMeetingId
+  if (!editMeetingId) return
+  if (route.query.tab === 'host') tab.value = 'host'
+  const meeting = filtered.value.find((item) => item.id === editMeetingId && item.role === 'host' && item.status !== 'ended')
+  if (meeting) openEdit(meeting)
+}
+
+function closeModal() {
+  modal.value = false
+  if (shouldReturnWorkspace.value) router.push('/app/workspace')
+}
+
 async function onSaved() {
   modal.value = false
   await loadMeetings()
+  if (shouldReturnWorkspace.value) router.push('/app/workspace')
 }
 
 function enterMeeting(meeting) {

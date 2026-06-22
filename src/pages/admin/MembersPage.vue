@@ -1,11 +1,13 @@
 <script setup>
 import { ref } from 'vue'
 import UserDirectoryPanel from '../../components/common/UserDirectoryPanel.vue'
+import { useAuthStore } from '../../stores/auth'
 
 const panelTitle = '사용자 검색'
 const panelDescription = '이름, 이메일, 로그인 ID로 사용자를 찾고 회원 요약 정보를 확인합니다.'
 // 패널 인스턴스를 잡아두고, 상단 버튼에서 생성 모달을 직접 연다.
 const directoryPanel = ref(null)
+const auth = useAuthStore()
 </script>
 
 <template>
@@ -15,13 +17,13 @@ const directoryPanel = ref(null)
         <h1>회원 관리</h1>
         <p>사용자 검색 화면에서 계정과 조직 정보를 확인할 수 있습니다.</p>
       </div>
-      <div class="admin-actions header-actions">
+      <div v-if="auth.user?.role === 'ADMIN'" class="admin-actions header-actions">
         <!-- 페이지 상단 오른쪽에 두는 주요 진입점이다. -->
         <button class="primary-button add-member-button" @click="directoryPanel?.openCreate?.()">회원 추가</button>
       </div>
     </header>
 
-    <UserDirectoryPanel ref="directoryPanel" :title="panelTitle" :description="panelDescription" />
+    <UserDirectoryPanel ref="directoryPanel" :title="panelTitle" :description="panelDescription" :editable="auth.user?.role === 'ADMIN'" />
   </section>
 </template>
 
