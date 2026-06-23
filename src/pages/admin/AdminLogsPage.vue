@@ -363,6 +363,33 @@ function formatAuxiliaryId(value) {
   return value || '-'
 }
 
+function formatActorName(value) {
+  return value || '-'
+}
+
+function formatIpAddress(value) {
+  return value || '-'
+}
+
+function normalizeInlineValue(value) {
+  if (value === null || value === undefined) return ''
+  const normalized = String(value).trim()
+  return normalized && normalized !== '-' ? normalized : ''
+}
+
+function buildAuditTargetSummary(log) {
+  const loginId = normalizeInlineValue(log?.targetLoginId)
+  const targetName = normalizeInlineValue(log?.targetName)
+
+  if (!loginId && !targetName) return '-'
+  if (loginId && targetName) return `${loginId} · ${targetName}`
+  return loginId || targetName || '-'
+}
+
+function buildAuditTargetTooltip(log) {
+  return [getAuditTargetTypeDisplay(log) || '-', buildAuditTargetSummary(log)].join('\n')
+}
+
 function resultBadgeClass(result) {
   const normalized = `${result || ''}`.toUpperCase()
   if (normalized === 'SUCCESS') return 'success'
@@ -406,7 +433,7 @@ function toIsoUtc(value) {
     <template v-else>
       <article class="card admin-toolbar admin-log-toolbar">
         <form class="admin-log-filter-form" @submit.prevent="submitFilters">
-          <select v-model="filterForm.actionType" aria-label="작업 내용">
+          <select v-model="filterForm.actionType" aria-label="작업 유형">
             <option
               v-for="option in AUDIT_ACTION_TYPE_OPTIONS"
               :key="option.value || 'all-action'"
@@ -462,49 +489,47 @@ function toIsoUtc(value) {
         <table>
           <thead>
             <tr>
-              <th>작업자 IP</th>
+              <th>작업 일시</th>
               <th>작업 내용</th>
-              <th>대상 유형</th>
-              <th>대상 로그인 ID</th>
-              <th>변경 대상 이름</th>
+              <th>대상</th>
+              <th>작업자</th>
+              <th>작업자 IP</th>
               <th>결과</th>
-              <th>발생 일시</th>
               <th>상세</th>
             </tr>
           </thead>
           <tbody>
             <tr v-if="!logs.length">
-              <td colspan="8">
+              <td colspan="7">
                 <div class="empty-state-inline">
                   {{ emptyStateMessage }}
                 </div>
               </td>
             </tr>
             <tr v-for="log in logs" :key="log.auditLogId">
-              <td class="ip-cell">
-                <strong>{{ log.ipAddress || '-' }}</strong>
-                <small>{{ log.actorName || '-' }}</small>
+              <td class="date-cell" :title="formatDateTime(log.createdAt)">
+                {{ formatDateTime(log.createdAt) }}
               </td>
               <td class="ellipsis-cell" :title="getAuditActionDisplay(log)">
                 {{ getAuditActionDisplay(log) }}
               </td>
-              <td class="ellipsis-cell" :title="getAuditTargetTypeDisplay(log)">
-                {{ getAuditTargetTypeDisplay(log) }}
+              <td class="target-cell" :title="buildAuditTargetTooltip(log)">
+                <strong>{{ getAuditTargetTypeDisplay(log) }}</strong>
+                <small>{{ buildAuditTargetSummary(log) }}</small>
               </td>
-              <td class="target-id-cell" :title="log.targetLoginId || '-'">
-                {{ log.targetLoginId || '-' }}
+              <td class="actor-cell" :title="formatActorName(log.actorName)">
+                {{ formatActorName(log.actorName) }}
               </td>
-              <td class="ellipsis-cell" :title="log.targetName || '-'">
-                {{ log.targetName || '-' }}
+              <td class="ip-cell" :title="formatIpAddress(log.ipAddress)">
+                {{ formatIpAddress(log.ipAddress) }}
               </td>
               <td>
                 <span :class="['badge', resultBadgeClass(log.result)]">
                   {{ formatAuditResultLabel(log.result) }}
                 </span>
               </td>
-              <td>{{ formatDateTime(log.createdAt) }}</td>
-              <td>
-                <button class="icon-text" type="button" @click="openDetail(log)">상세 보기</button>
+              <td class="detail-cell">
+                <button class="detail-link-button" type="button" @click="openDetail(log)">상세 보기</button>
               </td>
             </tr>
           </tbody>
@@ -550,7 +575,7 @@ function toIsoUtc(value) {
                 <dl class="detail-list">
                   <div><dt>작업 내용</dt><dd>{{ getAuditDisplayTitle(selectedLog) }}</dd></div>
                   <div><dt>결과</dt><dd>{{ formatAuditResultLabel(selectedLog.result) }}</dd></div>
-                  <div><dt>발생 일시</dt><dd>{{ formatDateTime(selectedLog.createdAt) }}</dd></div>
+                  <div><dt>작업 일시</dt><dd>{{ formatDateTime(selectedLog.createdAt) }}</dd></div>
                   <div><dt>작업자 IP</dt><dd>{{ selectedLog.ipAddress || '-' }}</dd></div>
                   <div><dt>작업자</dt><dd>{{ selectedLog.actorName || '-' }}</dd></div>
                 </dl>
@@ -625,27 +650,27 @@ function toIsoUtc(value) {
 
 .admin-log-table th:nth-child(1),
 .admin-log-table td:nth-child(1) {
-  width: 16%;
+  width: 17%;
 }
 
 .admin-log-table th:nth-child(2),
 .admin-log-table td:nth-child(2) {
-  width: 16%;
+  width: 19%;
 }
 
 .admin-log-table th:nth-child(3),
 .admin-log-table td:nth-child(3) {
-  width: 11%;
+  width: 24%;
 }
 
 .admin-log-table th:nth-child(4),
 .admin-log-table td:nth-child(4) {
-  width: 16%;
+  width: 10%;
 }
 
 .admin-log-table th:nth-child(5),
 .admin-log-table td:nth-child(5) {
-  width: 15%;
+  width: 12%;
 }
 
 .admin-log-table th:nth-child(6),
@@ -655,32 +680,61 @@ function toIsoUtc(value) {
 
 .admin-log-table th:nth-child(7),
 .admin-log-table td:nth-child(7) {
-  width: 12%;
+  width: 10%;
 }
 
-.admin-log-table th:nth-child(8),
-.admin-log-table td:nth-child(8) {
-  width: 6%;
+.admin-log-table th,
+.admin-log-table td {
+  padding-top: 16px;
+  padding-bottom: 16px;
+  vertical-align: middle;
 }
 
-.ip-cell strong,
-.ip-cell small {
+.date-cell,
+.actor-cell,
+.ip-cell,
+.detail-cell {
+  white-space: nowrap;
+}
+
+.date-cell {
+  color: var(--foreground);
+  font-weight: 600;
+}
+
+.target-cell {
+  min-width: 0;
+}
+
+.target-cell strong,
+.target-cell small {
   display: block;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
-.ip-cell strong {
-  font-size: 14px;
+.target-cell strong {
+  color: var(--foreground);
+  font-size: 13px;
   font-weight: 700;
 }
 
-.ip-cell small {
+.target-cell small {
   margin-top: 4px;
   color: var(--muted-foreground);
   font-size: 12px;
 }
 
-.target-id-cell {
-  word-break: break-word;
+.actor-cell {
+  color: var(--foreground);
+  font-weight: 600;
+}
+
+.ip-cell {
+  color: var(--muted-foreground);
+  font-weight: 500;
 }
 
 .ellipsis-cell {
@@ -688,6 +742,23 @@ function toIsoUtc(value) {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.detail-link-button {
+  min-height: 32px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  padding: 0;
+  color: var(--primary-dark);
+  font-size: 13px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.detail-link-button:hover {
+  color: var(--primary);
+  text-decoration: underline;
 }
 
 .detail-list dd,
@@ -703,6 +774,7 @@ function toIsoUtc(value) {
   gap: 12px;
   padding: 16px 4px 2px;
   border-top: 1px solid var(--border);
+  margin-bottom: 84px;
 }
 
 .admin-log-count {
@@ -816,6 +888,7 @@ function toIsoUtc(value) {
     flex-direction: column;
     align-items: stretch;
     gap: 10px;
+    margin-bottom: 32px;
   }
 
   .admin-log-footer :deep(.pagination) {
