@@ -29,6 +29,11 @@ import {
   createPositionForm,
   createTeamForm,
 } from '../../lib/admin-organization-form'
+import {
+  getOrganizationSortOrderConflictMessage,
+  ORGANIZATION_SORT_ORDER_DUPLICATE_MESSAGE,
+  validateOrganizationSortOrder,
+} from '../../lib/admin-organization-sort-validation.js'
 import { getAllAdminUsers } from '../../lib/admin-users'
 import {
   buildOrganizationMemberLabel,
@@ -234,6 +239,19 @@ const positionRows = computed(() =>
   })),
 )
 
+const sortOrderError = computed(() =>
+  modalOpen.value
+    ? validateOrganizationSortOrder({
+        tab: activeTab.value,
+        form: form.value,
+        editingItem: editingItem.value,
+        departments: departments.value,
+        teams: teams.value,
+        positions: positions.value,
+      })
+    : '',
+)
+
 watch(
   () => form.value.affiliateId,
   (affiliateId, previousAffiliateId) => {
@@ -241,6 +259,15 @@ watch(
     // 계열사를 바꾸면 기존 부서 선택이 다른 계열사 소속일 수 있어, 유효한 값만 유지한다.
     if (availableDepartments.value.some((department) => department.departmentId === form.value.departmentId)) return
     form.value.departmentId = ''
+  },
+)
+
+watch(
+  () => [form.value.sortOrder, form.value.affiliateId, form.value.departmentId],
+  () => {
+    if (actionError.value === ORGANIZATION_SORT_ORDER_DUPLICATE_MESSAGE) {
+      actionError.value = ''
+    }
   },
 )
 
@@ -393,6 +420,9 @@ async function confirmDeleteItem() {
 async function saveItem() {
   if (saving.value) return
 
+  const validationMessage = sortOrderError.value
+  if (validationMessage) return
+
   saving.value = true
   actionError.value = ''
   successMessage.value = ''
@@ -443,7 +473,9 @@ async function saveItem() {
       return
     }
 
-    actionError.value = error?.message || '저장에 실패했습니다.'
+    const duplicatedSortOrderMessage = getOrganizationSortOrderConflictMessage(error)
+    actionError.value =
+      duplicatedSortOrderMessage || formatActionError(error, '저장에 실패했습니다.')
   } finally {
     saving.value = false
   }
@@ -1216,6 +1248,7 @@ const remainingExcelValidationErrorCount = computed(() =>
             <label>
               순서
               <input v-model.number="form.sortOrder" type="number" min="0" />
+              <div v-if="sortOrderError" class="error-box organization-form-error">{{ sortOrderError }}</div>
             </label>
 
             <label>
@@ -1238,7 +1271,7 @@ const remainingExcelValidationErrorCount = computed(() =>
               >
                 {{ deleteLoading ? '삭제 중...' : deleteTargetLabel() + ' 삭제' }}
               </button>
-              <button class="primary-button" :disabled="saving || deleteLoading">
+              <button class="primary-button" :disabled="saving || deleteLoading || Boolean(sortOrderError)">
                 {{ saving ? '저장 중...' : '저장' }}
               </button>
             </div>
@@ -1415,6 +1448,10 @@ const remainingExcelValidationErrorCount = computed(() =>
 
 .action-feedback {
   white-space: pre-line;
+}
+
+.organization-form-error {
+  margin-top: 8px;
 }
 
 .excel-confirm-body {
