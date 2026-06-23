@@ -194,3 +194,16 @@
   원문 자막 표시 모드는 `sourceTranscript`를 우선 사용하도록 바꿔, 원문 STT가 들어왔는데 `sourceText`/번역 후보보다 덜 잘 보이던 상황을 줄였다.
 - 검증:
   통과: `npm run build`
+
+2026-06-23 회의록 조회·편집·승인 API 연결
+
+- 작업 목적: `내 회의록` 화면을 mock 데이터에서 BE 회의록 API 기반으로 전환하고, 종료 회의에서 해당 회의록 상세로 이동하게 한다.
+- 변경 파일: `src/pages/minutes/MinutesPage.vue`, `src/components/minutes/MinuteDetail.vue`, `src/lib/minutes.js`, `src/lib/minutes-content.js`, `src/router/index.js`, `src/pages/meetings/MeetingsPage.vue`, `src/styles/main.css`, `test/minutes-content.test.js`, 이 작업 기록 파일.
+- 동작 변경:
+  `GET /minutes` 목록, `GET /meetings/{meetingId}/minutes` 상세, `PATCH /meetings/{meetingId}/minutes` 수정, `POST /meetings/{meetingId}/minutes/approve` 승인, 즐겨찾기 등록/해제를 실제 API로 호출한다.
+  종료된 회의의 `내 회의록 보기`는 `/app/minutes/{meetingId}`로 이동한다.
+  AI 회의록 본문은 `minutes.content` Tiptap JSON에서 평문을 추출해 표시하고, 원문 STT는 `GET /meetings/{meetingId}/transcripts`를 별도 버튼으로 조회해 분리했다.
+- 제한 사항:
+  Tiptap editor 패키지가 아직 없어 본문 편집은 Tiptap JSON textarea로 연결했다. 리치 텍스트 편집기는 별도 단계에서 붙여야 한다.
+- 검증:
+  통과: `npm run build`, `npm test`.

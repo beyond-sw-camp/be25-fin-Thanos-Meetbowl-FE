@@ -321,9 +321,7 @@ async function onSaved() {
 function enterMeeting(meeting) {
   // 취소된 회의는 입장/회의록 대상이 아니다(버튼도 숨기지만 방어적으로 막는다).
   if (meeting.status === 'cancelled') return
-    // 종료 회의: 회의록 보기. 회의록 팀의 meetingId 라우트 확정 전까지 기존 임시 연결 유지.
-  // TODO(회의록 팀 라우트 확정 시): meetingId 전달해 해당 회의 회의록으로 이동.
-  if (meeting.status === 'ended') router.push('/app/minutes')
+  if (meeting.status === 'ended') router.push(`/app/minutes/${meeting.id}`)
   else openMeetingWindow(meeting.id, { scheduledAt: meeting.scheduledAtMs })
 }
 </script>

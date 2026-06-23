@@ -47,6 +47,7 @@ const routes = [
       { path: 'app/livekit-test', component: LiveKitTestPage, meta: { role: 'USER' } },
       { path: 'app/mail', component: MailPage, meta: { role: 'USER' } },
       { path: 'app/minutes', component: MinutesPage, meta: { role: 'USER' } },
+      { path: 'app/minutes/:meetingId', component: MinutesPage, meta: { role: 'USER' } },
       { path: 'app/recordings', redirect: '/app/minutes', meta: { role: 'USER' } },
       { path: 'app/workspace', component: WorkspacePage, meta: { role: 'USER' } },
       { path: 'app/shared-docs', component: SharedDocsPage, meta: { role: ['USER', 'ADMIN'] } },

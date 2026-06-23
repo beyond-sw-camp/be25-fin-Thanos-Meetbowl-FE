@@ -1,81 +1,311 @@
 <template>
   <section class="page minutes-page-full">
-    <header class="page-header"><h1>내 회의록</h1><p>AI가 자동 생성한 내 회의록을 확인·수정하고 내부 메일로 공유하세요.</p></header>
-    <div class="minute-layout">
+    <header class="page-header">
+      <h1>내 회의록</h1>
+      <p>AI가 자동 생성한 내 회의록을 확인·수정하고 승인 후 내부 메일로 공유하세요.</p>
+    </header>
+
+    <article v-if="loading" class="card empty-state">회의록을 불러오는 중입니다.</article>
+    <article v-else-if="loadError" class="card empty-state">
+      <p>{{ loadError }}</p>
+      <button class="secondary-button" type="button" @click="loadMinutes">다시 시도</button>
+    </article>
+    <article v-else-if="minuteItems.length === 0" class="card empty-state">표시할 회의록이 없습니다.</article>
+
+    <div v-else class="minute-layout">
       <MinuteList v-model:query="q" :items="filtered" :selected-id="selectedId" :favorites="favorites" @select="selectMinute" />
+      <article v-if="detailLoading" class="card minute-detail-panel empty-state">회의록 상세를 불러오는 중입니다.</article>
+      <article v-else-if="detailError" class="card minute-detail-panel empty-state">
+        <p>{{ detailError }}</p>
+        <button class="secondary-button" type="button" @click="loadSelectedDetail">다시 시도</button>
+      </article>
       <MinuteDetail
+        v-else-if="selected"
         :minute="selected"
         :editing="editing"
         :favorites="favorites"
         :transcript-open="transcriptOpen"
-        :transcript="mockTranscript"
+        :transcript="transcriptLines"
+        :transcript-loading="transcriptLoading"
+        :transcript-error="transcriptError"
+        :can-edit="canEditSelected"
+        :can-approve="canApproveSelected"
+        :action-pending="actionPending"
         @toggle-favorite="toggleFavorite"
         @start-edit="editing = true"
         @cancel-edit="editing = false"
         @save-edit="saveEdit"
-        @toggle-transcript="transcriptOpen = !transcriptOpen"
+        @approve="approveSelected"
+        @toggle-transcript="toggleTranscript"
         @share="openShare"
       />
     </div>
+
     <ShareMailModal v-if="shareOpen" :draft="share" :members="members" @close="shareOpen = false" @send="shareOpen = false" />
   </section>
 </template>
 
 <script setup>
-import { computed, onMounted, onUnmounted, ref } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 import MinuteDetail from '../../components/minutes/MinuteDetail.vue'
 import MinuteList from '../../components/minutes/MinuteList.vue'
 import ShareMailModal from '../../components/minutes/ShareMailModal.vue'
-import { members, minutes } from '../../data/mockData'
-import { onMinuteFavoritesChanged, readMinuteFavorites, toggleMinuteFavorite } from '../../lib/minute-favorites'
+import { members } from '../../data/mockData'
+import {
+  addMinutesFavorite,
+  approveMeetingMinutes,
+  getMeetingMinutes,
+  getMeetingTranscript,
+  listMinutes,
+  removeMinutesFavorite,
+  reviseMeetingMinutes,
+} from '../../lib/minutes'
+import { extractTiptapText, isValidTiptapDocument } from '../../lib/minutes-content'
+import { useAuthStore } from '../../stores/auth'
 
-const mockTranscript = [
-  { t: '00:00:08', who: '이지연', text: '오늘은 OKR 점검과 Q2 우선순위 재정렬을 진행하겠습니다.' },
-  { t: '00:00:42', who: '박서연', text: '프로덕트팀 KR-1은 진행률 78%로, 6월 첫 주 완료 가능합니다.' },
-  { t: '00:01:21', who: '정도현', text: '마케팅 측에서는 캠페인 일정을 한 주 당기는 것을 제안합니다.' },
-  { t: '00:02:03', who: '이지연', text: '좋습니다. 일정 변경에 따른 리소스 영향은 박서연 책임이 정리해 주세요.' },
-]
+const route = useRoute()
+const router = useRouter()
+const auth = useAuthStore()
 
-const minuteItems = ref(minutes.map((minute) => ({ ...minute })))
-const selectedId = ref(minutes[0].id)
+const minuteItems = ref([])
+const detailByMeetingId = ref({})
+const selectedId = ref('')
 const q = ref('')
+const loading = ref(false)
+const loadError = ref('')
+const detailLoading = ref(false)
+const detailError = ref('')
+const actionPending = ref(false)
 const shareOpen = ref(false)
 const transcriptOpen = ref(false)
+const transcriptLoading = ref(false)
+const transcriptError = ref('')
+const transcriptLines = ref([])
 const editing = ref(false)
-const favorites = ref(readMinuteFavorites())
+const favorites = ref({})
 const share = ref({ recipients: members.slice(4, 7), query: '', subject: '', body: '' })
-let stopFavoriteSync = null
 
-const filtered = computed(() => minuteItems.value.filter((minute) => minute.title.toLowerCase().includes(q.value.toLowerCase())))
-const selected = computed(() => minuteItems.value.find((minute) => minute.id === selectedId.value) || minuteItems.value[0])
-
-onMounted(() => {
-  stopFavoriteSync = onMinuteFavoritesChanged((next) => {
-    favorites.value = next
-  })
+const filtered = computed(() => {
+  const keyword = q.value.trim().toLowerCase()
+  if (!keyword) return minuteItems.value
+  return minuteItems.value.filter((minute) => `${minute.title} ${minute.summary}`.toLowerCase().includes(keyword))
 })
 
-onUnmounted(() => {
-  stopFavoriteSync?.()
+const selectedListItem = computed(() => minuteItems.value.find((minute) => minute.id === selectedId.value) || minuteItems.value[0] || null)
+const selected = computed(() => {
+  if (!selectedListItem.value) return null
+  const detail = detailByMeetingId.value[selectedListItem.value.meetingId]
+  return normalizeMinute(detail || selectedListItem.value)
 })
+const selectedStatus = computed(() => selected.value?.rawStatus || '')
+const canEditSelected = computed(() => {
+  if (!selected.value || !['DRAFT', 'IN_REVIEW'].includes(selectedStatus.value)) return false
+  return selected.value.reviewerUserId === auth.user?.userId
+})
+const canApproveSelected = computed(() => {
+  if (!selected.value || !['DRAFT', 'IN_REVIEW'].includes(selectedStatus.value)) return false
+  return selected.value.reviewerUserId === auth.user?.userId
+})
+
+onMounted(loadMinutes)
+
+watch(() => route.params.meetingId, () => {
+  selectFromRoute()
+})
+
+watch(selectedId, async () => {
+  editing.value = false
+  transcriptOpen.value = false
+  transcriptLines.value = []
+  transcriptError.value = ''
+  await loadSelectedDetail()
+})
+
+async function loadMinutes() {
+  loading.value = true
+  loadError.value = ''
+  try {
+    const rows = await listMinutes()
+    minuteItems.value = (rows || []).map(normalizeMinute)
+    favorites.value = Object.fromEntries(minuteItems.value.map((minute) => [minute.id, minute.favorite]))
+    selectFromRoute()
+    if (!selectedId.value && minuteItems.value.length > 0) selectedId.value = minuteItems.value[0].id
+  } catch (error) {
+    loadError.value = error?.message || '회의록 목록을 불러오지 못했습니다.'
+  } finally {
+    loading.value = false
+  }
+}
+
+function selectFromRoute() {
+  const meetingId = route.params.meetingId
+  if (!meetingId || minuteItems.value.length === 0) return
+  const matched = minuteItems.value.find((minute) => minute.meetingId === meetingId)
+  if (matched) selectedId.value = matched.id
+}
 
 function selectMinute(id) {
+  const item = minuteItems.value.find((minute) => minute.id === id)
   selectedId.value = id
-  editing.value = false
+  if (item?.meetingId && route.params.meetingId !== item.meetingId) {
+    router.push(`/app/minutes/${item.meetingId}`)
+  }
 }
 
-function saveEdit(draft) {
-  minuteItems.value = minuteItems.value.map((minute) => minute.id === selected.value.id ? { ...minute, title: draft.title || minute.title, summary: draft.summary } : minute)
-  editing.value = false
+async function loadSelectedDetail() {
+  if (!selectedListItem.value?.meetingId) return
+  const meetingId = selectedListItem.value.meetingId
+  detailLoading.value = true
+  detailError.value = ''
+  try {
+    const detail = await getMeetingMinutes(meetingId)
+    detailByMeetingId.value = { ...detailByMeetingId.value, [meetingId]: detail }
+    replaceListItem(normalizeMinute(detail))
+  } catch (error) {
+    detailError.value = error?.message || '회의록 상세를 불러오지 못했습니다.'
+  } finally {
+    detailLoading.value = false
+  }
 }
 
-function toggleFavorite(id) {
-  favorites.value = toggleMinuteFavorite(id)
+async function saveEdit(draft) {
+  if (!selected.value) return
+  if (!isValidTiptapDocument(draft.content)) {
+    detailError.value = '본문은 type=doc, content 배열을 가진 Tiptap JSON이어야 합니다.'
+    return
+  }
+  actionPending.value = true
+  detailError.value = ''
+  try {
+    const updated = await reviseMeetingMinutes(selected.value.meetingId, {
+      summary: draft.summary,
+      content: draft.content,
+    })
+    detailByMeetingId.value = { ...detailByMeetingId.value, [updated.meetingId]: updated }
+    replaceListItem(normalizeMinute(updated))
+    editing.value = false
+  } catch (error) {
+    detailError.value = error?.message || '회의록 수정 저장에 실패했습니다.'
+  } finally {
+    actionPending.value = false
+  }
+}
+
+async function approveSelected() {
+  if (!selected.value) return
+  actionPending.value = true
+  detailError.value = ''
+  try {
+    const approved = await approveMeetingMinutes(selected.value.meetingId)
+    detailByMeetingId.value = { ...detailByMeetingId.value, [approved.meetingId]: approved }
+    replaceListItem(normalizeMinute(approved))
+    editing.value = false
+  } catch (error) {
+    detailError.value = error?.message || '회의록 승인에 실패했습니다.'
+  } finally {
+    actionPending.value = false
+  }
+}
+
+async function toggleFavorite(id) {
+  const item = minuteItems.value.find((minute) => minute.id === id)
+  if (!item) return
+  const next = !favorites.value[id]
+  favorites.value = { ...favorites.value, [id]: next }
+  replaceListItem({ ...item, favorite: next })
+  try {
+    if (next) await addMinutesFavorite(id)
+    else await removeMinutesFavorite(id)
+  } catch {
+    favorites.value = { ...favorites.value, [id]: !next }
+    replaceListItem({ ...item, favorite: !next })
+  }
+}
+
+async function toggleTranscript() {
+  if (!selected.value) return
+  transcriptOpen.value = !transcriptOpen.value
+  if (!transcriptOpen.value || transcriptLines.value.length > 0) return
+  transcriptLoading.value = true
+  transcriptError.value = ''
+  try {
+    const transcript = await getMeetingTranscript(selected.value.meetingId)
+    transcriptLines.value = (transcript?.segments || []).map((segment) => ({
+      t: formatOffset(segment.startedAtMs),
+      who: `#${segment.sequence}`,
+      text: segment.sourceText,
+    }))
+  } catch (error) {
+    transcriptError.value = error?.message || '회의 원문 STT를 불러오지 못했습니다.'
+  } finally {
+    transcriptLoading.value = false
+  }
 }
 
 function openShare() {
+  if (!selected.value) return
   share.value.subject = `[회의록 공유] ${selected.value.title}`
   share.value.body = `안녕하세요,\n\n${selected.value.title} 회의록을 공유드립니다.\n\n[AI 요약]\n${selected.value.summary}\n\n확인 부탁드립니다.`
   shareOpen.value = true
+}
+
+function replaceListItem(next) {
+  minuteItems.value = minuteItems.value.map((minute) => minute.meetingId === next.meetingId ? { ...minute, ...next } : minute)
+}
+
+function normalizeMinute(raw) {
+  const startedAt = raw.meetingStartedAt || null
+  const endedAt = raw.meetingEndedAt || null
+  const title = raw.meetingTitle || '회의록'
+  return {
+    id: raw.minutesId,
+    minutesId: raw.minutesId,
+    meetingId: raw.meetingId,
+    reviewerUserId: raw.reviewerUserId,
+    title,
+    date: formatDate(startedAt || raw.approvedAt),
+    duration: formatDuration(startedAt, endedAt),
+    attendees: Number(raw.attendeeCount || 0),
+    summary: raw.summary || '',
+    content: raw.content || '',
+    contentText: extractTiptapText(raw.content),
+    reviewer: raw.reviewerName || raw.reviewerDepartment || '-',
+    reviewerDepartment: raw.reviewerDepartment || '',
+    rawStatus: raw.status,
+    statusLabel: statusLabel(raw.status),
+    approvedAt: raw.approvedAt || null,
+    favorite: Boolean(raw.favorite ?? favorites.value?.[raw.minutesId]),
+  }
+}
+
+function statusLabel(status) {
+  return {
+    DRAFT: '초안',
+    IN_REVIEW: '검토중',
+    APPROVED: '승인됨',
+    SHARED: '공유됨',
+    DELETION_SCHEDULED: '삭제 예정',
+  }[status] || status || '-'
+}
+
+function formatDate(value) {
+  if (!value) return '-'
+  return new Intl.DateTimeFormat('ko-KR', { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(value))
+}
+
+function formatDuration(startedAt, endedAt) {
+  if (!startedAt || !endedAt) return '-'
+  const minutes = Math.max(1, Math.round((new Date(endedAt) - new Date(startedAt)) / 60000))
+  if (minutes < 60) return `${minutes}분`
+  return `${Math.floor(minutes / 60)}시간 ${minutes % 60}분`
+}
+
+function formatOffset(ms) {
+  if (!Number.isFinite(Number(ms))) return '--:--'
+  const totalSeconds = Math.floor(Number(ms) / 1000)
+  const minutes = String(Math.floor(totalSeconds / 60)).padStart(2, '0')
+  const seconds = String(totalSeconds % 60).padStart(2, '0')
+  return `${minutes}:${seconds}`
 }
 </script>
