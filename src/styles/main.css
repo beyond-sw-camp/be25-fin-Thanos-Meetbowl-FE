@@ -1173,9 +1173,10 @@ input:focus { border-color: var(--primary); box-shadow: 0 0 0 3px rgba(243,115,3
 .chatbot-bubble { max-width: min(85%, 520px); border: 1px solid var(--border); border-radius: 10px; border-bottom-left-radius: 3px; background: white; padding: 10px 12px; color: var(--foreground); font-size: 13px; line-height: 1.6; box-shadow: 0 1px 2px rgba(15,23,42,.04); }
 .chatbot-message.user .chatbot-bubble { border-color: rgba(243,115,33,.5); border-bottom-left-radius: 10px; border-bottom-right-radius: 3px; background: var(--primary); color: white; }
 .chatbot-bubble p { margin: 0; white-space: pre-wrap; }
-.chatbot-source-line { min-width: 0; display: flex; align-items: center; gap: 6px; margin-top: 8px; color: var(--muted-foreground); font-size: 11px; line-height: 1.4; }
+.chat-answer { white-space: pre-wrap; line-height: 1.6; word-break: break-word; }
+.chatbot-source-line { min-width: 0; display: flex; align-items: flex-start; gap: 6px; margin-top: 8px; color: var(--muted-foreground); font-size: 11px; line-height: 1.5; }
 .chatbot-source-line svg { flex: 0 0 auto; color: var(--primary); }
-.chatbot-source-line span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.chatbot-source-line span { min-width: 0; white-space: normal; overflow-wrap: anywhere; }
 .chatbot-sources { display: grid; gap: 7px; margin-top: 10px; }
 .chatbot-sources button { display: grid; grid-template-columns: auto 1fr; gap: 2px 7px; align-items: start; border: 1px solid var(--border); border-radius: 8px; background: #f8fafc; padding: 8px 9px; color: var(--foreground); text-align: left; transition: border-color .15s ease, background .15s ease; }
 .chatbot-sources button:hover { border-color: rgba(243,115,33,.45); background: #fff7ed; }
