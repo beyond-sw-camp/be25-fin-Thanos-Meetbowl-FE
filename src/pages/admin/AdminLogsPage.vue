@@ -513,9 +513,7 @@ function toIsoUtc(value) {
 
       <div class="admin-log-footer">
         <p class="admin-log-count">총 {{ totalElements }}건</p>
-        <div class="admin-log-pagination">
-          <Pagination v-model="pageNo" :total-pages="totalPages" />
-        </div>
+        <Pagination v-model="pageNo" :total-pages="totalPages" />
       </div>
 
       <div v-if="detailOpen" class="modal-backdrop" @click.self="closeDetail">
@@ -699,44 +697,16 @@ function toIsoUtc(value) {
 }
 
 .admin-log-footer {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  display: flex;
+  justify-content: space-between;
   align-items: center;
-  gap: 12px 16px;
-  padding-bottom: 4px;
+  gap: 12px;
 }
 
 .admin-log-count {
-  grid-column: 1;
   margin: 0;
-  justify-self: start;
   color: var(--muted-foreground);
   font-size: 13px;
-}
-
-.admin-log-pagination {
-  grid-column: 2;
-  justify-self: center;
-  width: fit-content;
-  max-width: 100%;
-}
-
-.admin-log-pagination :deep(.pagination) {
-  margin-top: 0;
-  gap: 8px;
-}
-
-.admin-log-pagination :deep(.pagination span) {
-  min-width: 44px;
-  text-align: center;
-  color: var(--muted-foreground);
-  font-size: 13px;
-  font-weight: 700;
-}
-
-.admin-log-pagination :deep(.pagination button) {
-  min-height: 36px;
-  padding: 0 14px;
 }
 
 .audit-log-detail-modal {
@@ -810,14 +780,8 @@ function toIsoUtc(value) {
 
 @media (max-width: 959px) {
   .admin-log-footer {
-    grid-template-columns: 1fr;
-    justify-items: start;
-    gap: 10px;
-  }
-
-  .admin-log-pagination {
-    grid-column: 1;
-    justify-self: center;
+    flex-direction: column;
+    align-items: stretch;
   }
 }
 </style>
