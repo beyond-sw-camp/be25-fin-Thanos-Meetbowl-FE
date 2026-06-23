@@ -68,7 +68,14 @@
                 <td>{{ userLabel(file.uploaderUserId) }}</td>
                 <td>{{ formatSize(file.sizeBytes) }}</td>
                 <td>{{ displayDate(file.uploadedAt) }}</td>
-                <td><button type="button" class="more-button" @click.stop="openFile(file)" aria-label="파일 관리"><MoreHorizontal :size="17" /></button></td>
+                <td class="file-action-cell">
+                  <button type="button" class="more-button" @click.stop="toggleFileActionMenu(file.fileId)" aria-label="파일 관리"><MoreHorizontal :size="17" /></button>
+                  <div v-if="fileActionFileId === file.fileId" class="file-action-menu" @click.stop>
+                    <button type="button" @click="downloadFile(file)"><Download :size="14" /> 다운로드</button>
+                    <button type="button" @click="openFileInfo(file)"><Info :size="14" /> 파일 정보</button>
+                    <button type="button" class="danger" @click="removeFile(file)"><Trash2 :size="14" /> 삭제</button>
+                  </div>
+                </td>
               </tr>
               <tr v-if="filteredFiles.length === 0"><td colspan="6"><div class="empty-state">문서가 없습니다.</div></td></tr>
             </tbody>
@@ -85,9 +92,46 @@
             <strong>{{ openDoc.originalFileName }}</strong>
             <small>{{ userLabel(openDoc.uploaderUserId) }} · {{ openDoc.currentVersion }}</small>
           </div>
-          <button type="button" class="drawer-close" @click="closeDrawer">닫기</button>
+          <button type="button" class="drawer-close" aria-label="닫기" @click="closeDrawer"><X :size="17" /></button>
         </header>
         <section>
+          <div class="shared-member-section-title">
+            <h2>파일 미리보기</h2>
+            <button type="button" class="secondary-button small" @click="versionUploadOpen = !versionUploadOpen">
+              {{ versionUploadOpen ? '닫기' : '새 버전 업로드' }}
+            </button>
+          </div>
+          <form v-if="versionUploadOpen" class="shared-version-upload" @submit.prevent="submitNewVersion">
+            <div class="shared-member-section-title">
+              <strong>새 버전 업로드</strong>
+              <small>현재 버전: {{ openDoc.currentVersion }}</small>
+            </div>
+            <input type="file" @change="versionDraft.file = $event.target.files?.[0] || null">
+            <input v-model="versionDraft.newVersion" placeholder="새 버전 (예: v2)">
+            <input v-model="versionDraft.changeMemo" placeholder="변경 메모 (선택)">
+            <button type="submit" class="primary-button small" :disabled="!versionDraft.file || !versionDraft.newVersion.trim() || versionUploading">
+              {{ versionUploading ? '업로드 중...' : '업로드' }}
+            </button>
+          </form>
+          <article class="shared-version-preview file-preview-panel">
+            <div v-if="filePreviewLoading" class="empty-state">파일을 불러오는 중입니다.</div>
+            <div v-else-if="filePreviewError" class="empty-state">{{ filePreviewError }}</div>
+            <img v-else-if="filePreviewKind === 'image'" :src="filePreviewUrl" :alt="openDoc.originalFileName">
+            <iframe v-else-if="filePreviewKind === 'pdf'" :src="filePreviewUrl" title="파일 미리보기"></iframe>
+            <pre v-else-if="filePreviewKind === 'text'">{{ filePreviewText }}</pre>
+            <dl v-else class="file-info-list">
+              <div v-if="filePreviewKind === 'unsupported'" class="file-info-notice"><dt>미리보기</dt><dd>지원하지 않는 파일 형식입니다.</dd></div>
+              <div><dt>파일명</dt><dd>{{ openDoc.originalFileName }}</dd></div>
+              <div><dt>형식</dt><dd>{{ openDoc.contentType || '-' }}</dd></div>
+              <div><dt>크기</dt><dd>{{ formatSize(openDoc.sizeBytes) }}</dd></div>
+              <div><dt>업로드</dt><dd>{{ displayDate(openDoc.uploadedAt) }}</dd></div>
+              <div><dt>업로더</dt><dd>{{ userLabel(openDoc.uploaderUserId) }}</dd></div>
+              <div><dt>버전</dt><dd>{{ openDoc.currentVersion }}</dd></div>
+            </dl>
+            <div class="file-preview-actions">
+              <button type="button" class="primary-button small" @click="downloadFile(openDoc)"><Download :size="14" /> 다운로드</button>
+            </div>
+          </article>
           <h2>버전 이력</h2>
           <article v-for="version in versions" :key="version.versionId" class="version-card" :class="{ active: selectedVersion?.versionId === version.versionId }" @click="selectedVersion = version">
             <div><span class="badge primary">{{ version.version }}</span><strong>{{ version.changeMemo || '변경 메모 없음' }}</strong><small>{{ displayDate(version.uploadedAt) }}</small></div>
@@ -138,9 +182,32 @@
     <div v-if="uploadOpen" class="modal-backdrop" @click="uploadOpen = false">
       <form class="write-modal" @submit.prevent="submitUpload" @click.stop>
         <header><h2>파일 업로드</h2><button type="button" @click="uploadOpen = false">닫기</button></header>
-        <p class="shared-upload-note">선택한 공유 프로젝트에 새 파일로 등록합니다.</p>
-        <input ref="uploadInput" type="file" @change="uploadDraft.file = $event.target.files?.[0] || null">
-        <footer><button type="button" class="ghost-button" @click="uploadOpen = false">취소</button><button type="submit" class="primary-button small" :disabled="!uploadDraft.file">업로드</button></footer>
+        <p class="shared-upload-note">선택한 공유 프로젝트에 새 파일로 등록합니다. 여러 개를 한 번에 올릴 수 있습니다.</p>
+        <button
+          type="button"
+          class="shared-upload-zone"
+          @click="uploadInput?.click()"
+          @dragover.prevent
+          @drop.prevent="addUploadFiles($event.dataTransfer?.files)"
+        >
+          <Upload :size="22" />
+          <strong>파일을 끌어다 놓거나 클릭해 선택</strong>
+          <span>여러 파일 동시 업로드 지원</span>
+        </button>
+        <input ref="uploadInput" class="hidden-file-input" type="file" multiple @change="addUploadFiles($event.target.files)">
+        <ul v-if="uploadDraft.files.length" class="shared-upload-list">
+          <li v-for="(file, index) in uploadDraft.files" :key="file.name + index">
+            <span>{{ file.name }}</span>
+            <small>{{ formatSize(file.size) }}</small>
+            <button type="button" @click="removeUploadFile(index)" aria-label="제거">×</button>
+          </li>
+        </ul>
+        <footer>
+          <button type="button" class="ghost-button" @click="uploadOpen = false">취소</button>
+          <button type="submit" class="primary-button small" :disabled="!uploadDraft.files.length || uploadLoading">
+            {{ uploadLoading ? '업로드 중...' : `업로드 (${uploadDraft.files.length})` }}
+          </button>
+        </footer>
       </form>
     </div>
 
@@ -203,18 +270,23 @@
 
 <script setup>
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
-import { FileSpreadsheet, FileText, FileType2, FolderKanban, MoreHorizontal, Plus, Search, Upload } from '@lucide/vue'
+import { Download, FileSpreadsheet, FileText, FileType2, FolderKanban, Info, MoreHorizontal, Plus, Search, Trash2, Upload, X } from '@lucide/vue'
 import {
   changeSharedWorkspaceAudience,
+  addSharedWorkspaceFileVersion,
   createSharedWorkspace,
+  deleteSharedWorkspaceFile,
+  downloadSharedWorkspaceFile,
   getSharedWorkspaceFileVersions,
   getSharedWorkspaceFiles,
   getSharedWorkspaceMembers,
   getSharedWorkspaces,
   inviteSharedWorkspaceMember,
   removeSharedWorkspaceMember,
+  previewSharedWorkspaceFile,
   uploadSharedWorkspaceFile,
 } from '../../lib/shared-workspace'
+import { previewKind, resolveBlobFileName, saveBlob } from '../../lib/file-actions'
 import { getUserSummary, searchUsers } from '../../lib/users'
 import { formatKstDateTime } from '../../utils/dateTime'
 import {
@@ -233,14 +305,24 @@ const files = ref([])
 const members = ref([])
 const versions = ref([])
 const selectedVersion = ref(null)
+const versionDraft = ref({ file: null, newVersion: '', changeMemo: '' })
+const versionUploading = ref(false)
+const versionUploadOpen = ref(false)
 const keyword = ref('')
 const openDoc = ref(null)
+const fileActionFileId = ref('')
+const filePreviewUrl = ref('')
+const filePreviewKind = ref('unsupported')
+const filePreviewText = ref('')
+const filePreviewLoading = ref(false)
+const filePreviewError = ref('')
 const createOpen = ref(false)
 const uploadOpen = ref(false)
 const inviteOpen = ref(false)
 const uploadInput = ref(null)
+const uploadLoading = ref(false)
 const spaceDraft = ref({ name: '' })
-const uploadDraft = ref({ file: null })
+const uploadDraft = ref({ files: [] })
 const createMemberKeyword = ref('')
 const createMemberCandidates = ref([])
 const createSelectedMembers = ref([])
@@ -300,7 +382,10 @@ onMounted(() => {
   loadSpaces()
 })
 
-onUnmounted(() => document.removeEventListener('mousedown', closeInviteSearchOnOutside))
+onUnmounted(() => {
+  document.removeEventListener('mousedown', closeInviteSearchOnOutside)
+  clearFilePreviewUrl()
+})
 
 async function loadSpaces() {
   errorMessage.value = ''
@@ -334,7 +419,25 @@ async function loadFilesForSpace(spaceId, useCache) {
 }
 
 async function openFile(file) {
+  fileActionFileId.value = ''
   openDoc.value = file
+  versionDraft.value = { file: null, newVersion: '', changeMemo: '' }
+  versionUploadOpen.value = false
+  await loadFilePreview(file)
+  versions.value = await withFallback(() => getSharedWorkspaceFileVersions(activeSpaceId.value, file.fileId), () => fallbackSharedVersions(file))
+  if (!versions.value.length) versions.value = fallbackSharedVersions(file)
+  selectedVersion.value = versions.value[0] || null
+  await Promise.all(versions.value.map((version) => cacheUser(version.uploaderUserId)))
+}
+
+async function openFileInfo(file) {
+  fileActionFileId.value = ''
+  clearFilePreviewUrl()
+  openDoc.value = file
+  filePreviewKind.value = 'info'
+  filePreviewText.value = ''
+  filePreviewError.value = ''
+  filePreviewLoading.value = false
   versions.value = await withFallback(() => getSharedWorkspaceFileVersions(activeSpaceId.value, file.fileId), () => fallbackSharedVersions(file))
   if (!versions.value.length) versions.value = fallbackSharedVersions(file)
   selectedVersion.value = versions.value[0] || null
@@ -345,6 +448,43 @@ function closeDrawer() {
   openDoc.value = null
   versions.value = []
   selectedVersion.value = null
+  versionDraft.value = { file: null, newVersion: '', changeMemo: '' }
+  versionUploadOpen.value = false
+  clearFilePreviewUrl()
+  filePreviewKind.value = 'unsupported'
+  filePreviewText.value = ''
+  filePreviewError.value = ''
+  filePreviewLoading.value = false
+}
+
+async function submitNewVersion() {
+  if (!openDoc.value || !versionDraft.value.file || !versionDraft.value.newVersion.trim() || versionUploading.value) {
+    return
+  }
+  const fileId = openDoc.value.fileId
+  versionUploading.value = true
+  try {
+    await addSharedWorkspaceFileVersion(activeSpaceId.value, fileId, {
+      file: versionDraft.value.file,
+      // 낙관적 동시성 검증: 내가 본 현재 버전을 함께 보내 다른 사람이 먼저 올린 경우를 BE가 거른다.
+      expectedCurrentVersion: openDoc.value.currentVersion,
+      newVersion: versionDraft.value.newVersion.trim(),
+      changeMemo: versionDraft.value.changeMemo.trim(),
+    })
+  } catch (error) {
+    showToast('새 버전 업로드 실패', error?.message || '업로드 중 문제가 발생했습니다.')
+    return
+  } finally {
+    versionUploading.value = false
+  }
+  versionDraft.value = { file: null, newVersion: '', changeMemo: '' }
+  versionUploadOpen.value = false
+  // 목록·버전 이력을 새로고침하고, 드로어를 갱신된 파일(새 currentVersion)로 다시 연다.
+  filesBySpace.value.delete(activeSpaceId.value)
+  await selectSpace(activeSpaceId.value)
+  const refreshed = files.value.find((file) => file.fileId === fileId)
+  if (refreshed) await openFile(refreshed)
+  showToast('새 버전 업로드 완료', '새 버전을 등록했습니다.')
 }
 
 function openCreate() {
@@ -378,10 +518,20 @@ async function createSpace() {
 }
 
 function openUpload() {
-  uploadDraft.value = {
-    file: null,
-  }
+  uploadDraft.value = { files: [] }
   uploadOpen.value = true
+}
+
+// 드롭/선택 파일을 누적한다(여러 번 나눠 골라도 합쳐지도록).
+function addUploadFiles(fileList) {
+  const selected = Array.from(fileList || [])
+  if (!selected.length) return
+  uploadDraft.value.files = [...uploadDraft.value.files, ...selected]
+  if (uploadInput.value) uploadInput.value.value = ''
+}
+
+function removeUploadFile(index) {
+  uploadDraft.value.files = uploadDraft.value.files.filter((_, i) => i !== index)
 }
 
 function openMemberManage() {
@@ -394,16 +544,110 @@ function openMemberManage() {
 }
 
 async function submitUpload() {
-  if (!activeSpaceId.value || !uploadDraft.value.file) return
-  await uploadSharedWorkspaceFile(activeSpaceId.value, uploadDraft.value.file)
+  if (!activeSpaceId.value || !uploadDraft.value.files.length || uploadLoading.value) return
+  const spaceId = activeSpaceId.value
+  uploadLoading.value = true
+  const targetFiles = [...uploadDraft.value.files]
+  let uploadResults = []
+  try {
+    // BE는 단일 파일 엔드포인트라, 각 파일 업로드 결과를 따로 집계한다.
+    uploadResults = await Promise.allSettled(targetFiles.map((file) => uploadSharedWorkspaceFile(spaceId, file)))
+  } finally {
+    uploadLoading.value = false
+  }
+
+  const failedFiles = targetFiles.filter((_, index) => uploadResults[index]?.status === 'rejected')
+  const uploadedFiles = uploadResults
+    .filter((result) => result.status === 'fulfilled' && result.value?.fileId)
+    .map((result) => result.value)
+  const successCount = targetFiles.length - failedFiles.length
+  if (successCount > 0) {
+    mergeUploadedFiles(spaceId, uploadedFiles)
+    try {
+      filesBySpace.value.delete(spaceId)
+      await selectSpace(spaceId)
+      const missingUploadedFiles = uploadedFiles.filter((uploadedFile) => !files.value.some((file) => file.fileId === uploadedFile.fileId))
+      mergeUploadedFiles(spaceId, missingUploadedFiles)
+    } catch (error) {
+      mergeUploadedFiles(spaceId, uploadedFiles)
+      showToast('파일 목록 갱신 실패', error?.message || '업로드한 파일은 현재 목록에 임시로 표시됩니다.')
+    }
+    if (openDoc.value) {
+      const refreshed = files.value.find((file) => file.fileId === openDoc.value.fileId)
+      if (refreshed) await openFile(refreshed)
+    }
+  }
+
+  if (failedFiles.length > 0) {
+    uploadDraft.value.files = failedFiles
+    showToast('파일 업로드 일부 실패', `${targetFiles.length}개 중 ${successCount}개 성공, ${failedFiles.length}개 실패`)
+    return
+  }
+
   uploadOpen.value = false
+  uploadDraft.value.files = []
+  showToast('파일 업로드 완료', `공유 파일 ${successCount}개를 업로드했습니다.`)
+}
+
+function mergeUploadedFiles(spaceId, uploadedFiles) {
+  if (!uploadedFiles.length) return
+  const cachedFiles = filesBySpace.value.get(spaceId) || []
+  const mergedFiles = [
+    ...uploadedFiles,
+    ...cachedFiles.filter((file) => !uploadedFiles.some((uploadedFile) => uploadedFile.fileId === file.fileId)),
+  ]
+  filesBySpace.value = new Map(filesBySpace.value).set(spaceId, mergedFiles)
+  if (activeSpaceId.value === spaceId) files.value = mergedFiles
+}
+
+function toggleFileActionMenu(fileId) {
+  fileActionFileId.value = fileActionFileId.value === fileId ? '' : fileId
+}
+
+async function downloadFile(file) {
+  if (!activeSpaceId.value || !file?.fileId) return
+  fileActionFileId.value = ''
+  const { blob, headers } = await downloadSharedWorkspaceFile(activeSpaceId.value, file.fileId)
+  saveBlob(blob, resolveBlobFileName(headers, file.originalFileName))
+  showToast('다운로드 시작', file.originalFileName)
+}
+
+async function removeFile(file) {
+  if (!activeSpaceId.value || !file?.fileId) return
+  await deleteSharedWorkspaceFile(activeSpaceId.value, file.fileId)
+  fileActionFileId.value = ''
+  if (openDoc.value?.fileId === file.fileId) closeDrawer()
   filesBySpace.value.delete(activeSpaceId.value)
   await selectSpace(activeSpaceId.value)
-  if (openDoc.value) {
-    const refreshed = files.value.find((file) => file.fileId === openDoc.value.fileId)
-    if (refreshed) await openFile(refreshed)
+  showToast('파일 삭제 완료', file.originalFileName)
+}
+
+async function loadFilePreview(file) {
+  clearFilePreviewUrl()
+  filePreviewLoading.value = true
+  filePreviewError.value = ''
+  filePreviewText.value = ''
+  filePreviewKind.value = 'unsupported'
+
+  try {
+    const { blob } = await previewSharedWorkspaceFile(activeSpaceId.value, file.fileId)
+    const kind = previewKind(blob.type || file.contentType || '')
+    filePreviewKind.value = kind
+    if (kind === 'image' || kind === 'pdf') {
+      filePreviewUrl.value = window.URL.createObjectURL(blob)
+    } else if (kind === 'text') {
+      filePreviewText.value = await blob.text()
+    }
+  } catch (error) {
+    filePreviewError.value = error?.message || '파일 미리보기를 불러오지 못했습니다.'
+  } finally {
+    filePreviewLoading.value = false
   }
-  showToast('파일 업로드 완료', '공유 파일을 업로드했습니다.')
+}
+
+function clearFilePreviewUrl() {
+  if (filePreviewUrl.value) window.URL.revokeObjectURL(filePreviewUrl.value)
+  filePreviewUrl.value = ''
 }
 
 function selectCreateMember(user) {

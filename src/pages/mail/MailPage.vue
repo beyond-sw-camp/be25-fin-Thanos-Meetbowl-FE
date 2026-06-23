@@ -70,6 +70,7 @@ import MailList from '../../components/mail/MailList.vue'
 import {
   backupMails,
   changeMailRead,
+  downloadMailAttachment,
   getMail,
   listMails,
   moveMailToTrash,
@@ -310,13 +311,10 @@ async function sendDraft(draft) {
     await loadMails()
     showToast('메일 전송 완료', '메일을 보냈습니다.')
   } catch (error) {
-    localSentMails.value.unshift(createLocalSentMail(draft))
-    closeCompose()
-    tab.value = 'sent'
-    pageNo.value = 1
-    errorMessage.value = ''
-    await loadMails()
-    showToast('메일 전송 완료', '테스트용 보낸 메일함에 저장했습니다.')
+    // 전송 실패를 성공처럼 숨기지 않는다. 상세 사유는 콘솔에만 남기고(디버깅용),
+    // 사용자에겐 고정 안내 + 작성창 유지로 재시도하게 한다. (임시 보관 시 새로고침에 사라져 혼란을 줬음)
+    console.error('메일 전송 실패:', error)
+    showToast('메일 전송 실패', '메일을 보내지 못했습니다. 다시 시도해주세요.')
   }
 }
 
@@ -351,38 +349,29 @@ function closeCompose() {
   composeRecipients.value = []
 }
 
-function createLocalSentMail(draft) {
-  return {
-    mailId: `local-sent-${Date.now()}`,
-    senderUserId: 'local-user',
-    senderName: '나',
-    senderMeta: '테스트 발송',
-    recipientUserIds: draft.recipientUserIds,
-    subject: draft.subject,
-    body: draft.body,
-    requestedAt: new Date().toISOString(),
-    read: true,
-    trashed: false,
-    hasAttachments: draft.attachments?.length > 0,
-    attachmentCount: draft.attachments?.length || 0,
-    attachments: draft.attachments || [],
-  }
-}
-
 function printMail() {
   window.print()
 }
 
-function downloadAttachment(attachment) {
+async function downloadAttachment(attachment) {
   const fileName = attachment.originalFileName || attachment.fileName || attachment.name || attachment.storedFileName || 'attachment'
+  // 작성 중 로컬 첨부(미전송)는 메모리 URL로 바로 받는다.
   if (attachment.localUrl) {
     triggerDownload(attachment.localUrl, fileName)
     return
   }
-  const blob = createAttachmentDownloadBlob(attachment, fileName)
-  const url = URL.createObjectURL(blob)
-  triggerDownload(url, fileName)
-  setTimeout(() => URL.revokeObjectURL(url), 1000)
+  const attachmentId = attachment.attachmentId || attachment.id
+  const mailId = open.value?.mailId
+  if (!mailId || !attachmentId) return
+  try {
+    const { blob } = await downloadMailAttachment(mailId, attachmentId)
+    const url = URL.createObjectURL(blob)
+    triggerDownload(url, fileName)
+    setTimeout(() => URL.revokeObjectURL(url), 1000)
+  } catch (error) {
+    console.error('첨부 다운로드 실패:', error)
+    showToast('첨부 다운로드 실패', '첨부파일을 받지 못했습니다.')
+  }
 }
 
 function createAttachmentDownloadBlob(attachment, fileName) {

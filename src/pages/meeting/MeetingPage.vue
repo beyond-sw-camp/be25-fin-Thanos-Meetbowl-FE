@@ -605,6 +605,11 @@
           <strong>AI 실시간 피드백</strong>
           <p>{{ feedbackMessage }}</p>
 
+        <RealtimeFeedbackPanel
+          class="meeting-realtime-feedback"
+          :feedbacks="realtimeFeedbacks"
+          :connected="Boolean(meetingRoom)"
+        />
         </div>
       </div>
 

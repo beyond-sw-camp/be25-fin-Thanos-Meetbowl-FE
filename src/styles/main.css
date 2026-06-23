@@ -747,6 +747,12 @@ input:focus { border-color: var(--primary); box-shadow: 0 0 0 3px rgba(243,115,3
 .workspace-upload-zone { width: 100%; display: grid; gap: 7px; place-items: center; border: 2px dashed var(--border); border-radius: 10px; background: #f8fafc; padding: 30px; margin-bottom: 16px; color: var(--foreground); }
 .workspace-upload-zone:hover { border-color: var(--primary); background: #fff7ed; }
 .workspace-upload-zone span { color: var(--muted-foreground); font-size: 12px; }
+.workspace-drive-row { cursor: pointer; }
+.workspace-drive-row:hover { background: #f8fafc; }
+.workspace-drive-file-cell { min-width: 0; display: flex; align-items: center; gap: 11px; }
+.workspace-drive-file-cell span:last-child { min-width: 0; display: grid; gap: 4px; }
+.workspace-drive-file-cell strong, .workspace-drive-file-cell small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.workspace-drive-file-cell small { color: var(--muted-foreground); font-size: 12px; }
 .workspace-event-form-grid { display: grid; grid-template-columns: 1fr auto auto; gap: 8px; }
 .workspace-event-modal { padding: 0; overflow: hidden; }
 .workspace-event-modal header { padding: 14px 18px; border-bottom: 1px solid var(--border); }
@@ -793,6 +799,26 @@ input:focus { border-color: var(--primary); box-shadow: 0 0 0 3px rgba(243,115,3
 .shared-type-pdf { background: #fef2f2; color: #b91c1c; }
 .more-button { min-width: 32px; min-height: 32px; border: 0; border-radius: 8px; background: transparent; color: var(--muted-foreground); }
 .more-button:hover { background: var(--muted); color: var(--foreground); }
+.file-action-cell { position: relative; width: 74px; overflow: visible; }
+.file-action-menu { position: absolute; right: 12px; top: 44px; z-index: 25; width: 160px; display: grid; gap: 4px; border: 1px solid var(--border); border-radius: 8px; background: white; padding: 6px; box-shadow: 0 16px 40px rgba(15,23,42,.16); }
+.file-action-menu button { min-height: 34px; display: flex; align-items: center; gap: 8px; border: 0; border-radius: 7px; background: white; padding: 0 9px; color: var(--foreground); text-align: left; font-size: 13px; }
+.file-action-menu button:hover { background: var(--muted); }
+.file-action-menu button.danger { color: var(--danger); }
+.file-preview-modal { width: min(920px, calc(100vw - 32px)); max-height: calc(100vh - 48px); grid-template-rows: auto minmax(0, 1fr) auto; padding: 0; overflow: hidden; }
+.file-preview-modal header { padding: 15px 18px; border-bottom: 1px solid var(--border); }
+.file-preview-modal header p { margin: 4px 0 0; color: var(--muted-foreground); font-size: 12px; }
+.file-preview-modal footer { padding: 12px 18px; border-top: 1px solid var(--border); }
+.file-preview-body { min-height: 360px; max-height: min(68vh, 720px); overflow: auto; background: #f8fafc; padding: 16px; }
+.file-preview-body img, .file-preview-panel img { display: block; max-width: 100%; max-height: 620px; margin: 0 auto; border-radius: 8px; object-fit: contain; }
+.file-preview-body iframe, .file-preview-panel iframe { width: 100%; height: min(62vh, 680px); border: 1px solid var(--border); border-radius: 8px; background: white; }
+.file-preview-body pre, .file-preview-panel pre { min-height: 260px; overflow: auto; white-space: pre-wrap; margin: 0; border: 1px solid var(--border); border-radius: 8px; background: white; padding: 14px; color: var(--foreground); font: 13px/1.65 ui-monospace, SFMono-Regular, Menlo, monospace; }
+.file-info-list { display: grid; gap: 8px; margin: 0; }
+.file-info-list div { display: grid; grid-template-columns: 88px minmax(0, 1fr); gap: 12px; border: 1px solid var(--border); border-radius: 8px; background: white; padding: 10px 12px; }
+.file-info-list .file-info-notice { border-color: #fed7aa; background: #fff7ed; }
+.file-info-list dt { color: var(--muted-foreground); font-size: 12px; font-weight: 800; }
+.file-info-list dd { min-width: 0; margin: 0; overflow-wrap: anywhere; }
+.file-preview-panel { display: grid; gap: 12px; }
+.file-preview-actions { display: flex; justify-content: flex-end; }
 .drawer-backdrop { position: fixed; inset: 0; z-index: 50; background: rgba(15,23,42,.45); }
 .shared-drawer { position: absolute; right: 0; top: 0; bottom: 0; width: min(680px, 100%); display: grid; grid-template-rows: auto 1fr; background: white; border-left: 1px solid var(--border); box-shadow: -20px 0 50px rgba(15,23,42,.22); }
 .shared-drawer header { display: flex; align-items: center; gap: 12px; min-height: 64px; border-bottom: 1px solid var(--border); padding: 12px 18px; }
@@ -809,6 +835,10 @@ input:focus { border-color: var(--primary); box-shadow: 0 0 0 3px rgba(243,115,3
 .version-card strong { font-size: 13px; font-weight: 700; letter-spacing: 0; }
 .version-card div small { margin-left: auto; color: var(--muted-foreground); font-size: 12px; }
 .version-card p { margin: 8px 0 0; color: var(--muted-foreground); font-size: 12px; }
+.shared-version-upload { display: grid; gap: 8px; margin: 10px 0 14px; border: 1px dashed var(--border); border-radius: 10px; background: #f8fafc; padding: 12px; }
+.shared-version-upload input[type="file"] { font-size: 12px; }
+.shared-version-upload input:not([type="file"]) { height: 36px; border: 1px solid var(--border); border-radius: 8px; background: white; padding: 0 10px; }
+.shared-version-upload button { justify-self: end; }
 .shared-version-preview { margin-top: 16px; border: 1px solid var(--border); border-radius: 10px; background: #f8fafc; padding: 14px; }
 .shared-version-preview pre { max-height: 260px; overflow: auto; white-space: pre-wrap; margin: 12px 0 0; color: var(--foreground); font: inherit; font-size: 12.5px; line-height: 1.65; }
 .participant-box { border: 1px solid var(--border); border-radius: 8px; padding: 8px; }
@@ -829,6 +859,12 @@ input:focus { border-color: var(--primary); box-shadow: 0 0 0 3px rgba(243,115,3
 .shared-upload-zone { width: 100%; display: grid; gap: 7px; place-items: center; border: 2px dashed var(--border); border-radius: 10px; background: #f8fafc; padding: 30px; color: var(--foreground); }
 .shared-upload-zone:hover { border-color: var(--primary); background: #fff7ed; }
 .shared-upload-zone span { color: var(--muted-foreground); font-size: 12px; }
+.shared-upload-list { list-style: none; margin: 10px 0 0; padding: 0; display: grid; gap: 6px; max-height: 200px; overflow: auto; }
+.shared-upload-list li { display: flex; align-items: center; gap: 8px; border: 1px solid var(--border); border-radius: 8px; background: white; padding: 8px 10px; font-size: 13px; }
+.shared-upload-list li span { min-width: 0; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.shared-upload-list li small { color: var(--muted-foreground); white-space: nowrap; }
+.shared-upload-list li button { border: 0; background: transparent; color: var(--muted-foreground); font-size: 16px; line-height: 1; }
+.shared-upload-list li button:hover { color: var(--danger); }
 .settings-page { max-width: 820px; }
 .settings-card + .settings-card { margin-top: 16px; }
 .settings-card h2 { font-size: 15px; }
@@ -1122,6 +1158,9 @@ input:focus { border-color: var(--primary); box-shadow: 0 0 0 3px rgba(243,115,3
 .chatbot-bubble { max-width: min(85%, 520px); border: 1px solid var(--border); border-radius: 10px; border-bottom-left-radius: 3px; background: white; padding: 10px 12px; color: var(--foreground); font-size: 13px; line-height: 1.6; box-shadow: 0 1px 2px rgba(15,23,42,.04); }
 .chatbot-message.user .chatbot-bubble { border-color: rgba(243,115,33,.5); border-bottom-left-radius: 10px; border-bottom-right-radius: 3px; background: var(--primary); color: white; }
 .chatbot-bubble p { margin: 0; white-space: pre-wrap; }
+.chatbot-source-line { min-width: 0; display: flex; align-items: center; gap: 6px; margin-top: 8px; color: var(--muted-foreground); font-size: 11px; line-height: 1.4; }
+.chatbot-source-line svg { flex: 0 0 auto; color: var(--primary); }
+.chatbot-source-line span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .chatbot-sources { display: grid; gap: 7px; margin-top: 10px; }
 .chatbot-sources button { display: grid; grid-template-columns: auto 1fr; gap: 2px 7px; align-items: start; border: 1px solid var(--border); border-radius: 8px; background: #f8fafc; padding: 8px 9px; color: var(--foreground); text-align: left; transition: border-color .15s ease, background .15s ease; }
 .chatbot-sources button:hover { border-color: rgba(243,115,33,.45); background: #fff7ed; }
