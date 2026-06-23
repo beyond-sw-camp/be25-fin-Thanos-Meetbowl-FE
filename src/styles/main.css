@@ -943,6 +943,19 @@ input:focus { border-color: var(--primary); box-shadow: 0 0 0 3px rgba(243,115,3
 .admin-bar-track { height: 190px; display: flex; align-items: end; border-radius: 10px 10px 4px 4px; background: linear-gradient(180deg, #eef2f7, #e2e8f0); overflow: hidden; }
 .admin-bar-track i { width: 100%; display: block; border-radius: 10px 10px 0 0; background: linear-gradient(180deg, #818cf8, #4f46e5); box-shadow: inset 0 1px 0 rgba(255,255,255,.3); }
 .admin-bar-item small { color: var(--foreground); font-weight: 800; }
+.admin-usage-detail-card { display: grid; gap: 18px; }
+.admin-usage-chart-shell { border: 1px solid var(--border); border-radius: 18px; background: linear-gradient(180deg, #fffdf7, #ffffff); padding: 16px 16px 8px; }
+.admin-usage-chart { width: 100%; height: 320px; display: block; overflow: visible; }
+.admin-usage-grid-line { stroke: #e5e7eb; stroke-width: 1; stroke-dasharray: 4 6; }
+.admin-usage-axis-label { fill: var(--muted-foreground); font-size: 11px; font-weight: 700; }
+.admin-usage-area { fill: rgba(245, 158, 11, 0.12); }
+.admin-usage-line { fill: none; stroke: #f59e0b; stroke-width: 4; stroke-linecap: round; stroke-linejoin: round; }
+.admin-usage-dot { fill: #ffffff; stroke: #d97706; stroke-width: 3; }
+.admin-usage-value { fill: #92400e; font-size: 12px; font-weight: 800; }
+.admin-usage-insights { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
+.admin-usage-insight { display: grid; gap: 6px; border: 1px solid var(--border); border-radius: 14px; background: #fffaf0; padding: 14px 16px; }
+.admin-usage-insight span { color: var(--muted-foreground); font-size: 12px; font-weight: 700; }
+.admin-usage-insight strong { color: var(--foreground); font-size: 18px; }
 .admin-progress-list { list-style: none; display: grid; gap: 16px; margin: 0; padding: 0; }
 .admin-progress-list li { display: grid; gap: 7px; }
 .admin-progress-list div { display: flex; justify-content: space-between; gap: 10px; font-size: 13px; }
@@ -1225,6 +1238,8 @@ input:focus { border-color: var(--primary); box-shadow: 0 0 0 3px rgba(243,115,3
   .admin-actions, .admin-toolbar, .admin-progress-list div { flex-direction: column; align-items: stretch; }
   .admin-bar-chart { grid-template-columns: repeat(5, minmax(0, 1fr)); height: auto; }
   .admin-bar-track { height: 120px; }
+  .admin-usage-chart { height: 260px; }
+  .admin-usage-insights { grid-template-columns: 1fr; }
   .admin-tabs { overflow-x: auto; }
   .mail-tabs, .mail-bulkbar, .minute-detail-panel > header, .minute-actions { flex-direction: column; align-items: stretch; }
   .mail-tabs select { margin-left: 0; }
