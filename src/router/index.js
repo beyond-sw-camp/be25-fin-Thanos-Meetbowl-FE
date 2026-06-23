@@ -28,7 +28,7 @@ import SharedDocsPage from '../pages/shared-docs/SharedDocsPage.vue'
 import WorkspacePage from '../pages/workspace/WorkspacePage.vue'
 
 const routes = [
-  { path: '/', redirect: '/app/dashboard' },
+  { path: '/', redirect: '/login' },
   { path: '/login', component: LoginPage, meta: { public: true } },
   { path: '/join/:code', component: JoinPage, meta: { public: true } },
   { path: '/guest/meeting/:meetingId', component: MeetingPage, meta: { public: true } },

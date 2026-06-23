@@ -10,6 +10,34 @@ function buildAvatar(name, loginId) {
   return source ? source[0].toUpperCase() : '?'
 }
 
+function decodeBase64Url(value) {
+  const normalized = String(value || '')
+    .replace(/-/g, '+')
+    .replace(/_/g, '/')
+  const padded = normalized.padEnd(Math.ceil(normalized.length / 4) * 4, '=')
+
+  if (typeof atob === 'function') {
+    return atob(padded)
+  }
+  if (typeof Buffer !== 'undefined') {
+    return Buffer.from(padded, 'base64').toString('binary')
+  }
+  return ''
+}
+
+function readJwtExpirationAt(token) {
+  const parts = String(token || '').split('.')
+  if (parts.length < 2) return 0
+
+  try {
+    const payload = JSON.parse(decodeBase64Url(parts[1]))
+    const expiresAt = Number(payload?.exp || 0) * 1000
+    return Number.isFinite(expiresAt) && expiresAt > 0 ? expiresAt : 0
+  } catch {
+    return 0
+  }
+}
+
 export function normalizeUser(user) {
   if (!user) return null
 
@@ -48,6 +76,11 @@ export function readStoredAuthSession() {
 
     return {
       ...parsed,
+      accessTokenExpiresAt:
+        Number(parsed.accessTokenExpiresAt) > 0
+          ? Number(parsed.accessTokenExpiresAt)
+          : readJwtExpirationAt(parsed.accessToken),
+      refreshTokenExpiresAt: Number(parsed.refreshTokenExpiresAt) > 0 ? Number(parsed.refreshTokenExpiresAt) : 0,
       user: normalizeUser(parsed.user),
     }
   } catch {
@@ -62,6 +95,8 @@ export function writeStoredAuthSession(session) {
     tokenType: session?.tokenType || 'Bearer',
     accessTokenExpiresIn: session?.accessTokenExpiresIn || 0,
     refreshTokenExpiresIn: session?.refreshTokenExpiresIn || 0,
+    accessTokenExpiresAt: Number(session?.accessTokenExpiresAt) > 0 ? Number(session.accessTokenExpiresAt) : 0,
+    refreshTokenExpiresAt: Number(session?.refreshTokenExpiresAt) > 0 ? Number(session.refreshTokenExpiresAt) : 0,
     user: normalizeUser(session?.user),
   }
 
