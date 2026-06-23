@@ -53,7 +53,7 @@
               <td v-if="allowCancel">
                 <template v-if="item.mine">
                   <button class="icon-text" type="button" :disabled="!canEdit(item) || saving" @click="openEdit(item)">수정</button>
-                  <button class="icon-text danger" type="button" :disabled="!canCancel(item) || saving" @click="cancel(item)">취소</button>
+                  <button class="icon-text danger" type="button" :disabled="!canCancel(item) || saving" @click="cancel(item)">예약 취소</button>
                 </template>
                 <span v-else class="muted-text">-</span>
               </td>
@@ -113,6 +113,7 @@ const tabs = [
   { key: 'today', label: '오늘' },
   { key: 'week', label: '이번 주' },
   { key: 'month', label: '이번 달' },
+  { key: 'cancelled', label: '취소된 회의' },
 ]
 
 const STATUS = {
@@ -123,22 +124,31 @@ const STATUS = {
 }
 
 // 다가오는 예약 — 표 노출용. "아직 안 끝난"(종료시각 >= now) 기준. 진행 중 회의 포함,
-// 완전히 끝난 회의는 제외. 모든 상태 포함(취소/종료도 회색으로 이력 표시).
+// 완전히 끝난 회의는 제외. 종료(ENDED)는 회색 이력으로 남기되, 취소(CANCELLED)는 '취소' 탭에서
+// 따로 보여주므로 전체/기간 탭에서는 제외한다.
 const upcomingMeetings = computed(() => {
   const now = Date.now()
   return meetings.value
+    .filter((meeting) => meeting.status !== 'CANCELLED')
     .filter((meeting) => new Date(meeting.scheduledEndAt).getTime() >= now)
     // 날짜순(가까운 예약부터) 정렬.
     .sort((a, b) => new Date(a.scheduledAt).getTime() - new Date(b.scheduledAt).getTime())
 })
+// 취소된 예약 — '취소' 탭 전용. 기간/미종료 제한 없이 취소된 예약 전체를 최근 취소순으로 보여준다.
+const cancelledMeetings = computed(() =>
+  meetings.value
+    .filter((meeting) => meeting.status === 'CANCELLED')
+    .sort((a, b) => new Date(b.scheduledAt).getTime() - new Date(a.scheduledAt).getTime()),
+)
 // 카운트 전용 — 다가오는 예약 ∩ 활성(SCHEDULED/IN_PROGRESS). 취소/종료는 유효 예약 수에서 제외한다.
 const activeUpcomingMeetings = computed(() => upcomingMeetings.value.filter(isActive))
 
-const displayedMeetings = computed(() =>
-  activeTab.value === 'all'
+const displayedMeetings = computed(() => {
+  if (activeTab.value === 'cancelled') return cancelledMeetings.value
+  return activeTab.value === 'all'
     ? upcomingMeetings.value
-    : upcomingMeetings.value.filter((meeting) => inPeriod(meeting, activeTab.value)),
-)
+    : upcomingMeetings.value.filter((meeting) => inPeriod(meeting, activeTab.value))
+})
 const countAll = computed(() => activeUpcomingMeetings.value.length)
 const countWeek = computed(() => activeUpcomingMeetings.value.filter((meeting) => inPeriod(meeting, 'week')).length)
 const countMonth = computed(() => activeUpcomingMeetings.value.filter((meeting) => inPeriod(meeting, 'month')).length)

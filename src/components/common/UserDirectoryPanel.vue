@@ -2,6 +2,7 @@
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import {
   createAdminUser,
+  deleteAdminUser,
   getAdminUser,
   getAdminUsers,
   resetAdminUserPassword,
@@ -16,6 +17,8 @@ import {
 } from '../../lib/admin-organizations'
 import { useUserSuggestions } from '../../composables/useUserSuggestions.js'
 import { getOrganizationUserSummary } from '../../lib/user-directory'
+import { useAuthStore } from '../../stores/auth'
+import ModalShell from './ModalShell.vue'
 import Pagination from './Pagination.vue'
 
 const props = defineProps({
@@ -25,6 +28,7 @@ const props = defineProps({
     default: '이름, 이메일, 로그인 ID로 사용자를 찾고 조직 요약 정보를 확인합니다.',
   },
   pageSize: { type: Number, default: 20 },
+  editable: { type: Boolean, default: false },
 })
 
 defineExpose({
@@ -35,6 +39,7 @@ const loading = ref(true)
 const detailLoading = ref(false)
 const editLoading = ref(false)
 const saving = ref(false)
+const deleteLoading = ref(false)
 const resetPasswordLoading = ref(false)
 const organizationLoading = ref(false)
 const forbidden = ref(false)
@@ -50,6 +55,7 @@ const totalElements = ref(0)
 const users = ref([])
 const detailOpen = ref(false)
 const editOpen = ref(false)
+const deleteConfirmOpen = ref(false)
 const selectedUser = ref(null)
 const editForm = ref(createEmptyForm())
 const affiliates = ref([])
@@ -82,6 +88,7 @@ const {
 })
 
 let keywordSearchTimer = null
+const auth = useAuthStore()
 
 const statusFilterOptions = [
   { value: 'ALL', label: '전체 상태' },
@@ -91,6 +98,9 @@ const statusFilterOptions = [
 
 const hasUsers = computed(() => users.value.length > 0)
 const isEditMode = computed(() => Boolean(editForm.value.userId))
+const isEditingCurrentUser = computed(
+  () => Boolean(editForm.value.userId) && editForm.value.userId === auth.user?.userId,
+)
 
 const availableAffiliates = computed(() =>
   filterActiveOrSelected(affiliates.value, editForm.value.affiliateId, 'affiliateId'),
@@ -229,6 +239,8 @@ async function openDetail(user) {
 }
 
 async function openCreate() {
+  if (!props.editable) return
+  // 생성 모달은 빈 폼으로 시작하고, 조직 옵션은 미리 준비해 둔다.
   actionError.value = ''
   successMessage.value = ''
   await loadOrganizationOptions()
@@ -237,6 +249,8 @@ async function openCreate() {
 }
 
 async function openEdit(user) {
+  if (!props.editable) return
+  // 수정 모달은 상세 조회 후 받은 원본 데이터로 폼을 채운다.
   actionError.value = ''
   successMessage.value = ''
   editLoading.value = true
@@ -327,6 +341,47 @@ async function saveMember() {
     actionError.value = error?.message || '사용자 저장에 실패했습니다.'
   } finally {
     saving.value = false
+  }
+}
+
+function openDeleteConfirm() {
+  if (!isEditMode.value || deleteLoading.value || isEditingCurrentUser.value) return
+  deleteConfirmOpen.value = true
+}
+
+function closeDeleteConfirm() {
+  if (deleteLoading.value) return
+  deleteConfirmOpen.value = false
+}
+
+async function handleDeleteMember() {
+  if (!editForm.value.userId || deleteLoading.value) return
+
+  deleteLoading.value = true
+  actionError.value = ''
+  successMessage.value = ''
+
+  try {
+    // 회원 삭제 API는 실제 hard delete가 아니라 비활성화 처리이므로 안내 문구와 성공 메시지를 동일 기준으로 맞춘다.
+    await deleteAdminUser(editForm.value.userId)
+    deleteConfirmOpen.value = false
+    editOpen.value = false
+    detailOpen.value = false
+    successMessage.value = '회원이 삭제되었습니다.'
+    // 삭제 성공 후에는 현재 필터/페이지 기준으로 목록을 다시 받아 비활성화 상태와 총 개수를 함께 동기화한다.
+    await loadUsers()
+  } catch (error) {
+    if (error?.status === 403) {
+      forbidden.value = true
+      deleteConfirmOpen.value = false
+      editOpen.value = false
+      detailOpen.value = false
+      return
+    }
+
+    actionError.value = formatActionError(error, '회원 삭제에 실패했습니다.')
+  } finally {
+    deleteLoading.value = false
   }
 }
 
@@ -464,6 +519,24 @@ function toInstantFromDateInput(value) {
 function filterActiveOrSelected(items, selectedId, idField) {
   return items.filter((item) => item.status === 'ACTIVE' || item[idField] === selectedId)
 }
+
+function formatActionError(error, fallbackMessage) {
+  // 삭제 실패 시에는 BE message/details를 함께 합쳐 한 번에 보여 주고, 중복 문구는 제거한다.
+  const messages = []
+  const baseMessage = `${error?.message || fallbackMessage}`.trim()
+  if (baseMessage) messages.push(baseMessage)
+
+  if (Array.isArray(error?.details)) {
+    for (const detail of error.details) {
+      const reason = `${detail?.reason || ''}`.trim()
+      if (reason && !messages.includes(reason)) {
+        messages.push(reason)
+      }
+    }
+  }
+
+  return messages.join('\n') || fallbackMessage
+}
 </script>
 
 <template>
@@ -536,7 +609,7 @@ function filterActiveOrSelected(items, selectedId, idField) {
         {{ successMessage }}
       </div>
 
-      <div v-if="actionError" class="error-box" style="margin-bottom: 12px;">
+      <div v-if="actionError" class="error-box action-feedback" style="margin-bottom: 12px;">
         {{ actionError }}
       </div>
 
@@ -553,12 +626,12 @@ function filterActiveOrSelected(items, selectedId, idField) {
               <th>직책</th>
               <th>권한</th>
               <th>상태</th>
-              <th>액션</th>
+              <th v-if="editable">액션</th>
             </tr>
           </thead>
           <tbody>
             <tr v-if="!hasUsers">
-              <td colspan="10"><div class="empty-state">검색 결과가 없습니다.</div></td>
+              <td :colspan="editable ? 10 : 9"><div class="empty-state">검색 결과가 없습니다.</div></td>
             </tr>
             <tr v-for="user in users" :key="user.userId" class="directory-row" @click="openDetail(user)">
               <td><span class="table-avatar">{{ user.name?.[0] || '?' }}</span>{{ user.name }}</td>
@@ -574,7 +647,7 @@ function filterActiveOrSelected(items, selectedId, idField) {
                   {{ statusLabel(user.status) }}
                 </span>
               </td>
-              <td>
+              <td v-if="editable">
                 <button class="icon-text" @click.stop="openEdit(user)">수정</button>
               </td>
             </tr>
@@ -722,24 +795,59 @@ function filterActiveOrSelected(items, selectedId, idField) {
           <div v-if="isEditMode" class="settings-alert">
             비밀번호 초기화가 필요하면 아래 버튼을 눌러 1234로 초기화할 수 있습니다.
           </div>
+          <div v-if="isEditMode && isEditingCurrentUser" class="settings-alert">
+            현재 로그인한 관리자 계정은 삭제할 수 없습니다.
+          </div>
           <div class="modal-actions">
             <button type="button" class="secondary-button" @click="editOpen = false">취소</button>
             <button
               v-if="isEditMode"
               type="button"
+              class="danger-button"
+              :disabled="saving || resetPasswordLoading || deleteLoading || isEditingCurrentUser"
+              @click="openDeleteConfirm"
+            >
+              {{ deleteLoading ? '삭제 중...' : '회원 삭제' }}
+            </button>
+            <button
+              v-if="isEditMode"
+              type="button"
               class="secondary-button"
-              :disabled="resetPasswordLoading"
+              :disabled="resetPasswordLoading || deleteLoading"
               @click="handleResetPassword(editForm)"
             >
               {{ resetPasswordLoading ? '초기화 중...' : '비밀번호 초기화' }}
             </button>
-            <button class="primary-button" :disabled="saving">
+            <button class="primary-button" :disabled="saving || deleteLoading">
               {{ saving ? '저장 중...' : '저장' }}
             </button>
           </div>
         </form>
       </article>
     </div>
+
+    <ModalShell v-if="deleteConfirmOpen" modal-class="delete-confirm-modal" @close="closeDeleteConfirm">
+      <header>
+        <h2>회원 삭제</h2>
+        <button type="button" @click="closeDeleteConfirm">닫기</button>
+      </header>
+
+      <div class="delete-confirm-body">
+        <!-- 회원 삭제 확인 모달은 실제 동작이 비활성화 처리라는 점을 공통 문구로 명확히 안내한다. -->
+        <p>정말 이 회원을 삭제하시겠습니까?</p>
+        <p>삭제 후 해당 회원은 비활성화되며 더 이상 로그인할 수 없습니다.</p>
+        <p class="delete-confirm-target">{{ editForm.name || editForm.loginId || '-' }}</p>
+      </div>
+
+      <div class="modal-actions">
+        <button type="button" class="secondary-button" :disabled="deleteLoading" @click="closeDeleteConfirm">
+          취소
+        </button>
+        <button type="button" class="danger-button" :disabled="deleteLoading" @click="handleDeleteMember">
+          {{ deleteLoading ? '삭제 중...' : '회원 삭제' }}
+        </button>
+      </div>
+    </ModalShell>
   </article>
 </template>
 
@@ -776,6 +884,30 @@ function filterActiveOrSelected(items, selectedId, idField) {
 
 .directory-table {
   margin-top: 0;
+}
+
+.action-feedback {
+  white-space: pre-line;
+}
+
+.delete-confirm-modal {
+  max-width: 520px;
+}
+
+.delete-confirm-body {
+  display: grid;
+  gap: 10px;
+  margin: 16px 0 20px;
+}
+
+.delete-confirm-body p {
+  margin: 0;
+  line-height: 1.6;
+}
+
+.delete-confirm-target {
+  color: var(--muted-foreground);
+  font-size: 13px;
 }
 
 .directory-row {

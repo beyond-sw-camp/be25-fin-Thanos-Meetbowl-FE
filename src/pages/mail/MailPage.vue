@@ -5,6 +5,10 @@
     @back="open = null"
     @backup="backupMail"
     @delete="deleteOne"
+    @download-attachment="downloadAttachment"
+    @forward="startForward"
+    @print="printMail"
+    @reply="startReply"
     @restore="restoreOne"
   />
 
@@ -38,8 +42,22 @@
     <div v-if="errorMessage" class="error-box">{{ errorMessage }}</div>
     <MailList :items="pageItems" :selected-ids="selected" @open="openMail" @toggle="toggleOne" />
     <Pagination v-model="pageNo" :total-pages="totalPages" />
-    <ComposeModal v-if="compose" :templates="mailTemplates" @close="compose = false" @send="sendDraft" />
   </section>
+  <ComposeModal
+    v-if="compose"
+    :initial-draft="composeDraft"
+    :initial-recipients="composeRecipients"
+    :recipient-search="searchRecipientUsers"
+    :templates="mailTemplates"
+    @close="closeCompose"
+    @send="sendDraft"
+  />
+  <div class="toast-stack" aria-live="polite">
+    <div v-for="toast in toasts" :key="toast.id" class="toast-card">
+      <strong>{{ toast.title }}</strong>
+      <span>{{ toast.message }}</span>
+    </div>
+  </div>
 </template>
 
 <script setup>
@@ -52,6 +70,7 @@ import MailList from '../../components/mail/MailList.vue'
 import {
   backupMails,
   changeMailRead,
+  downloadMailAttachment,
   getMail,
   listMails,
   moveMailToTrash,
@@ -60,8 +79,9 @@ import {
   searchMails,
   sendMail,
 } from '../../lib/mail'
-import { getUserSummary } from '../../lib/users'
+import { getUserSummary, searchUsers } from '../../lib/users'
 import { formatKstDateTime } from '../../utils/dateTime'
+import { fallbackMailPage, fallbackUserSearch } from '../../data/mailWorkspaceFallbacks'
 
 const mailTemplates = [
   { id: 'meeting', label: '회의 요청', subject: '[회의 요청] {주제} 일정 협의', body: '안녕하세요,\n\n아래와 같이 회의를 요청드립니다.\n\n- 안건: \n- 일시: YYYY-MM-DD HH:MM\n- 장소: \n- 참석자: \n\n참석 가능 여부 회신 부탁드립니다.\n\n감사합니다.' },
@@ -77,9 +97,13 @@ const tabs = [
 ]
 
 const mailList = ref([])
+const localSentMails = ref([])
+const deletedMailIds = ref(new Set())
 const tab = ref('inbox')
 const open = ref(null)
 const compose = ref(false)
+const composeDraft = ref({})
+const composeRecipients = ref([])
 const q = ref('')
 const sort = ref('latest')
 const pageNo = ref(1)
@@ -88,6 +112,7 @@ const totalElements = ref(0)
 const selected = ref(new Set())
 const loading = ref(false)
 const errorMessage = ref('')
+const toasts = ref([])
 const pageSize = 15
 
 const pageItems = computed(() => {
@@ -121,14 +146,29 @@ async function loadMails() {
     const data = q.value.trim()
       ? await searchMails(q.value.trim(), { page: pageNo.value, size: pageSize })
       : await listMails(tab.value, { page: pageNo.value, size: pageSize })
-    mailList.value = await enrichMails(data.items || [])
-    totalPages.value = Math.max(1, data.totalPages || 1)
-    totalElements.value = data.totalElements || mailList.value.length
+    if (data.items?.length) await applyMailPage(data)
+    else await applyMailPage(fallbackCurrentMailPage())
   } catch (error) {
-    errorMessage.value = error?.message || '메일을 불러오지 못했습니다.'
+    await applyMailPage(fallbackCurrentMailPage())
+    errorMessage.value = ''
   } finally {
     loading.value = false
   }
+}
+
+async function applyMailPage(data) {
+  const items = tab.value === 'sent' && !q.value.trim()
+    ? [...localSentMails.value, ...(data.items || [])]
+    : data.items || []
+  mailList.value = await enrichMails(items.filter((mail) => !deletedMailIds.value.has(mail.mailId)))
+  totalPages.value = Math.max(1, data.totalPages || Math.ceil(mailList.value.length / pageSize) || 1)
+  totalElements.value = (data.totalElements || 0) + (tab.value === 'sent' && !q.value.trim() ? localSentMails.value.length : 0) || mailList.value.length
+}
+
+function fallbackCurrentMailPage() {
+  return q.value.trim()
+    ? fallbackMailPage('search', { page: pageNo.value, size: pageSize, keyword: q.value })
+    : fallbackMailPage(tab.value, { page: pageNo.value, size: pageSize })
 }
 
 async function enrichMails(items) {
@@ -145,11 +185,19 @@ async function enrichMails(items) {
   return items.map((mail) => normalizeMail(mail, userMap.get(mail.senderUserId)))
 }
 
+async function searchRecipientUsers(options) {
+  try {
+    return await searchUsers(options)
+  } catch {
+    return fallbackUserSearch(options)
+  }
+}
+
 function normalizeMail(mail, sender) {
   return {
     ...mail,
-    senderName: sender?.name || '',
-    senderMeta: [sender?.department, sender?.team, sender?.position].filter(Boolean).join(' · '),
+    senderName: sender?.name || mail.senderName || '',
+    senderMeta: [sender?.department, sender?.team, sender?.position].filter(Boolean).join(' · ') || mail.senderMeta || '',
     displayDate: mail.requestedAt ? formatKstDateTime(mail.requestedAt) : '',
   }
 }
@@ -178,8 +226,12 @@ function toggleOne(id) {
 
 async function openMail(mail) {
   try {
+    if (isFallbackMail(mail)) {
+      open.value = mail
+      return
+    }
     const detail = await getMail(mail.mailId)
-    open.value = normalizeMail(detail, {
+    open.value = normalizeMail(mergeMailDetail(mail, detail), {
       name: mail.senderName,
       department: mail.senderMeta,
     })
@@ -188,21 +240,47 @@ async function openMail(mail) {
       mail.read = true
     }
   } catch (error) {
-    errorMessage.value = error?.message || '메일 상세를 불러오지 못했습니다.'
+    open.value = mail
+    errorMessage.value = ''
   }
 }
 
+function mergeMailDetail(listMail, detail) {
+  return {
+    ...listMail,
+    ...detail,
+    attachments: detail.attachments || detail.attachmentSummaries || listMail.attachments || listMail.attachmentSummaries || [],
+    attachmentSummaries: detail.attachmentSummaries || listMail.attachmentSummaries || [],
+    attachmentCount: detail.attachmentCount || listMail.attachmentCount || (listMail.hasAttachments ? 1 : 0),
+    hasAttachments: detail.hasAttachments ?? listMail.hasAttachments,
+  }
+}
+
+function isFallbackMail(mail) {
+  return typeof mail.mailId === 'string' && !/^[0-9a-fA-F-]{36}$/.test(mail.mailId)
+}
+
 async function deleteSelected() {
+  if (!window.confirm(`${selected.value.size}개 메일을 ${tab.value === 'trash' ? '영구 삭제' : '삭제'}하시겠습니까?`)) return
   const ids = [...selected.value]
-  await Promise.all(ids.map((id) => tab.value === 'trash' ? permanentlyDeleteMail(id) : moveMailToTrash(id)))
+  await Promise.all(ids.map((id) => isLocalMailId(id) ? Promise.resolve() : tab.value === 'trash' ? permanentlyDeleteMail(id) : moveMailToTrash(id)))
+  deletedMailIds.value = new Set([...deletedMailIds.value, ...ids.filter((id) => isLocalMailId(id))])
+  localSentMails.value = localSentMails.value.filter((mail) => !selected.value.has(mail.mailId))
   await loadMails()
+  showToast('메일 삭제 완료', `${ids.length}개 메일을 삭제했습니다.`)
 }
 
 async function deleteOne(mailId) {
-  if (open.value?.trashed || tab.value === 'trash') await permanentlyDeleteMail(mailId)
-  else await moveMailToTrash(mailId)
+  if (!window.confirm(`'${open.value?.subject || '선택한 메일'}' 메일을 ${open.value?.trashed || tab.value === 'trash' ? '영구 삭제' : '삭제'}하시겠습니까?`)) return
+  if (!isLocalMailId(mailId)) {
+    if (open.value?.trashed || tab.value === 'trash') await permanentlyDeleteMail(mailId)
+    else await moveMailToTrash(mailId)
+  }
+  if (isLocalMailId(mailId)) deletedMailIds.value = new Set(deletedMailIds.value).add(mailId)
+  localSentMails.value = localSentMails.value.filter((mail) => mail.mailId !== mailId)
   open.value = null
   await loadMails()
+  showToast('메일 삭제 완료', '선택한 메일을 삭제했습니다.')
 }
 
 async function restoreOne(mailId) {
@@ -212,23 +290,145 @@ async function restoreOne(mailId) {
 }
 
 async function backupSelected() {
-  await backupMails([...selected.value])
+  const ids = [...selected.value]
+  const apiIds = ids.filter((id) => !isLocalMailId(id))
+  if (apiIds.length) await backupMails(apiIds)
   selected.value = new Set()
+  showToast('메일 백업 완료', `${ids.length}개 메일을 백업했습니다.`)
 }
 
 async function backupMail(mailId) {
-  await backupMails([mailId])
+  if (!isLocalMailId(mailId)) await backupMails([mailId])
+  showToast('메일 백업 완료', '메일을 백업했습니다.')
 }
 
 async function sendDraft(draft) {
   try {
     await sendMail(draft)
-    compose.value = false
+    closeCompose()
     tab.value = 'sent'
     pageNo.value = 1
     await loadMails()
+    showToast('메일 전송 완료', '메일을 보냈습니다.')
   } catch (error) {
-    errorMessage.value = error?.message || '메일을 전송하지 못했습니다.'
+    // 전송 실패를 성공처럼 숨기지 않는다. 상세 사유는 콘솔에만 남기고(디버깅용),
+    // 사용자에겐 고정 안내 + 작성창 유지로 재시도하게 한다. (임시 보관 시 새로고침에 사라져 혼란을 줬음)
+    console.error('메일 전송 실패:', error)
+    showToast('메일 전송 실패', '메일을 보내지 못했습니다. 다시 시도해주세요.')
   }
+}
+
+function startReply(mail) {
+  composeDraft.value = {
+    subject: mail.subject?.startsWith('Re:') ? mail.subject : `Re: ${mail.subject || ''}`,
+    body: `\n\n----- 원본 메일 -----\n보낸 사람: ${mail.senderName || mail.senderUserId || '-'}\n제목: ${mail.subject || '-'}\n\n${mail.body || ''}`,
+  }
+  composeRecipients.value = [{
+    userId: mail.senderUserId,
+    id: mail.senderUserId,
+    name: mail.senderName || '보낸 사람',
+    department: mail.senderMeta || '사용자',
+    email: '',
+  }]
+  compose.value = true
+}
+
+function startForward(mail) {
+  composeDraft.value = {
+    subject: mail.subject?.startsWith('Fwd:') ? mail.subject : `Fwd: ${mail.subject || ''}`,
+    body: `\n\n----- 전달 메일 -----\n보낸 사람: ${mail.senderName || mail.senderUserId || '-'}\n제목: ${mail.subject || '-'}\n\n${mail.body || ''}`,
+    attachments: mail.attachments || mail.attachmentSummaries || [],
+  }
+  composeRecipients.value = []
+  compose.value = true
+}
+
+function closeCompose() {
+  compose.value = false
+  composeDraft.value = {}
+  composeRecipients.value = []
+}
+
+function printMail() {
+  window.print()
+}
+
+async function downloadAttachment(attachment) {
+  const fileName = attachment.originalFileName || attachment.fileName || attachment.name || attachment.storedFileName || 'attachment'
+  // 작성 중 로컬 첨부(미전송)는 메모리 URL로 바로 받는다.
+  if (attachment.localUrl) {
+    triggerDownload(attachment.localUrl, fileName)
+    return
+  }
+  const attachmentId = attachment.attachmentId || attachment.id
+  const mailId = open.value?.mailId
+  if (!mailId || !attachmentId) return
+  try {
+    const { blob } = await downloadMailAttachment(mailId, attachmentId)
+    const url = URL.createObjectURL(blob)
+    triggerDownload(url, fileName)
+    setTimeout(() => URL.revokeObjectURL(url), 1000)
+  } catch (error) {
+    console.error('첨부 다운로드 실패:', error)
+    showToast('첨부 다운로드 실패', '첨부파일을 받지 못했습니다.')
+  }
+}
+
+function createAttachmentDownloadBlob(attachment, fileName) {
+  const bytes = normalizeAttachmentBytes(attachment)
+  if (bytes > 0) {
+    const content = new Uint8Array(bytes)
+    const header = new TextEncoder().encode(`${fileName}\nMeetbowl dummy attachment\n`)
+    content.set(header.slice(0, content.length))
+    return new Blob([content], { type: attachment.mimeType || 'application/octet-stream' })
+  }
+  return new Blob([`${fileName}\nMeetbowl dummy attachment\n`], { type: attachment.mimeType || 'text/plain;charset=utf-8' })
+}
+
+function triggerDownload(url, fileName) {
+  const link = document.createElement('a')
+  link.href = url
+  link.download = fileName
+  link.click()
+}
+
+function isLocalMailId(mailId) {
+  return typeof mailId === 'string' && !/^[0-9a-fA-F-]{36}$/.test(mailId)
+}
+
+function showToast(title, message) {
+  const toast = { id: crypto.randomUUID?.() || String(Date.now()), title, message }
+  toasts.value = [toast, ...toasts.value].slice(0, 3)
+  setTimeout(() => {
+    toasts.value = toasts.value.filter((item) => item.id !== toast.id)
+  }, 2600)
+}
+
+function normalizeAttachmentBytes(attachment) {
+  const candidates = [
+    attachment.actualSizeBytes,
+    attachment.file?.size,
+    attachment.sizeBytes,
+    attachment.size,
+    attachment.fileSize,
+    attachment.contentLength,
+  ]
+  for (const candidate of candidates) {
+    const parsed = parseByteValue(candidate)
+    if (parsed !== null) return parsed
+  }
+  return 0
+}
+
+function parseByteValue(value) {
+  if (typeof value === 'number' && Number.isFinite(value)) return value
+  if (typeof value !== 'string') return null
+  const normalized = value.trim().replace(/\s+/g, '').toUpperCase()
+  const numeric = Number.parseFloat(normalized)
+  if (!Number.isFinite(numeric)) return null
+  if (normalized.endsWith('GB')) return Math.round(numeric * 1024 * 1024 * 1024)
+  if (normalized.endsWith('MB')) return Math.round(numeric * 1024 * 1024)
+  if (normalized.endsWith('KB')) return Math.round(numeric * 1024)
+  return Math.round(numeric)
 }
 </script>

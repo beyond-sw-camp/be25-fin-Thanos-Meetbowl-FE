@@ -1,4 +1,4 @@
-import { deleteJson, getJson, patchJson, postForm, postJson } from './api-client'
+import { deleteJson, getBlob, getJson, patchJson, postForm, postJson } from './api-client'
 
 export function getSharedWorkspaces() {
   return getJson('/shared-workspaces')
@@ -61,4 +61,12 @@ export function updateSharedWorkspaceFileVersionMemo(spaceId, fileId, versionId,
 
 export function deleteSharedWorkspaceFile(spaceId, fileId) {
   return deleteJson(`/shared-workspaces/${spaceId}/files/${fileId}`)
+}
+
+export function downloadSharedWorkspaceFile(spaceId, fileId) {
+  return getBlob(`/shared-workspaces/${spaceId}/files/${fileId}/download`)
+}
+
+export function previewSharedWorkspaceFile(spaceId, fileId) {
+  return getBlob(`/shared-workspaces/${spaceId}/files/${fileId}/preview`)
 }

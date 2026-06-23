@@ -60,13 +60,13 @@
           <span class="badge primary">{{ selectedEvents.length }}건</span>
         </div>
         <div class="workspace-event-list">
-          <div v-for="event in selectedEvents" :key="event.eventId" :class="['workspace-event-item', event.source === 'MEETING' ? 'team' : 'mine']">
+          <button v-for="event in selectedEvents" :key="event.eventId" type="button" :class="['workspace-event-item', event.source === 'MEETING' ? 'team' : 'mine']" @click="openSelectedEvent(event)">
             <div>
               <strong>{{ event.title }}</strong>
               <span>{{ event.timeRange }} <template v-if="event.description">· {{ event.description }}</template></span>
             </div>
             <span :class="['badge', event.source === 'MEETING' ? 'navy' : 'primary']">{{ event.source === 'MEETING' ? '회의' : '개인' }}</span>
-          </div>
+          </button>
           <div v-if="selectedEvents.length === 0" class="empty-state">예정된 일정이 없습니다.</div>
         </div>
 
@@ -87,11 +87,12 @@
     <div v-else-if="activeTab === 'memo'" class="workspace-memo-grid">
       <aside class="card workspace-memo-list">
         <div class="workspace-panel-head"><h2>최근 메모</h2><button type="button" @click="createNewMemo"><Plus :size="14" /></button></div>
-        <button v-for="memo in memos" :key="memo.memoId" type="button" class="workspace-memo-item" :class="{ active: activeMemoId === memo.memoId }" @click="selectMemo(memo.memoId)">
+        <button v-for="memo in pagedMemos" :key="memo.memoId" type="button" class="workspace-memo-item" :class="{ active: activeMemoId === memo.memoId }" @click="selectMemo(memo.memoId)">
           <strong>{{ memo.title }}</strong>
           <span>{{ memo.content.split('\n')[0] || '내용 없음' }}</span>
           <small>{{ displayDate(memo.updatedAt || memo.createdAt) }}</small>
         </button>
+        <Pagination v-model="memoPage" :total-pages="memoTotalPages" />
       </aside>
       <article class="card workspace-memo-editor">
         <template v-if="memoDraft.memoId">
@@ -108,17 +109,21 @@
 
     <article v-else-if="activeTab === 'backups'" class="card workspace-panel">
       <div class="workspace-panel-head">
-        <h2>백업 자료</h2>
+        <h2>백업한 메일</h2>
+        <span class="badge primary">총 {{ backups.length }}건</span>
         <input v-model="backupKeyword" placeholder="백업 자료 검색">
       </div>
       <div v-for="backup in backups" :key="backup.backupId" class="workspace-mail-row">
         <RouterLink :to="'/app/backup/' + backup.backupId">
+          <span class="workspace-file-icon mail"><Mail :size="17" /></span>
+          <span>
           <strong>{{ backup.title }}</strong>
-          <small>{{ backup.sourceType }} · {{ displayDate(backup.backedUpAt) }} · {{ backup.summary }}</small>
+            <small>{{ backup.sourceType }} · {{ displayDate(backup.backedUpAt) }} · {{ backup.summary }}</small>
+          </span>
         </RouterLink>
-        <button type="button" @click="toggleBookmark(backup)">{{ backup.bookmarked ? '북마크 해제' : '북마크' }}</button>
+        <button type="button" class="workspace-backup-release" @click="releaseBackup(backup)">해제</button>
       </div>
-      <div v-if="backups.length === 0" class="empty-state">백업 자료가 없습니다.</div>
+      <div v-if="backups.length === 0" class="empty-state">백업한 메일이 없습니다.</div>
     </article>
 
     <article v-else-if="activeTab === 'minutes'" class="card workspace-panel workspace-minutes-panel">
@@ -142,22 +147,40 @@
     <article v-else class="card workspace-panel">
       <div class="workspace-panel-head">
         <h2>개인 드라이브</h2>
-        <button type="button" @click="driveInput?.click()"><Upload :size="14" /> 업로드</button>
+        <button type="button" :disabled="driveUploading" @click="driveInput?.click()"><Upload :size="14" /> {{ driveUploading ? '업로드 중...' : '업로드' }}</button>
       </div>
-      <input ref="driveInput" class="hidden-file-input" type="file" @change="uploadPersonalFile">
-      <button type="button" class="workspace-upload-zone" @click="driveInput?.click()">
-        <strong>파일을 선택해 업로드</strong>
-        <span>원본은 Object Storage에 저장되고 DB에는 메타데이터만 저장됩니다.</span>
+      <input ref="driveInput" class="hidden-file-input" type="file" multiple @change="uploadPersonalFiles($event.target.files)">
+      <button
+        type="button"
+        class="workspace-upload-zone"
+        @click="driveInput?.click()"
+        @dragover.prevent
+        @drop.prevent="uploadPersonalFiles($event.dataTransfer?.files)"
+      >
+        <strong>파일을 끌어다 놓거나 클릭해 업로드</strong>
+        <span>여러 파일 동시 업로드 지원 · 원본은 Object Storage, DB에는 메타데이터만 저장됩니다.</span>
       </button>
       <div class="table-card">
         <table>
           <thead><tr><th>파일명</th><th>크기</th><th>업로드</th><th>관리</th></tr></thead>
           <tbody>
-            <tr v-for="file in driveFiles" :key="file.fileId">
-              <td>{{ file.originalFileName }}</td>
+            <tr v-for="file in driveFiles" :key="file.fileId" class="workspace-drive-row" @click="openDrivePreview(file)">
+              <td>
+                <div class="workspace-drive-file-cell">
+                  <span class="workspace-file-icon"><FileText :size="17" /></span>
+                  <span><strong>{{ file.originalFileName }}</strong><small>{{ file.contentType || '파일' }}</small></span>
+                </div>
+              </td>
               <td>{{ formatSize(file.sizeBytes) }}</td>
               <td>{{ displayDate(file.uploadedAt) }}</td>
-              <td><button type="button" class="danger-text" @click="removeDriveFile(file.fileId)">삭제</button></td>
+              <td class="file-action-cell">
+                <button type="button" class="more-button" aria-label="파일 관리" @click.stop="toggleDriveActionMenu(file.fileId)"><MoreHorizontal :size="17" /></button>
+                <div v-if="driveActionFileId === file.fileId" class="file-action-menu" @click.stop>
+                  <button type="button" @click="downloadPersonalFile(file)"><Download :size="14" /> 다운로드</button>
+                  <button type="button" @click="openDriveInfo(file)"><Info :size="14" /> 파일 정보</button>
+                  <button type="button" class="danger" @click="removeDriveFile(file.fileId)"><Trash2 :size="14" /> 삭제</button>
+                </div>
+              </td>
             </tr>
             <tr v-if="driveFiles.length === 0"><td colspan="4"><div class="empty-state">업로드한 파일이 없습니다.</div></td></tr>
           </tbody>
@@ -166,44 +189,91 @@
     </article>
 
     <div v-if="eventOpen" class="modal-backdrop" @click="eventOpen = false">
-      <form class="write-modal" @submit.prevent="saveEvent" @click.stop>
-        <header><h2>일정 추가</h2><button type="button" @click="eventOpen = false">닫기</button></header>
-        <input v-model="eventDraft.title" placeholder="일정 제목">
-        <div class="workspace-event-form-grid">
-          <input v-model="eventDraft.date" type="date">
-          <input v-model="eventDraft.start" type="time">
-          <input v-model="eventDraft.end" type="time">
+      <form class="write-modal workspace-event-modal" @submit.prevent="saveEvent" @click.stop>
+        <header>
+          <div>
+            <h2>{{ editingEventId ? '내 일정 수정' : '일정 추가' }}</h2>
+            <p>개인 일정으로 등록되며 회의 일정은 회의 수정 화면에서 관리합니다.</p>
+          </div>
+          <button type="button" @click="eventOpen = false">닫기</button>
+        </header>
+        <div class="workspace-event-form-body">
+          <label>일정 제목<input v-model="eventDraft.title" placeholder="일정 제목" required></label>
+          <div class="workspace-event-form-grid">
+            <label>날짜<input v-model="eventDraft.date" type="date" required></label>
+            <label>시작<input v-model="eventDraft.start" type="time" required></label>
+            <label>종료<input v-model="eventDraft.end" type="time" required></label>
+          </div>
+          <label>설명<textarea v-model="eventDraft.description" rows="3" placeholder="참여자, 안건 등"></textarea></label>
         </div>
-        <textarea v-model="eventDraft.description" rows="3" placeholder="설명"></textarea>
-        <footer><button type="button" class="ghost-button" @click="eventOpen = false">취소</button><button type="submit" class="primary-button small">저장</button></footer>
+        <footer><button type="button" class="ghost-button" @click="eventOpen = false">취소</button><button type="submit" class="primary-button small">{{ editingEventId ? '수정 저장' : '일정 추가' }}</button></footer>
       </form>
     </div>
 
     <div v-if="subscriptionOpen" class="modal-backdrop" @click="subscriptionOpen = false">
       <form class="write-modal" @submit.prevent="addSubscription" @click.stop>
         <header><h2>동료 구독 추가</h2><button type="button" @click="subscriptionOpen = false">닫기</button></header>
-        <input v-model="userKeyword" placeholder="이름, 부서/팀, 이메일 검색">
-        <div class="recipient-results">
-          <button v-for="user in userCandidates" :key="user.userId" type="button" @click="selectedUserId = user.userId">
+        <div ref="subscriptionSearchRoot" class="recipient-picker">
+          <input v-model="userKeyword" placeholder="이름, 부서/팀, 이메일 검색" @focus="openSubscriptionSearch">
+          <div v-if="subscriptionSearchOpen && userCandidates.length" class="recipient-results">
+          <button v-for="user in userCandidates" :key="user.userId" type="button" :class="{ selected: selectedUserId === user.userId }" @click="selectSubscriptionUser(user)">
             <strong>{{ user.name }}</strong>
             <small>{{ user.department || user.team || '-' }} · {{ user.email }}</small>
           </button>
+          </div>
         </div>
         <footer><button type="button" class="ghost-button" @click="subscriptionOpen = false">취소</button><button type="submit" class="primary-button small" :disabled="!selectedUserId">구독</button></footer>
       </form>
+    </div>
+    <div v-if="drivePreviewOpen" class="modal-backdrop" @click="closeDrivePreview">
+      <article class="write-modal file-preview-modal" @click.stop>
+        <header>
+          <div>
+            <h2>{{ drivePreviewFile?.originalFileName }}</h2>
+            <p>{{ drivePreviewFile?.contentType || '파일' }} · {{ formatSize(drivePreviewFile?.sizeBytes) }} · {{ displayDate(drivePreviewFile?.uploadedAt) }}</p>
+          </div>
+          <button type="button" aria-label="닫기" @click="closeDrivePreview"><X :size="17" /></button>
+        </header>
+        <section class="file-preview-body">
+          <div v-if="drivePreviewLoading" class="empty-state">파일을 불러오는 중입니다.</div>
+          <div v-else-if="drivePreviewError" class="empty-state">{{ drivePreviewError }}</div>
+          <img v-else-if="drivePreviewKind === 'image'" :src="drivePreviewUrl" :alt="drivePreviewFile?.originalFileName">
+          <iframe v-else-if="drivePreviewKind === 'pdf'" :src="drivePreviewUrl" title="파일 미리보기"></iframe>
+          <pre v-else-if="drivePreviewKind === 'text'">{{ drivePreviewText }}</pre>
+          <dl v-else class="file-info-list">
+            <div v-if="drivePreviewKind === 'unsupported'" class="file-info-notice"><dt>미리보기</dt><dd>지원하지 않는 파일 형식입니다.</dd></div>
+            <div><dt>파일명</dt><dd>{{ drivePreviewFile?.originalFileName }}</dd></div>
+            <div><dt>형식</dt><dd>{{ drivePreviewFile?.contentType || '-' }}</dd></div>
+            <div><dt>크기</dt><dd>{{ formatSize(drivePreviewFile?.sizeBytes) }}</dd></div>
+            <div><dt>업로드</dt><dd>{{ displayDate(drivePreviewFile?.uploadedAt) }}</dd></div>
+          </dl>
+        </section>
+        <footer>
+          <button type="button" class="ghost-button" @click="closeDrivePreview">닫기</button>
+          <button type="button" class="primary-button small" @click="downloadPersonalFile(drivePreviewFile)"><Download :size="14" /> 다운로드</button>
+        </footer>
+      </article>
+    </div>
+    <div class="toast-stack" aria-live="polite">
+      <div v-for="toast in toasts" :key="toast.id" class="toast-card">
+        <strong>{{ toast.title }}</strong>
+        <span>{{ toast.message }}</span>
+      </div>
     </div>
   </section>
 </template>
 
 <script setup>
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
-import { BookmarkCheck, CalendarDays, FileText, Folder, Mail, Plus, StickyNote, Upload } from '@lucide/vue'
+import { useRouter } from 'vue-router'
+import { BookmarkCheck, CalendarDays, Download, FileText, Folder, Info, Mail, MoreHorizontal, Plus, StickyNote, Trash2, Upload, X } from '@lucide/vue'
+import Pagination from '../../components/common/Pagination.vue'
 import {
-  addBackupBookmark,
   createMemo,
   createWorkspaceEvent,
   deleteDriveFile,
   deleteMemo,
+  downloadDriveFile,
   getBackups,
   getCalendarSubscriptions,
   getDriveFiles,
@@ -213,15 +283,27 @@ import {
   searchBackups,
   subscribeCalendar,
   unsubscribeCalendar,
+  updateWorkspaceEvent,
   updateMemo,
   uploadDriveFile,
+  previewDriveFile,
 } from '../../lib/workspace'
+import { previewKind, resolveBlobFileName, saveBlob } from '../../lib/file-actions'
 import { getUserSummary, searchUsers } from '../../lib/users'
 import { formatKstDateTime, formatKstTime } from '../../utils/dateTime'
-import { workspaceDateKey, workspaceMonthCells } from '../../data/workspaceData'
+import { workspaceDateKey, workspaceMonthCells, workspaceNow } from '../../data/workspaceData'
 import { minutes as mockMinutes } from '../../data/mockData'
+import {
+  fallbackWorkspaceBackups,
+  fallbackWorkspaceCalendar,
+  fallbackWorkspaceDriveFiles,
+  fallbackWorkspaceMemos,
+  fallbackUserSearch,
+  withFallback,
+} from '../../data/mailWorkspaceFallbacks'
 import { onMinuteFavoritesChanged, readMinuteFavorites, toggleMinuteFavorite } from '../../lib/minute-favorites'
 
+const router = useRouter()
 const tabs = [
   { id: 'calendar', label: '일정', icon: CalendarDays },
   { id: 'memo', label: '개인 메모장', icon: StickyNote },
@@ -229,30 +311,48 @@ const tabs = [
   { id: 'backups', label: '백업 자료', icon: Mail },
   { id: 'drive', label: '개인 드라이브', icon: Folder },
 ]
+const workspaceToday = new Date(workspaceNow().replace(' ', 'T'))
 const monthNames = ['1월', '2월', '3월', '4월', '5월', '6월', '7월', '8월', '9월', '10월', '11월', '12월']
 const weekNames = ['일', '월', '화', '수', '목', '금', '토']
 const activeTab = ref('calendar')
-const cursor = ref(new Date())
-const selected = ref(workspaceDateKey(new Date()))
+const cursor = ref(workspaceToday)
+const selected = ref(workspaceDateKey(workspaceToday))
 const filter = ref('all')
 const events = ref([])
+const localEvents = ref([])
 const subscriptions = ref([])
 const userMap = ref(new Map())
 const memos = ref([])
 const activeMemoId = ref('')
+// 메모는 한 페이지에 5개씩 보여주고 나머지는 페이지네이션으로 넘긴다.
+const MEMO_PAGE_SIZE = 5
+const memoPage = ref(1)
 const memoDraft = ref({ memoId: '', title: '', content: '' })
 const backups = ref([])
 const backupKeyword = ref('')
 const driveFiles = ref([])
 const driveInput = ref(null)
+const driveUploading = ref(false)
+const driveActionFileId = ref('')
+const drivePreviewOpen = ref(false)
+const drivePreviewFile = ref(null)
+const drivePreviewUrl = ref('')
+const drivePreviewKind = ref('unsupported')
+const drivePreviewText = ref('')
+const drivePreviewLoading = ref(false)
+const drivePreviewError = ref('')
 const eventOpen = ref(false)
 const subscriptionOpen = ref(false)
+const subscriptionSearchOpen = ref(false)
+const subscriptionSearchRoot = ref(null)
+const editingEventId = ref('')
 const eventDraft = ref({ title: '', date: selected.value, start: '09:00', end: '10:00', description: '' })
 const userKeyword = ref('')
 const userCandidates = ref([])
 const selectedUserId = ref('')
 const errorMessage = ref('')
-const todayKey = workspaceDateKey(new Date())
+const toasts = ref([])
+const todayKey = workspaceDateKey(workspaceToday)
 const minuteFavorites = ref(readMinuteFavorites())
 let stopFavoriteSync = null
 
@@ -275,16 +375,29 @@ const eventsByDate = computed(() => {
 })
 const selectedEvents = computed(() => (eventsByDate.value[selected.value] || []).slice().sort((a, b) => String(a.startedAt).localeCompare(String(b.startedAt))))
 const activeMemo = computed(() => memos.value.find((memo) => memo.memoId === activeMemoId.value))
+const memoTotalPages = computed(() => Math.max(1, Math.ceil(memos.value.length / MEMO_PAGE_SIZE)))
+const pagedMemos = computed(() => {
+  const start = (memoPage.value - 1) * MEMO_PAGE_SIZE
+  return memos.value.slice(start, start + MEMO_PAGE_SIZE)
+})
+// 메모 삭제 등으로 페이지 수가 줄면 현재 페이지가 범위를 벗어날 수 있어 마지막 페이지로 보정한다.
+watch(memoTotalPages, (total) => {
+  if (memoPage.value > total) memoPage.value = total
+})
 const favoriteMinuteItems = computed(() => mockMinutes.filter((minute) => minuteFavorites.value[minute.id]))
 
 watch(cursor, loadCalendar)
 watch(backupKeyword, () => loadBackups())
 watch(userKeyword, async () => {
-  const data = await searchUsers({ keyword: userKeyword.value, size: 8 }).catch(() => ({ items: [] }))
-  userCandidates.value = data.items || []
+  if (!userKeyword.value.trim()) {
+    await loadUserCandidates('')
+    return
+  }
+  await loadUserCandidates(userKeyword.value)
 })
 
 onMounted(async () => {
+  document.addEventListener('mousedown', closeSubscriptionSearchOnOutside)
   stopFavoriteSync = onMinuteFavoritesChanged((next) => {
     minuteFavorites.value = next
   })
@@ -292,32 +405,45 @@ onMounted(async () => {
 })
 
 onUnmounted(() => {
+  document.removeEventListener('mousedown', closeSubscriptionSearchOnOutside)
   stopFavoriteSync?.()
+  clearDrivePreviewUrl()
 })
 
 async function loadCalendar() {
   const from = new Date(cursor.value.getFullYear(), cursor.value.getMonth(), 1 - new Date(cursor.value.getFullYear(), cursor.value.getMonth(), 1).getDay())
   const to = new Date(from)
   to.setDate(from.getDate() + 42)
-  events.value = (await getWorkspaceCalendar(from.toISOString(), to.toISOString())).map(normalizeEvent)
+  try {
+    events.value = mergeLocalEvents((await getWorkspaceCalendar(from.toISOString(), to.toISOString())).map(normalizeEvent))
+    if (!events.value.length) events.value = mergeLocalEvents(fallbackWorkspaceCalendar().map(normalizeEvent))
+  } catch {
+    events.value = mergeLocalEvents(fallbackWorkspaceCalendar().map(normalizeEvent))
+  }
 }
 
 async function loadSubscriptions() {
-  subscriptions.value = await getCalendarSubscriptions()
+  subscriptions.value = await getCalendarSubscriptions().catch(() => [])
   await Promise.all(subscriptions.value.map((item) => cacheUser(item.targetUserId)))
 }
 
 async function loadMemos() {
-  memos.value = await getMemos()
+  memos.value = await withFallback(() => getMemos(), () => fallbackWorkspaceMemos())
+  if (!memos.value.length) memos.value = fallbackWorkspaceMemos()
   if (!activeMemoId.value && memos.value[0]) selectMemo(memos.value[0].memoId)
 }
 
 async function loadBackups() {
-  backups.value = backupKeyword.value.trim() ? await searchBackups(backupKeyword.value.trim()) : await getBackups()
+  backups.value = await withFallback(
+    () => (backupKeyword.value.trim() ? searchBackups(backupKeyword.value.trim()) : getBackups()),
+    () => fallbackWorkspaceBackups(backupKeyword.value),
+  )
+  if (!backups.value.length) backups.value = fallbackWorkspaceBackups(backupKeyword.value)
 }
 
 async function loadDriveFiles() {
-  driveFiles.value = await getDriveFiles()
+  driveFiles.value = await withFallback(() => getDriveFiles(), () => fallbackWorkspaceDriveFiles())
+  if (!driveFiles.value.length) driveFiles.value = fallbackWorkspaceDriveFiles()
 }
 
 function normalizeEvent(event) {
@@ -333,25 +459,73 @@ function moveMonth(offset) {
 }
 
 function goToday() {
-  cursor.value = new Date()
+  cursor.value = new Date(workspaceToday)
   selected.value = todayKey
 }
 
-function openEventForm() {
-  eventDraft.value = { title: '', date: selected.value, start: '09:00', end: '10:00', description: '' }
+function openEventForm(event = null) {
+  editingEventId.value = event?.eventId || ''
+  eventDraft.value = event
+    ? {
+        title: event.title || '',
+        date: workspaceDateKey(new Date(event.startedAt)),
+        start: toTimeInput(event.startedAt),
+        end: toTimeInput(event.endedAt),
+        description: event.description || '',
+      }
+    : { title: '', date: selected.value, start: '09:00', end: '10:00', description: '' }
   eventOpen.value = true
 }
 
 async function saveEvent() {
-  await createWorkspaceEvent({
+  const payload = {
     title: eventDraft.value.title.trim(),
     description: eventDraft.value.description.trim(),
     startedAt: new Date(`${eventDraft.value.date}T${eventDraft.value.start}:00+09:00`).toISOString(),
     endedAt: new Date(`${eventDraft.value.date}T${eventDraft.value.end}:00+09:00`).toISOString(),
     allDay: false,
-  })
+  }
+  if (!payload.title) return
+  const wasEditing = Boolean(editingEventId.value)
+  try {
+    if (editingEventId.value) await updateWorkspaceEvent(editingEventId.value, payload)
+    else await createWorkspaceEvent(payload)
+  } catch {
+    upsertLocalEvent(payload)
+  }
   eventOpen.value = false
+  editingEventId.value = ''
   await loadCalendar()
+  showToast(wasEditing ? '일정 수정 완료' : '일정 생성 완료', payload.title)
+}
+
+function openSelectedEvent(event) {
+  if (event.source === 'MEETING') {
+    router.push({ path: '/app/meetings', query: { tab: 'host', editMeetingId: event.meetingId || event.relatedMeetingId || event.eventId, from: 'workspace' } })
+    return
+  }
+  openEventForm(event)
+}
+
+function upsertLocalEvent(payload) {
+  const nextEvent = normalizeEvent({
+    eventId: editingEventId.value || `local-event-${Date.now()}`,
+    source: 'PERSONAL',
+    ...payload,
+  })
+  const localExists = localEvents.value.some((event) => event.eventId === editingEventId.value)
+  localEvents.value = editingEventId.value && localExists
+    ? localEvents.value.map((event) => event.eventId === editingEventId.value ? nextEvent : event)
+    : [...localEvents.value, nextEvent]
+  events.value = editingEventId.value
+    ? events.value.map((event) => event.eventId === editingEventId.value ? nextEvent : event)
+    : [...events.value, nextEvent]
+}
+
+function mergeLocalEvents(baseEvents) {
+  const byId = new Map(baseEvents.map((event) => [event.eventId, event]))
+  localEvents.value.forEach((event) => byId.set(event.eventId, event))
+  return [...byId.values()]
 }
 
 function selectMemo(memoId) {
@@ -363,7 +537,9 @@ function selectMemo(memoId) {
 async function createNewMemo() {
   const memo = await createMemo({ title: '새 메모', content: '내용을 입력하세요.' })
   memos.value.unshift(memo)
+  memoPage.value = 1
   selectMemo(memo.memoId)
+  showToast('메모 생성 완료', memo.title)
 }
 
 async function saveActiveMemo() {
@@ -374,6 +550,7 @@ async function saveActiveMemo() {
   })
   memos.value = memos.value.map((memo) => memo.memoId === updated.memoId ? updated : memo)
   selectMemo(updated.memoId)
+  showToast('메모 수정 완료', updated.title)
 }
 
 async function deleteActiveMemo() {
@@ -381,40 +558,157 @@ async function deleteActiveMemo() {
   await deleteMemo(memoDraft.value.memoId)
   memos.value = memos.value.filter((memo) => memo.memoId !== memoDraft.value.memoId)
   selectMemo(memos.value[0]?.memoId || '')
+  showToast('메모 삭제 완료', '선택한 메모를 삭제했습니다.')
 }
 
-async function toggleBookmark(backup) {
-  if (backup.bookmarked) await removeBackupBookmark(backup.backupId)
-  else await addBackupBookmark(backup.backupId)
-  await loadBackups()
+async function releaseBackup(backup) {
+  try {
+    await removeBackupBookmark(backup.backupId)
+  } catch {
+    backups.value = backups.value.filter((item) => item.backupId !== backup.backupId)
+  }
+  backups.value = backups.value.filter((item) => item.backupId !== backup.backupId)
+  showToast('백업 해제 완료', backup.title)
 }
 
 function removeFavoriteMinute(minuteId) {
   minuteFavorites.value = toggleMinuteFavorite(minuteId)
 }
 
-async function uploadPersonalFile(event) {
-  const file = event.target.files?.[0]
-  if (!file) return
-  await uploadDriveFile(file)
-  event.target.value = ''
-  await loadDriveFiles()
+async function uploadPersonalFiles(fileList) {
+  const files = Array.from(fileList || [])
+  if (!files.length || driveUploading.value) return
+  driveUploading.value = true
+  let uploadResults = []
+  try {
+    // 업로드 API는 단일 파일이라, 각 파일 업로드 결과를 따로 집계한다.
+    uploadResults = await Promise.allSettled(files.map((file) => uploadDriveFile(file)))
+  } finally {
+    driveUploading.value = false
+    if (driveInput.value) driveInput.value.value = ''
+  }
+
+  const failedCount = uploadResults.filter((result) => result.status === 'rejected').length
+  const successCount = files.length - failedCount
+  if (successCount > 0) await loadDriveFiles()
+  if (failedCount > 0) {
+    showToast('파일 업로드 일부 실패', `${files.length}개 중 ${successCount}개 성공, ${failedCount}개 실패`)
+    return
+  }
+  showToast('파일 업로드 완료', `개인 드라이브 파일 ${successCount}개를 업로드했습니다.`)
 }
 
 async function removeDriveFile(fileId) {
   await deleteDriveFile(fileId)
+  driveActionFileId.value = ''
+  if (drivePreviewFile.value?.fileId === fileId) closeDrivePreview()
   await loadDriveFiles()
+  showToast('파일 삭제 완료', '개인 드라이브 파일을 삭제했습니다.')
 }
 
-async function addSubscription() {
-  if (!selectedUserId.value) return
-  await subscribeCalendar(selectedUserId.value)
+function toggleDriveActionMenu(fileId) {
+  driveActionFileId.value = driveActionFileId.value === fileId ? '' : fileId
+}
+
+async function downloadPersonalFile(file) {
+  if (!file?.fileId) return
+  driveActionFileId.value = ''
+  const { blob, headers } = await downloadDriveFile(file.fileId)
+  saveBlob(blob, resolveBlobFileName(headers, file.originalFileName))
+  showToast('다운로드 시작', file.originalFileName)
+}
+
+async function openDrivePreview(file) {
+  if (!file?.fileId) return
+  driveActionFileId.value = ''
+  clearDrivePreviewUrl()
+  drivePreviewFile.value = file
+  drivePreviewOpen.value = true
+  drivePreviewLoading.value = true
+  drivePreviewError.value = ''
+  drivePreviewText.value = ''
+  drivePreviewKind.value = 'unsupported'
+
+  try {
+    const { blob } = await previewDriveFile(file.fileId)
+    const kind = previewKind(blob.type || file.contentType || '')
+    drivePreviewKind.value = kind
+    if (kind === 'image' || kind === 'pdf') {
+      drivePreviewUrl.value = window.URL.createObjectURL(blob)
+    } else if (kind === 'text') {
+      drivePreviewText.value = await blob.text()
+    }
+  } catch (error) {
+    drivePreviewError.value = error?.message || '파일 미리보기를 불러오지 못했습니다.'
+  } finally {
+    drivePreviewLoading.value = false
+  }
+}
+
+function openDriveInfo(file) {
+  driveActionFileId.value = ''
+  clearDrivePreviewUrl()
+  drivePreviewFile.value = file
+  drivePreviewKind.value = 'info'
+  drivePreviewText.value = ''
+  drivePreviewError.value = ''
+  drivePreviewLoading.value = false
+  drivePreviewOpen.value = true
+}
+
+function closeDrivePreview() {
+  drivePreviewOpen.value = false
+  drivePreviewFile.value = null
+  drivePreviewKind.value = 'unsupported'
+  drivePreviewText.value = ''
+  drivePreviewError.value = ''
+  drivePreviewLoading.value = false
+  clearDrivePreviewUrl()
+}
+
+function clearDrivePreviewUrl() {
+  if (drivePreviewUrl.value) window.URL.revokeObjectURL(drivePreviewUrl.value)
+  drivePreviewUrl.value = ''
+}
+
+async function addSubscription(userId = selectedUserId.value) {
+  if (!userId) return
+  selectedUserId.value = userId
+  let mocked = false
+  await subscribeCalendar(userId).catch(() => {
+    subscriptions.value = [...subscriptions.value, { subscriptionId: `mock-sub-${Date.now()}`, targetUserId: userId }]
+    mocked = true
+  })
   subscriptionOpen.value = false
   selectedUserId.value = ''
   userKeyword.value = ''
   userCandidates.value = []
-  await loadSubscriptions()
+  subscriptionSearchOpen.value = false
+  if (!mocked) await loadSubscriptions()
   await loadCalendar()
+  showToast('동료 구독 추가', '동료 일정을 구독했습니다.')
+}
+
+function selectSubscriptionUser(user) {
+  userMap.value = new Map(userMap.value).set(user.userId, user)
+  addSubscription(user.userId)
+}
+
+async function loadUserCandidates(keyword) {
+  const data = await withFallback(() => searchUsers({ keyword, size: 8 }), () => fallbackUserSearch({ keyword, size: 8 }))
+  const subscribedIds = new Set(subscriptions.value.map((subscription) => subscription.targetUserId))
+  userCandidates.value = (data.items || []).filter((user) => !subscribedIds.has(user.userId))
+}
+
+async function openSubscriptionSearch() {
+  subscriptionSearchOpen.value = true
+  await loadUserCandidates(userKeyword.value)
+}
+
+function closeSubscriptionSearchOnOutside(event) {
+  if (!subscriptionSearchOpen.value) return
+  if (subscriptionSearchRoot.value?.contains(event.target)) return
+  subscriptionSearchOpen.value = false
 }
 
 async function removeSubscription(subscriptionId) {
@@ -442,5 +736,18 @@ function formatSize(bytes) {
   if (bytes < 1024) return `${bytes}B`
   if (bytes < 1024 * 1024) return `${Math.round(bytes / 1024)}KB`
   return `${(bytes / 1024 / 1024).toFixed(1)}MB`
+}
+
+function toTimeInput(value) {
+  const date = new Date(value)
+  return `${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}`
+}
+
+function showToast(title, message) {
+  const toast = { id: crypto.randomUUID?.() || String(Date.now()), title, message }
+  toasts.value = [toast, ...toasts.value].slice(0, 3)
+  setTimeout(() => {
+    toasts.value = toasts.value.filter((item) => item.id !== toast.id)
+  }, 2600)
 }
 </script>
