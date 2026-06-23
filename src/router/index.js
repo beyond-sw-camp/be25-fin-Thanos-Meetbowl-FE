@@ -32,6 +32,13 @@ const routes = [
   { path: '/login', component: LoginPage, meta: { public: true } },
   { path: '/join/:code', component: JoinPage, meta: { public: true } },
   { path: '/guest/meeting/:meetingId', component: MeetingPage, meta: { public: true } },
+  {
+    path: '/password/change',
+    component: SettingsPage,
+    // 강제 초기 비밀번호 변경은 셸 밖 단독 화면으로 보여 사이드바를 노출하지 않는다.
+    props: { forcePasswordChange: true },
+    meta: { role: ['USER', 'ADMIN'], allowWhenPasswordChangeRequired: true },
+  },
   { path: '/app/meeting', redirect: meetingRoute(), meta: { role: 'USER' } },
   { path: '/app/meeting/:meetingId', component: MeetingPage, meta: { role: 'USER' } },
   {
@@ -55,13 +62,6 @@ const routes = [
         path: 'app/backup/:id',
         component: BackupDetailPage,
         meta: { role: 'USER' },
-      },
-      {
-        path: 'password/change',
-        component: SettingsPage,
-        // 최초 로그인 사용자는 일반 설정 화면이 아니라 이 강제 변경 경로로만 진입시킨다.
-        props: { forcePasswordChange: true },
-        meta: { role: ['USER', 'ADMIN'], allowWhenPasswordChangeRequired: true },
       },
       {
         path: 'app/settings',

@@ -1,6 +1,7 @@
 <script setup>
 import { computed, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
+import { changeInitialPassword } from '../../lib/auth'
 import {
   changeMyPassword,
   getMyProfile,
@@ -190,13 +191,18 @@ async function savePassword() {
   const newPassword = passwordForm.value.newPassword
   const newPasswordConfirm = passwordForm.value.newPasswordConfirm
 
-  if (!currentPassword.trim()) {
+  if (!props.forcePasswordChange && !currentPassword.trim()) {
     passwordError.value = '현재 비밀번호를 입력해 주세요.'
     return
   }
 
   if (!newPassword.trim()) {
     passwordError.value = '새 비밀번호를 입력해 주세요.'
+    return
+  }
+
+  if (newPassword.length < 8 || newPassword.length > 100) {
+    passwordError.value = '새 비밀번호는 8자 이상 100자 이하여야 합니다.'
     return
   }
 
@@ -208,12 +214,18 @@ async function savePassword() {
   passwordSaving.value = true
 
   try {
-    // 최초 변경과 일반 변경 모두 BE의 MyPasswordChangeRequest 필드명에 맞춰 요청 body를 보낸다.
-    await changeMyPassword({
-      currentPassword,
-      newPassword,
-      newPasswordConfirm,
-    })
+    if (props.forcePasswordChange) {
+      await changeInitialPassword({
+        newPassword,
+        newPasswordConfirm,
+      })
+    } else {
+      await changeMyPassword({
+        currentPassword,
+        newPassword,
+        newPasswordConfirm,
+      })
+    }
 
     passwordForm.value = {
       currentPassword: '',
@@ -249,7 +261,7 @@ function statusLabel(status) {
 </script>
 
 <template>
-  <section class="page settings-page">
+  <section class="page settings-page" :class="{ 'force-password-page': forcePasswordChange }">
     <header class="page-header">
       <h1>{{ forcePasswordChange ? '비밀번호 변경' : '설정' }}</h1>
       <p v-if="forcePasswordChange">
@@ -298,7 +310,7 @@ function statusLabel(status) {
         <p v-if="forcePasswordChange">초기 비밀번호를 반드시 새 비밀번호로 변경해 주세요.</p>
         <p v-else>본인 확인을 위해 현재 비밀번호를 입력한 뒤 새 비밀번호로 변경해 주세요.</p>
         <div class="settings-form-grid password-form-grid">
-          <label>
+          <label v-if="!forcePasswordChange">
             현재 비밀번호
             <input v-model="passwordForm.currentPassword" type="password" autocomplete="current-password">
           </label>

@@ -280,6 +280,8 @@ const memoPage = ref(1)
 const memoDraft = ref({ memoId: '', title: '', content: '' })
 const backups = ref([])
 const backupKeyword = ref('')
+const LOCAL_RELEASED_BACKUP_IDS_KEY = 'meetbowl.workspace.releasedBackupIds'
+const releasedBackupIds = ref(readStoredReleasedBackupIds())
 const driveFiles = ref([])
 const driveInput = ref(null)
 const eventOpen = ref(false)
@@ -374,11 +376,12 @@ async function loadMemos() {
 }
 
 async function loadBackups() {
-  backups.value = await withFallback(
+  const loaded = await withFallback(
     () => (backupKeyword.value.trim() ? searchBackups(backupKeyword.value.trim()) : getBackups()),
     () => fallbackWorkspaceBackups(backupKeyword.value),
   )
-  if (!backups.value.length) backups.value = fallbackWorkspaceBackups(backupKeyword.value)
+  const next = loaded.length ? loaded : fallbackWorkspaceBackups(backupKeyword.value)
+  backups.value = next.filter((backup) => !releasedBackupIds.value.has(backup.backupId))
 }
 
 async function loadDriveFiles() {
@@ -504,15 +507,43 @@ async function deleteActiveMemo() {
 async function releaseBackup(backup) {
   try {
     await removeBackupBookmark(backup.backupId)
-  } catch {
+  } finally {
+    releasedBackupIds.value = new Set(releasedBackupIds.value).add(backup.backupId)
+    persistReleasedBackupIds()
     backups.value = backups.value.filter((item) => item.backupId !== backup.backupId)
   }
-  backups.value = backups.value.filter((item) => item.backupId !== backup.backupId)
   showToast('백업 해제 완료', backup.title)
 }
 
 function removeFavoriteMinute(minuteId) {
   minuteFavorites.value = toggleMinuteFavorite(minuteId)
+}
+
+function readStoredReleasedBackupIds() {
+  return new Set(readStoredJson(LOCAL_RELEASED_BACKUP_IDS_KEY, []))
+}
+
+function persistReleasedBackupIds() {
+  writeStoredJson(LOCAL_RELEASED_BACKUP_IDS_KEY, [...releasedBackupIds.value])
+}
+
+function readStoredJson(key, fallback) {
+  try {
+    if (typeof window === 'undefined') return fallback
+    const raw = window.localStorage.getItem(key)
+    return raw ? JSON.parse(raw) : fallback
+  } catch {
+    return fallback
+  }
+}
+
+function writeStoredJson(key, value) {
+  try {
+    if (typeof window === 'undefined') return
+    window.localStorage.setItem(key, JSON.stringify(value))
+  } catch {
+    // 로컬 보관 상태 저장 실패는 화면 동작을 막지 않는다.
+  }
 }
 
 async function uploadPersonalFile(event) {

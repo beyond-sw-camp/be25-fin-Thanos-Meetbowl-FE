@@ -600,12 +600,11 @@
               {{ currentCaptionEmptyStateMessage }}
             </p>
           </div>
-        </section>
+	        </section>
 
-        </div>
-        <RealtimeFeedbackPanel
-          class="meeting-realtime-feedback"
-          :feedbacks="realtimeFeedbacks"
+	        <RealtimeFeedbackPanel
+	          class="meeting-realtime-feedback"
+	          :feedbacks="realtimeFeedbacks"
           :connected="Boolean(meetingRoom)"
         />
       </div>
@@ -848,7 +847,7 @@
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { Room, RoomEvent, Track, createLocalAudioTrack, createLocalVideoTrack } from 'livekit-client'
 import { useRoute, useRouter } from 'vue-router'
-import { postJson } from '../../lib/api-client'
+import { API_BASE_URL, postJson } from '../../lib/api-client'
 import {
   displayFinalizedCaptions,
   latestStreamingCaption,
@@ -857,7 +856,6 @@ import {
   upsertCaption,
 } from '../../lib/caption-store'
 import RealtimeFeedbackPanel from '../../components/meeting/RealtimeFeedbackPanel.vue'
-import { API_BASE_URL, postJson } from '../../lib/api-client'
 import { sortedFeedbacks, upsertFeedback } from '../../lib/feedback-store'
 import { guestMeetingRoute, openMeetingWindow } from '../../lib/meeting-route'
 import { resolveLiveKitConnection } from '../../lib/livekit-meeting'

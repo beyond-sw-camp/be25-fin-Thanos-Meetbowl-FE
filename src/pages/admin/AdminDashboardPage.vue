@@ -32,16 +32,22 @@ const recentAuditLogs = computed(() => summary.value?.recentAuditLogs || [])
 const mailRetentionPolicy = computed(() => summary.value?.mailRetentionPolicy || null)
 const meetingRoomSummary = computed(() => summary.value?.meetingRoomSummary || null)
 const timeSlotUsage = computed(() => meetingRoomSummary.value?.timeSlotUsage || [])
+const visibleTimeSlotUsage = computed(() =>
+  timeSlotUsage.value.filter((item) => {
+    const hour = kstHour(item.slotStartAt)
+    return hour >= 9 && hour < 24
+  }),
+)
 const siteBuildingUsage = computed(() => meetingRoomSummary.value?.siteBuildingUsage || [])
 const maxReservationCount = computed(() => {
-  const counts = timeSlotUsage.value.map((item) => item.reservationCount)
+  const counts = visibleTimeSlotUsage.value.map((item) => item.reservationCount)
   return counts.length ? Math.max(...counts, 1) : 1
 })
 const peakUsage = computed(() => {
-  if (!timeSlotUsage.value.length) return null
+  if (!visibleTimeSlotUsage.value.length) return null
 
-  // 막대 차트 보조 문구에 쓸 최고 예약 시간대를 계산한다.
-  return timeSlotUsage.value.reduce((top, item) => {
+  // 화면에 표시하는 운영 시간대 안에서 최고 예약 시간대를 계산한다.
+  return visibleTimeSlotUsage.value.reduce((top, item) => {
     if (!top || item.reservationCount > top.reservationCount) return item
     return top
   }, null)
@@ -62,7 +68,7 @@ const kpis = computed(() => {
     {
       label: '오늘 예약 수',
       value: meetingRoomSummary.value.todayReservationCount,
-      sub: `시간대 집계 ${timeSlotUsage.value.length}건`,
+      sub: `운영 시간 집계 ${visibleTimeSlotUsage.value.length}건`,
     },
     {
       label: '현재 사용 중 회의실 수',
@@ -132,7 +138,22 @@ function formatHour(value) {
   const date = new Date(value)
   if (Number.isNaN(date.getTime())) return '-'
 
-  return hourFormatter.format(date)
+  return hourFormatter.format(date).replace(':00', '')
+}
+
+function kstHour(value) {
+  if (!value) return -1
+
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) return -1
+
+  return Number(
+    new Intl.DateTimeFormat('ko-KR', {
+      timeZone: 'Asia/Seoul',
+      hour: '2-digit',
+      hour12: false,
+    }).format(date),
+  )
 }
 
 function formatPercent(value) {
@@ -225,13 +246,13 @@ function resultBadgeClass(result) {
           <div class="card-head">
             <div>
               <h2>시간대별 회의실 사용 빈도</h2>
-              <p>오늘 예약된 회의실의 시간대별 예약 수입니다.</p>
+              <p>오늘 예약된 회의실의 시간대별 예약 수입니다. 운영 시간인 09:00부터 24:00 전까지를 막대그래프로 보여줍니다.</p>
             </div>
-            <span class="badge">{{ timeSlotUsage.length }}개 시간대</span>
+            <span class="badge">{{ visibleTimeSlotUsage.length }}개 시간대</span>
           </div>
-          <p v-if="!timeSlotUsage.length" class="empty-text">집계된 시간대 사용 정보가 없습니다.</p>
+          <p v-if="!visibleTimeSlotUsage.length" class="empty-text">집계된 시간대 사용 정보가 없습니다.</p>
           <div v-else class="admin-bar-chart">
-            <div v-for="item in timeSlotUsage" :key="item.slotStartAt" class="admin-bar-item">
+            <div v-for="item in visibleTimeSlotUsage" :key="item.slotStartAt" class="admin-bar-item">
               <div class="admin-bar-track">
                 <i :style="{ height: `${(item.reservationCount / maxReservationCount) * 100}%` }"></i>
               </div>

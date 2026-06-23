@@ -268,13 +268,12 @@ onMounted(async () => {
   loadMeetings()
   window.addEventListener('focus', handleWindowFocus)
   document.addEventListener('visibilitychange', handleVisibilityChange)
+  openMeetingFromQuery()
 })
 
 onBeforeUnmount(() => {
   window.removeEventListener('focus', handleWindowFocus)
   document.removeEventListener('visibilitychange', handleVisibilityChange)
-  await loadMeetings()
-  openMeetingFromQuery()
 })
 
 // 탭(역할)·기간이 바뀌면 서버에서 다시 조회한다.

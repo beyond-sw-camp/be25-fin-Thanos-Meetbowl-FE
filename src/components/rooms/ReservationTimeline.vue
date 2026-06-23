@@ -32,8 +32,11 @@
         show-availability
         selectable
         :selected-range="range"
+        :preview-block="room.roomId === selectedRoomId ? previewBlock : null"
+        :show-empty-label="false"
         :selected="room.roomId === selectedRoomId"
         @select="$emit('select-room', $event)"
+        @select-range="forwardSelectRange"
       />
       <div v-if="!filteredRooms.length" class="empty-state-inline">표시할 회의실이 없습니다.</div>
     </div>
@@ -51,14 +54,19 @@ const props = defineProps({
   nameMap: { type: Object, default: () => ({}) },
   range: { type: Object, required: true },
   selectedRoomId: { type: String, default: '' },
+  previewBlock: { type: Object, default: null },
 })
-defineEmits(['select-room'])
+const emit = defineEmits(['select-room', 'select-range'])
 
 const siteFilter = ref('전체')
 const siteTabs = computed(() => ['전체', ...new Set(props.rooms.map((room) => room.siteName).filter(Boolean))])
 const filteredRooms = computed(() =>
   siteFilter.value === '전체' ? props.rooms : props.rooms.filter((room) => room.siteName === siteFilter.value),
 )
+
+function forwardSelectRange(roomId, start, end) {
+  emit('select-range', roomId, start, end)
+}
 </script>
 
 <style scoped>

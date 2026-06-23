@@ -1,11 +1,24 @@
 <template>
-  <ModalShell modal-class="room-modal" @close="$emit('close')">
+  <ModalShell :modal-class="['room-modal', { 'has-timeline': roomTimelineVisible, compact: !roomTimelineVisible }]" @close="$emit('close')">
+    <template #overlay>
+      <div v-if="actionError" class="reservation-warning-overlay">{{ actionError }}</div>
+    </template>
     <header>
       <div><h2>{{ isEdit ? '회의 수정' : '새 회의 예약' }}</h2></div>
       <button class="modal-close" type="button" aria-label="닫기" @click="$emit('close')">×</button>
     </header>
     <div class="room-modal-grid">
-      <ReservationForm :form="form" :rooms="rooms" :my-user-id="myUserId" :action-error="actionError" :allow-remote="allowRemote" @submit="save">
+      <ReservationForm
+        :form="form"
+        :rooms="rooms"
+        :my-user-id="myUserId"
+        :host-user-id="myUserId"
+        :room-usage-enabled="roomUsageEnabled"
+        :allow-remote="allowRemote"
+        @submit="save"
+        @enable-room-usage="enableRoomUsage"
+        @disable-room-usage="disableRoomUsage"
+      >
         <template #actions>
           <div class="modal-actions">
             <button type="button" class="secondary-button" @click="$emit('close')">취소</button>
@@ -15,26 +28,29 @@
       </ReservationForm>
 
       <ReservationTimeline
+        v-if="roomTimelineVisible"
         :rooms="rooms"
         :blocks-by-room="blocksByRoom"
         :name-map="nameMap"
-        :range="{ start: form.start, end: form.end }"
+        :range="timelineRange"
         :selected-room-id="form.roomId"
+        :preview-block="timelinePreviewBlock"
         @select-room="selectRoom"
+        @select-range="applyTimelineRange"
       />
     </div>
   </ModalShell>
 </template>
 
 <script setup>
-import { computed, onMounted, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import ModalShell from '../common/ModalShell.vue'
 import ReservationForm from './ReservationForm.vue'
 import ReservationTimeline from './ReservationTimeline.vue'
 import { useAuthStore } from '../../stores/auth'
 import { createMeeting, getMeeting, getRoomReservations, updateMeeting } from '../../lib/reservations'
 import { useUserNames } from '../../composables/useUserNames'
-import { addMinutes, kstDayRangeUtc, kstToUtcIso, todayKst, utcToKstClock, utcToKstDate } from '../../utils/dateTime'
+import { addMinutes, kstDayRangeUtc, kstToUtcIso, shiftDateKst, todayKst, utcToKstClock, utcToKstDate } from '../../utils/dateTime'
 
 const props = defineProps({
   rooms: { type: Array, default: () => [] },
@@ -56,36 +72,66 @@ const emit = defineEmits(['close', 'saved'])
 
 const auth = useAuthStore()
 const myUserId = computed(() => auth.user?.userId || '')
+const hostAttendee = computed(() => {
+  if (!auth.user?.userId) return null
+  return {
+    userId: auth.user.userId,
+    name: auth.user.name || '나',
+  }
+})
 const { nameMap, resolveNames } = useUserNames()
 
 const isEdit = computed(() => props.mode === 'edit')
+const roomUsageEnabled = ref(!props.allowRemote || Boolean(props.initialRoomId) || Boolean(props.meeting?.meetingRoomId))
 const saving = ref(false)
 const loading = ref(false)
 const actionError = ref('')
 const blocksByRoom = ref({})
+let errorOverlayTimerId = null
 
 const submitLabel = computed(() => {
   if (saving.value) return isEdit.value ? '수정 중...' : '예약 중...'
   return isEdit.value ? '회의 수정하기' : '회의 예약하기'
 })
+const timelineRange = computed(() => ({
+  start: form.value.start,
+  end:
+    form.value.endDate > form.value.date && form.value.end === '00:00'
+      ? '24:00'
+      : form.value.end,
+}))
+const timelinePreviewBlock = computed(() => {
+  if (!roomUsageEnabled.value || !form.value.roomId || !timelineRange.value.start || !timelineRange.value.end) return null
+  return {
+    label: form.value.title.trim() || '내 예약',
+    start: timelineRange.value.start,
+    end: timelineRange.value.end,
+  }
+})
+const roomTimelineVisible = computed(() => !props.allowRemote || roomUsageEnabled.value)
 
 const initialDate = props.initialDate || todayKst()
+const normalizedInitialEnd = props.initialEnd === '24:00' ? '00:00' : props.initialEnd
+const normalizedInitialEndDate =
+  props.initialEnd === '24:00' ? shiftDateKst(initialDate, 1) : initialDate
 const form = ref({
   title: '',
   // 회의실 선택값이 곧 meetingRoomId(미선택 ''=원격). 원격 토글은 roomId로부터 파생된다(별도 상태 없음).
   // initialRemote면 기본 미선택('')으로 시작(회의 모달). 회의실 예약은 첫 회의실을 기본 선택.
   roomId: props.initialRoomId || (props.initialRemote ? '' : props.rooms[0]?.roomId || ''),
   date: initialDate,
-  endDate: initialDate,
+  endDate: normalizedInitialEndDate,
   start: props.initialStart,
-  end: props.initialEnd || addMinutes(props.initialStart, 60),
-  attendees: [],
+  end: normalizedInitialEnd || addMinutes(props.initialStart, 60),
+  attendees: hostAttendee.value ? [hostAttendee.value] : [],
   reviewerUserId: '',
   content: '',
 })
 
 onMounted(async () => {
   if (isEdit.value && props.meeting) await prefillFromMeeting()
+  if (!props.allowRemote) roomUsageEnabled.value = true
+  if (props.allowRemote && props.initialRemote) roomUsageEnabled.value = false
   await loadDay()
 })
 
@@ -95,10 +141,8 @@ async function prefillFromMeeting() {
   loading.value = true
   try {
     const full = await getMeeting(props.meeting.meetingId)
-    // 참석자 칩은 주최자(HOST)를 제외하지만, 주최자가 검토자로 지정된 경우엔
-    // 검토자 드롭다운(참석자 기반)에 떠야 하므로 포함한다.
     const participants = (full.attendees || []).filter(
-      (attendee) => attendee.role !== 'HOST' || attendee.reviewer,
+      (attendee) => attendee.role !== 'HOST' || attendee.userId === myUserId.value,
     )
     await resolveNames(participants.map((attendee) => attendee.userId))
     form.value = {
@@ -109,10 +153,15 @@ async function prefillFromMeeting() {
       endDate: utcToKstDate(full.scheduledEndAt),
       start: utcToKstClock(full.scheduledAt),
       end: utcToKstClock(full.scheduledEndAt),
-      attendees: participants.map((attendee) => ({
-        userId: attendee.userId,
-        name: nameMap[attendee.userId] || '이름 미확인',
-      })),
+      attendees: normalizeAttendees(
+        participants.map((attendee) => ({
+          userId: attendee.userId,
+          name:
+            attendee.userId === myUserId.value
+              ? auth.user?.name || '나'
+              : nameMap[attendee.userId] || '이름 미확인',
+        })),
+      ),
       reviewerUserId: full.attendees?.find((attendee) => attendee.reviewer)?.userId || '',
       content: full.description || '',
     }
@@ -126,11 +175,36 @@ async function prefillFromMeeting() {
 // 시작 날짜를 바꾸면 그날 예약 현황만 다시 불러온다(시간 변경은 재조회 없이 computed로 처리).
 watch(() => form.value.date, loadDay)
 
+watch(
+  hostAttendee,
+  (host) => {
+    if (!host) return
+    form.value.attendees = normalizeAttendees(form.value.attendees)
+  },
+  { immediate: true },
+)
+
+watch(actionError, (message) => {
+  if (errorOverlayTimerId) {
+    window.clearTimeout(errorOverlayTimerId)
+    errorOverlayTimerId = null
+  }
+  if (!message) return
+  errorOverlayTimerId = window.setTimeout(() => {
+    actionError.value = ''
+    errorOverlayTimerId = null
+  }, 3000)
+})
+
 // 참석자에서 빠진 사용자가 검토자였다면 검토자 선택을 비운다.
 watch(
   () => form.value.attendees,
   (attendees) => {
     if (form.value.reviewerUserId && !attendees.some((a) => a.userId === form.value.reviewerUserId)) {
+      form.value.reviewerUserId = ''
+      return
+    }
+    if (form.value.reviewerUserId && form.value.reviewerUserId === myUserId.value) {
       form.value.reviewerUserId = ''
     }
   },
@@ -169,6 +243,47 @@ async function loadDay() {
 // 타임라인에서 회의실을 고르면 그 회의실로 지정한다(원격 토글은 roomId에서 파생).
 function selectRoom(roomId) {
   form.value.roomId = roomId
+  if (roomId) roomUsageEnabled.value = true
+}
+
+function applyTimelineRange(roomId, start, end) {
+  form.value.roomId = roomId
+  if (roomId) roomUsageEnabled.value = true
+  form.value.start = start
+  if (end === '24:00') {
+    form.value.endDate = shiftDateKst(form.value.date, 1)
+    form.value.end = '00:00'
+    return
+  }
+  form.value.endDate = form.value.date
+  form.value.end = end
+}
+
+function enableRoomUsage() {
+  roomUsageEnabled.value = true
+}
+
+function disableRoomUsage() {
+  roomUsageEnabled.value = false
+  form.value.roomId = ''
+}
+
+function normalizeAttendees(attendees = []) {
+  const normalized = []
+  const seen = new Set()
+  if (hostAttendee.value?.userId) {
+    normalized.push(hostAttendee.value)
+    seen.add(hostAttendee.value.userId)
+  }
+  for (const attendee of attendees) {
+    if (!attendee?.userId || seen.has(attendee.userId)) continue
+    normalized.push({
+      userId: attendee.userId,
+      name: attendee.name || nameMap[attendee.userId] || '이름 미확인',
+    })
+    seen.add(attendee.userId)
+  }
+  return normalized
 }
 
 async function save() {
@@ -227,6 +342,13 @@ async function save() {
     saving.value = false
   }
 }
+
+onBeforeUnmount(() => {
+  if (errorOverlayTimerId) {
+    window.clearTimeout(errorOverlayTimerId)
+    errorOverlayTimerId = null
+  }
+})
 </script>
 
 <style scoped>
@@ -244,5 +366,22 @@ async function save() {
 .modal-close:hover {
   background: var(--muted);
   color: var(--foreground);
+}
+.reservation-warning-overlay {
+  position: absolute;
+  left: 50%;
+  top: calc(50% - 360px);
+  z-index: 2;
+  width: min(860px, calc(100vw - 64px));
+  transform: translateX(-50%);
+  border: 1px solid #fdba74;
+  border-radius: 10px;
+  background: #fff7ed;
+  color: #c2410c;
+  padding: 12px 14px;
+  font-size: 13px;
+  font-weight: 700;
+  box-shadow: 0 12px 28px rgba(194, 65, 12, 0.16);
+  pointer-events: none;
 }
 </style>
