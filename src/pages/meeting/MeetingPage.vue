@@ -602,7 +602,6 @@
           </div>
         </section>
 
-        </div>
         <RealtimeFeedbackPanel
           class="meeting-realtime-feedback"
           :feedbacks="realtimeFeedbacks"
@@ -848,7 +847,6 @@
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { Room, RoomEvent, Track, createLocalAudioTrack, createLocalVideoTrack } from 'livekit-client'
 import { useRoute, useRouter } from 'vue-router'
-import { postJson } from '../../lib/api-client'
 import {
   displayFinalizedCaptions,
   latestStreamingCaption,
