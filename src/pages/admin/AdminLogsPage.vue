@@ -513,7 +513,9 @@ function toIsoUtc(value) {
 
       <div class="admin-log-footer">
         <p class="admin-log-count">총 {{ totalElements }}건</p>
-        <Pagination v-model="pageNo" :total-pages="totalPages" />
+        <div class="admin-log-pagination">
+          <Pagination v-model="pageNo" :total-pages="totalPages" />
+        </div>
       </div>
 
       <div v-if="detailOpen" class="modal-backdrop" @click.self="closeDetail">
@@ -697,16 +699,73 @@ function toIsoUtc(value) {
 }
 
 .admin-log-footer {
-  display: flex;
-  justify-content: space-between;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
   align-items: center;
-  gap: 12px;
+  gap: 12px 16px;
+  margin-top: 14px;
+  padding: 14px 18px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: linear-gradient(180deg, #ffffff, #fbfcfe);
+  box-shadow: 0 8px 24px rgba(15,23,42,.04);
 }
 
 .admin-log-count {
+  grid-column: 1;
   margin: 0;
+  justify-self: start;
   color: var(--muted-foreground);
   font-size: 13px;
+  font-weight: 700;
+}
+
+.admin-log-pagination {
+  grid-column: 2;
+  justify-self: center;
+  min-width: 0;
+}
+
+.admin-log-pagination :deep(.pagination) {
+  margin-top: 0;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.admin-log-pagination :deep(.pagination span) {
+  min-width: 58px;
+  min-height: 36px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: #f8fafc;
+  padding: 0 12px;
+  color: var(--foreground);
+  font-size: 13px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.admin-log-pagination :deep(.pagination button) {
+  min-height: 36px;
+  min-width: 56px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 14px;
+  color: var(--foreground);
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.admin-log-pagination :deep(.pagination button:hover:not(:disabled)) {
+  background: #f8fafc;
+}
+
+.admin-log-pagination :deep(.pagination button:disabled) {
+  opacity: .42;
 }
 
 .audit-log-detail-modal {
@@ -780,8 +839,20 @@ function toIsoUtc(value) {
 
 @media (max-width: 959px) {
   .admin-log-footer {
-    flex-direction: column;
-    align-items: stretch;
+    grid-template-columns: 1fr;
+    gap: 10px;
+    padding: 14px 16px 18px;
+  }
+
+  .admin-log-pagination {
+    grid-column: 1;
+    justify-self: center;
+  }
+}
+
+@media (max-width: 640px) {
+  .admin-log-pagination :deep(.pagination) {
+    justify-content: center;
   }
 }
 </style>
