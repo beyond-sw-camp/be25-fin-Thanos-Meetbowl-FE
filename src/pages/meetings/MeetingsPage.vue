@@ -131,7 +131,8 @@ function canCancel(meeting) {
 }
 const tabs = [{ key: 'all', label: '전체' }, { key: 'host', label: '내가 주최한 회의' }, { key: 'attendee', label: '초대된 회의' }, { key: 'active', label: '예정·진행중' }]
 
-const tab = ref('all')
+// 다른 화면(대시보드 등)에서 ?tab= 으로 진입하면 해당 탭으로 시작한다(all/host/attendee/active).
+const tab = ref(['all', 'host', 'attendee', 'active'].includes(route.query.tab) ? route.query.tab : 'all')
 const range = ref('all')
 // 기본 정렬: 가까운 날짜순(scheduledAt 오름차순) — 다가오는 회의가 위로.
 const sort = ref('oldest')

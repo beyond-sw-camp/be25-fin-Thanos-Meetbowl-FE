@@ -82,7 +82,7 @@ import { computed, onMounted, ref } from 'vue'
 import { useAuthStore } from '../../stores/auth'
 import ReservationModal from '../rooms/ReservationModal.vue'
 import { cancelMeeting, getMeetings, getRooms } from '../../lib/reservations'
-import { shiftDateKst, todayKst, utcToKstClock, utcToKstDate } from '../../utils/dateTime'
+import { compareByDistanceTo, shiftDateKst, todayKst, utcToKstClock, utcToKstDate } from '../../utils/dateTime'
 
 const props = defineProps({
   // 데이터 기준: 'host'(내가 주최/예약) | 'invited'(내가 참석자로 지정)
@@ -134,12 +134,14 @@ const upcomingMeetings = computed(() => {
     // 날짜순(가까운 예약부터) 정렬.
     .sort((a, b) => new Date(a.scheduledAt).getTime() - new Date(b.scheduledAt).getTime())
 })
-// 취소된 예약 — '취소' 탭 전용. 기간/미종료 제한 없이 취소된 예약 전체를 최근 취소순으로 보여준다.
-const cancelledMeetings = computed(() =>
-  meetings.value
+// 취소된 예약 — '취소' 탭 전용. 기간/미종료 제한 없이 취소된 예약 전체를,
+// 오늘(now)에 가장 가까운 예정일(과거·미래 무관)부터 위로 보여준다.
+const cancelledMeetings = computed(() => {
+  const compare = compareByDistanceTo(Date.now())
+  return meetings.value
     .filter((meeting) => meeting.status === 'CANCELLED')
-    .sort((a, b) => new Date(b.scheduledAt).getTime() - new Date(a.scheduledAt).getTime()),
-)
+    .sort((a, b) => compare(a.scheduledAt, b.scheduledAt))
+})
 // 카운트 전용 — 다가오는 예약 ∩ 활성(SCHEDULED/IN_PROGRESS). 취소/종료는 유효 예약 수에서 제외한다.
 const activeUpcomingMeetings = computed(() => upcomingMeetings.value.filter(isActive))
 
