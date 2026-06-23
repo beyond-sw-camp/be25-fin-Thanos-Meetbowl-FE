@@ -73,6 +73,15 @@
                 <span>{{ item.content }}</span>
                 <small>{{ formatNotificationTime(item.createdAt) }}</small>
               </RouterLink>
+              <button
+                v-if="notificationsHasMore && !notificationsLoading"
+                type="button"
+                class="notification-more"
+                :disabled="notificationsLoadingMore"
+                @click="loadMoreNotifications"
+              >
+                {{ notificationsLoadingMore ? '불러오는 중…' : '더보기' }}
+              </button>
             </div>
           </div>
 
@@ -132,6 +141,11 @@ const homePath = computed(() => auth.homePath)
 const notifications = ref([])
 const unreadCount = ref(0)
 const notificationsLoading = ref(false)
+// 드롭다운은 최근 10개부터 보여주고, '더보기'로 그 이전 페이지를 이어붙인다(개수 기반).
+const NOTIFICATION_PAGE_SIZE = 10
+const notificationPage = ref(1)
+const notificationsHasMore = ref(false)
+const notificationsLoadingMore = ref(false)
 let notificationSource = null
 
 const navSections = [
@@ -172,16 +186,55 @@ const navSections = [
   },
 ]
 
+// 다음 페이지 존재 여부 판단. 백엔드 응답 메타데이터(totalPages/totalElements/hasNext)를 우선 쓰고,
+// 없으면 "마지막 페이지가 size만큼 가득 찼는가"로 추정한다.
+function resolveNotificationsHasMore(data, loadedCount) {
+  if (typeof data?.totalPages === 'number') return notificationPage.value < data.totalPages
+  if (typeof data?.totalElements === 'number') return loadedCount < data.totalElements
+  if (typeof data?.hasNext === 'boolean') return data.hasNext
+  return (data?.items?.length ?? 0) === NOTIFICATION_PAGE_SIZE
+}
+
 async function loadNotifications() {
   notificationsLoading.value = true
+  notificationPage.value = 1
   try {
-    const data = await getNotifications({ page: 1, size: 20 })
+    const data = await getNotifications({ page: 1, size: NOTIFICATION_PAGE_SIZE })
     notifications.value = data?.items ?? []
     unreadCount.value = data?.unreadCount ?? 0
+    notificationsHasMore.value = resolveNotificationsHasMore(data, notifications.value.length)
   } catch {
     // 알림 조회 실패는 화면을 막지 않는다 — 다음 갱신/SSE 수신에서 보강된다.
   } finally {
     notificationsLoading.value = false
+  }
+}
+
+async function loadMoreNotifications() {
+  if (notificationsLoadingMore.value || !notificationsHasMore.value) return
+  notificationsLoadingMore.value = true
+  try {
+    const nextPage = notificationPage.value + 1
+    const data = await getNotifications({ page: nextPage, size: NOTIFICATION_PAGE_SIZE })
+    const incoming = data?.items ?? []
+    // SSE로 이미 앞에 추가된 알림과 중복되지 않게, 기존에 없는 id만 이어붙인다.
+    const existingIds = new Set(notifications.value.map((item) => item.id))
+    const added = incoming.filter((item) => !existingIds.has(item.id))
+    notifications.value.push(...added)
+    notificationPage.value = nextPage
+    if (typeof data?.unreadCount === 'number') unreadCount.value = data.unreadCount
+    notificationsHasMore.value = resolveNotificationsHasMore(data, notifications.value.length)
+    // 메타데이터가 없고 새로 추가된 항목도 없으면 더 가져올 게 없다고 보고 버튼을 닫는다(죽은 버튼 방지).
+    if (!added.length
+      && typeof data?.totalPages !== 'number'
+      && typeof data?.totalElements !== 'number'
+      && typeof data?.hasNext !== 'boolean') {
+      notificationsHasMore.value = false
+    }
+  } catch {
+    // 더보기 실패는 조용히 무시한다 — 버튼을 유지해 다시 시도할 수 있게 한다.
+  } finally {
+    notificationsLoadingMore.value = false
   }
 }
 
@@ -318,5 +371,30 @@ async function handleLogout() {
   border-radius: 999px;
   background: var(--primary-dark, #2563eb);
   vertical-align: middle;
+}
+
+/* 안 읽은 알림은 제목·내용 텍스트를 굵게 표시한다(읽으면 일반 굵기로 돌아감). */
+.notification.unread strong,
+.notification.unread span {
+  font-weight: 700;
+}
+
+.notification-more {
+  width: 100%;
+  padding: 10px 14px;
+  border: none;
+  border-top: 1px solid var(--border, #e5e7eb);
+  background: transparent;
+  color: var(--primary-dark, #2563eb);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.notification-more:hover {
+  background: var(--muted, #f8fafc);
+}
+.notification-more:disabled {
+  color: var(--muted-foreground);
+  cursor: default;
 }
 </style>
