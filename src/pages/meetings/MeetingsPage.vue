@@ -98,11 +98,13 @@
 </template>
 
 <script setup>
+
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import Pagination from '../../components/common/Pagination.vue'
 import ModalShell from '../../components/common/ModalShell.vue'
 import ReservationModal from '../../components/rooms/ReservationModal.vue'
+  
 import { getMeetingJoinBlockedMessage, openMeetingWindow } from '../../lib/meeting-route'
 import { cancelMeeting, getMeeting, getMeetings, getRooms } from '../../lib/reservations'
 import { useAuthStore } from '../../stores/auth'
@@ -271,6 +273,8 @@ onMounted(async () => {
 onBeforeUnmount(() => {
   window.removeEventListener('focus', handleWindowFocus)
   document.removeEventListener('visibilitychange', handleVisibilityChange)
+  await loadMeetings()
+  openMeetingFromQuery()
 })
 
 // 탭(역할)·기간이 바뀌면 서버에서 다시 조회한다.
@@ -323,6 +327,25 @@ function enterMeeting(meeting) {
   if (meeting.status === 'cancelled') return
   if (meeting.status === 'ended') router.push(`/app/minutes/${meeting.id}`)
   else openMeetingWindow(meeting.id, { scheduledAt: meeting.scheduledAtMs })
+
+  const blockedMessage = getMeetingJoinBlockedMessage(meeting.scheduledAt)
+  if (blockedMessage) {
+    window.alert(blockedMessage)
+    return
+  }
+
+  openMeetingWindow(meeting.id, {
+    scheduledAt: meeting.scheduledAt,
+  })
+}
+
+function handleWindowFocus() {
+  void loadMeetings()
+}
+
+function handleVisibilityChange() {
+  if (document.visibilityState !== 'visible') return
+  void loadMeetings()
 }
 </script>
 

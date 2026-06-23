@@ -502,6 +502,11 @@ input:focus { border-color: var(--primary); box-shadow: 0 0 0 3px rgba(243,115,3
 }
 .meeting-caption-empty { border: 1px dashed rgba(255,255,255,.14); border-radius: 9px; padding: 14px; color: rgba(255,255,255,.45); font-size: 13px; line-height: 1.6; }
 .ai-box { margin-top: 16px; border: 1px solid rgba(243,115,33,.35); border-radius: 10px; padding: 14px; background: rgba(243,115,33,.1); }
+.meeting-caption-panel .ai-box {
+  flex: 0 0 auto;
+  max-height: 180px;
+  margin-top: 0;
+  overflow-y: auto;
 .meeting-realtime-feedback {
   flex: 0 0 auto;
   width: 100%;

@@ -145,6 +145,7 @@ export const useAuthStore = defineStore('auth', {
     clearTokenRefreshTimer() {
       if (this.tokenRefreshTimerId) {
         globalThis.clearTimeout(this.tokenRefreshTimerId)
+        window.clearTimeout(this.tokenRefreshTimerId)
         this.tokenRefreshTimerId = null
       }
     },
