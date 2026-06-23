@@ -2,7 +2,7 @@
   <section class="page rooms-page">
     <header class="page-header rooms-header">
       <div><h1>회의실 예약 현황</h1><p>회의실별 예약 시간을 확인하고 빈 시간대를 바로 예약합니다.</p></div>
-      <button class="primary-button" @click="openCreate(filteredRooms[0]?.roomId || '')">회의/회의실 예약</button>
+      <button class="primary-button" @click="openCreate(filteredRooms[0]?.roomId || '')">회의실 사용</button>
     </header>
 
     <article v-if="loading" class="card empty-state">회의실 예약 현황을 불러오는 중입니다.</article>

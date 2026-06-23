@@ -85,7 +85,7 @@
       <RouterView />
     </main>
 
-    <FloatingChatbot />
+    <FloatingChatbot v-if="showFloatingChatbot" />
   </div>
 </template>
 
@@ -107,6 +107,7 @@ const profileOpen = ref(false)
 const user = computed(() => auth.user)
 const homePath = computed(() => auth.homePath)
 const liveMeetingPath = meetingRoute(myMeetings.find((meeting) => meeting.status === 'live')?.id)
+const showFloatingChatbot = computed(() => !route.path.startsWith('/admin'))
 
 const navSections = [
   {
