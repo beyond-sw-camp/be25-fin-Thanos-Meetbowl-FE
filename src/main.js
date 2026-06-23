@@ -10,6 +10,9 @@ const app = createApp(App)
 const auth = useAuthStore(pinia)
 
 setApiClientAuthHandlers({
+  onSessionRefreshed(session) {
+    auth.applySession(session)
+  },
   async onUnauthorized() {
     const refreshed = await auth.refreshSession()
     if (refreshed) {

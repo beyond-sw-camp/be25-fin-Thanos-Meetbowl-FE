@@ -178,10 +178,11 @@ const detailTimeLabel = computed(() => {
 const detailHostName = computed(
   () => nameMap[detail.value?.hostUserId] || (detail.value?.mine ? '나' : '-'),
 )
+// 주최자가 본인을 참석자로 넣은 경우도 그대로 보여준다(선택한 참석자 전원 노출). 주최자는 HOST 1행으로 저장되므로 여기 포함된다.
 const detailAttendeeList = computed(() =>
-  (detailFull.value?.attendees || [])
-    .filter((attendee) => attendee.role !== 'HOST')
-    .map((attendee) => nameMap[attendee.userId] || '이름 미확인'),
+  (detailFull.value?.attendees || []).map(
+    (attendee) => nameMap[attendee.userId] || '이름 미확인',
+  ),
 )
 // 종료 여부는 백엔드 status 기준으로만 판단한다. 예정 종료 시각은 입장 차단 기준으로 쓰지 않는다.
 const detailEnded = computed(() => {
