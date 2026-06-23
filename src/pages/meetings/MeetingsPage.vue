@@ -264,8 +264,9 @@ async function loadRooms() {
 }
 
 onMounted(async () => {
-  loadRooms()
-  loadMeetings()
+  await loadRooms()
+  await loadMeetings()
+  openMeetingFromQuery()
   window.addEventListener('focus', handleWindowFocus)
   document.addEventListener('visibilitychange', handleVisibilityChange)
 })
@@ -273,8 +274,6 @@ onMounted(async () => {
 onBeforeUnmount(() => {
   window.removeEventListener('focus', handleWindowFocus)
   document.removeEventListener('visibilitychange', handleVisibilityChange)
-  await loadMeetings()
-  openMeetingFromQuery()
 })
 
 // 탭(역할)·기간이 바뀌면 서버에서 다시 조회한다.
@@ -325,12 +324,8 @@ async function onSaved() {
 function enterMeeting(meeting) {
   // 취소된 회의는 입장/회의록 대상이 아니다(버튼도 숨기지만 방어적으로 막는다).
   if (meeting.status === 'cancelled') return
-  // 종료 회의: 회의록 보기. 회의록 팀의 meetingId 라우트 확정 전까지 기존 임시 연결 유지.
-  // TODO(회의록 팀 라우트 확정 시): meetingId 전달해 해당 회의 회의록으로 이동.
-  if (meeting.status === 'ended') {
-    router.push('/app/minutes')
-    return
-  }
+  if (meeting.status === 'ended') router.push(`/app/minutes/${meeting.id}`)
+  else openMeetingWindow(meeting.id, { scheduledAt: meeting.scheduledAtMs })
 
   const blockedMessage = getMeetingJoinBlockedMessage(meeting.scheduledAt)
   if (blockedMessage) {
@@ -350,63 +345,6 @@ function handleWindowFocus() {
 function handleVisibilityChange() {
   if (document.visibilityState !== 'visible') return
   void loadMeetings()
-}
-
-async function openMeetingDetail(meeting) {
-  detailMeeting.value = meeting
-  detailFull.value = null
-  detailError.value = ''
-  try {
-    const full = await getMeeting(meeting.meetingId)
-    detailFull.value = full
-    resolveNames([full.hostUserId, ...(full.attendees || []).map((attendee) => attendee.userId)])
-  } catch (error) {
-    detailError.value = error?.message || '회의 상세를 불러오지 못했습니다.'
-  }
-}
-
-function closeMeetingDetail() {
-  detailMeeting.value = null
-  detailFull.value = null
-  detailError.value = ''
-}
-
-// 상세 모달에서 '수정'/'입장' — 모달을 닫고 기존 흐름을 재사용한다.
-function editFromDetail() {
-  const meeting = detailMeeting.value
-  closeMeetingDetail()
-  openEdit(meeting)
-}
-
-function enterFromDetail() {
-  const meeting = detailMeeting.value
-  closeMeetingDetail()
-  enterMeeting(meeting)
-}
-
-// 상세 모달에서 '회의 취소하기' — 주최자만. 성공 시 목록을 갱신하고, 모달은 갱신된
-// '취소됨' 항목으로 교체해 그대로 열어둔다(배지·버튼 비활성이 즉시 반영된다).
-async function cancelFromDetail() {
-  const meeting = detailMeeting.value
-  if (!meeting || cancelling.value || !canCancel(meeting)) return
-  if (!window.confirm(`'${meeting.title}' 회의를 취소하시겠습니까? 참석자에게도 취소됩니다.`)) return
-
-  cancelling.value = true
-  detailError.value = ''
-  try {
-    await cancelMeeting(meeting.meetingId)
-    await loadMeetings()
-    // 갱신된 목록에서 같은 회의를 찾아 모달 상태를 교체(없으면 모달 닫기).
-    const updated = filtered.value.find((item) => item.meetingId === meeting.meetingId)
-    if (updated) detailMeeting.value = updated
-    else closeMeetingDetail()
-  } catch (error) {
-    if (error?.status === 403) detailError.value = '회의 주최자만 취소할 수 있습니다.'
-    else if (error?.status === 409) detailError.value = '이미 종료되었거나 취소된 회의입니다.'
-    else detailError.value = error?.message || '회의 취소에 실패했습니다.'
-  } finally {
-    cancelling.value = false
-  }
 }
 </script>
 
