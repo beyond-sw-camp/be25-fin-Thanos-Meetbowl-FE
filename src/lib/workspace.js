@@ -1,4 +1,4 @@
-import { deleteJson, getJson, patchJson, postForm, postJson } from './api-client'
+import { deleteJson, getBlob, getJson, patchJson, postForm, postJson } from './api-client'
 
 export function getWorkspaceCalendar(from, to) {
   const params = new URLSearchParams({ from, to })
@@ -58,6 +58,14 @@ export function uploadDriveFile(file) {
 
 export function deleteDriveFile(fileId) {
   return deleteJson(`/workspace/drive/files/${fileId}`)
+}
+
+export function downloadDriveFile(fileId) {
+  return getBlob(`/workspace/drive/files/${fileId}/download`)
+}
+
+export function previewDriveFile(fileId) {
+  return getBlob(`/workspace/drive/files/${fileId}/preview`)
 }
 
 export function getMemos() {

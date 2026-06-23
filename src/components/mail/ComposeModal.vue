@@ -131,7 +131,8 @@ function send() {
     subject: draft.value.subject.trim(),
     body: draft.value.body.trim(),
     recipientUserIds: recipients.value.map((recipient) => userKey(recipient)),
-    attachments: draft.value.attachments.map(({ file, ...metadata }) => metadata),
+    // 실제 전송을 위해 원본 File 객체를 그대로 넘긴다(상위에서 multipart로 업로드).
+    attachments: draft.value.attachments,
   })
   recipients.value = []
   recipientQuery.value = ''

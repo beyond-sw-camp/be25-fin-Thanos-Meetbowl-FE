@@ -601,13 +601,12 @@
             </p>
           </div>
         </section>
-        <div class="ai-box">
-          <strong>AI 실시간 피드백</strong>
-          <p>{{ feedbackMessage }}</p>
-
+        <RealtimeFeedbackPanel
+          class="meeting-realtime-feedback"
+          :feedbacks="realtimeFeedbacks"
+          :connected="Boolean(meetingRoom)"
+        />
         </div>
-      </div>
-
       <div v-else-if="tab === 'people'" class="side-body meeting-people-body">
         <p v-for="participant in participantList" :key="participant.key" class="people-row">
           <span class="people-row-name">

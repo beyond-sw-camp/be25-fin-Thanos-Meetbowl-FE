@@ -43,20 +43,45 @@
         <div class="search-box">검색</div>
         <div class="top-actions">
           <div class="dropdown-wrap">
-            <button class="icon-button" type="button" @click="notificationsOpen = !notificationsOpen">●</button>
+            <button class="icon-button notification-button" type="button" @click="toggleNotifications">
+              <Bell :size="20" />
+              <span v-if="unreadCount > 0" class="notification-badge">{{ unreadCount > 99 ? '99+' : unreadCount }}</span>
+            </button>
             <div v-if="notificationsOpen" class="dropdown panel">
-              <p class="panel-title">알림</p>
+              <div class="notification-header">
+                <p class="panel-title">알림</p>
+                <button
+                  v-if="unreadCount > 0"
+                  type="button"
+                  class="notification-mark-all"
+                  @click="handleMarkAllRead"
+                >
+                  모두 읽음
+                </button>
+              </div>
+              <p v-if="notificationsLoading" class="notification-empty">불러오는 중…</p>
+              <p v-else-if="notifications.length === 0" class="notification-empty">새로운 알림이 없습니다.</p>
               <RouterLink
                 v-for="item in notifications"
-                :key="item.title"
-                :to="item.to"
+                :key="item.id"
+                :to="notificationRoute(item)"
                 class="notification"
-                @click="notificationsOpen = false"
+                :class="{ unread: !item.read }"
+                @click="handleNotificationClick(item)"
               >
                 <strong>{{ item.title }}</strong>
-                <span>{{ item.desc }}</span>
-                <small>{{ item.time }}</small>
+                <span>{{ item.content }}</span>
+                <small>{{ formatNotificationTime(item.createdAt) }}</small>
               </RouterLink>
+              <button
+                v-if="notificationsHasMore && !notificationsLoading && notifications.length > 0"
+                type="button"
+                class="notification-more"
+                :disabled="notificationsLoadingMore"
+                @click="loadMoreNotifications"
+              >
+                {{ notificationsLoadingMore ? '불러오는 중…' : '더보기' }}
+              </button>
             </div>
           </div>
 
@@ -85,16 +110,23 @@
       <RouterView />
     </main>
 
-    <FloatingChatbot />
+    <FloatingChatbot v-if="showFloatingChatbot" />
   </div>
 </template>
 
 <script setup>
-import { computed, ref } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { myMeetings } from '../data/mockData'
+import { Bell } from '@lucide/vue'
 import FloatingChatbot from './FloatingChatbot.vue'
-import { meetingRoute } from '../lib/meeting-route'
+import {
+  formatNotificationTime,
+  getNotifications,
+  markAllNotificationsRead,
+  markNotificationRead,
+  notificationRoute,
+  subscribeNotifications,
+} from '../lib/notifications'
 import { useAuthStore } from '../stores/auth'
 
 const route = useRoute()
@@ -106,7 +138,22 @@ const profileOpen = ref(false)
 
 const user = computed(() => auth.user)
 const homePath = computed(() => auth.homePath)
-const liveMeetingPath = meetingRoute(myMeetings.find((meeting) => meeting.status === 'live')?.id)
+// 관리자 화면에서는 플로팅 챗봇을 숨긴다(dev 머지로 반영된 동작).
+const showFloatingChatbot = computed(() => !route.path.startsWith('/admin'))
+
+const notifications = ref([])
+const unreadCount = ref(0)
+const notificationsLoading = ref(false)
+// 드롭다운은 최근 10개부터 보여주고, '더보기'로 그 이전 페이지를 이어붙인다(개수 기반).
+const NOTIFICATION_PAGE_SIZE = 10
+const notificationPage = ref(1)
+const notificationsHasMore = ref(false)
+const notificationsLoadingMore = ref(false)
+let notificationSource = null
+// 벨에는 '안 읽은 알림'만 노출한다. 읽은 알림(개별 클릭/모두 읽음 모두)은 목록에서 빠져 계속 쌓이지 않는다.
+function isVisibleNotification(item) {
+  return !item?.read
+}
 
 // 로컬 관리자 계정 식별: role === 'ADMIN', loginId === 'admin', email === 'admin@local.meetbowl'
 const isLocalAdmin = computed(() => 
@@ -164,12 +211,108 @@ const navSections = [
   },
 ]
 
-const notifications = [
-  { title: '새 메일 3건', desc: '김지연 외 2명에게 메일이 도착했습니다.', time: '5분 전', to: '/app/mail' },
-  { title: '회의 시작 임박', desc: 'Q2 캠페인 킥오프가 10분 후 시작됩니다.', time: '10분 전', to: liveMeetingPath },
-  { title: '회의실 예약 승인', desc: '테헤란로 대회의실 예약이 승인되었습니다.', time: '1시간 전', to: '/app/my-reservations' },
-  { title: '회의록 공유 완료', desc: '주간 전략 회의 회의록이 공유되었습니다.', time: '3시간 전', to: '/app/minutes' },
-]
+// 다음 페이지 존재 여부 판단. 백엔드 응답 메타데이터(totalPages/totalElements/hasNext)를 우선 쓰고,
+// 없으면 "마지막 페이지가 size만큼 가득 찼는가"로 추정한다.
+function resolveNotificationsHasMore(data, loadedCount) {
+  if (typeof data?.totalPages === 'number') return notificationPage.value < data.totalPages
+  if (typeof data?.totalElements === 'number') return loadedCount < data.totalElements
+  if (typeof data?.hasNext === 'boolean') return data.hasNext
+  return (data?.items?.length ?? 0) === NOTIFICATION_PAGE_SIZE
+}
+
+async function loadNotifications() {
+  notificationsLoading.value = true
+  notificationPage.value = 1
+  try {
+    const data = await getNotifications({ page: 1, size: NOTIFICATION_PAGE_SIZE })
+    notifications.value = (data?.items ?? []).filter(isVisibleNotification)
+    unreadCount.value = data?.unreadCount ?? 0
+    notificationsHasMore.value = resolveNotificationsHasMore(data, notifications.value.length)
+  } catch {
+    // 알림 조회 실패는 화면을 막지 않는다 — 다음 갱신/SSE 수신에서 보강된다.
+  } finally {
+    notificationsLoading.value = false
+  }
+}
+
+async function loadMoreNotifications() {
+  if (notificationsLoadingMore.value || !notificationsHasMore.value) return
+  notificationsLoadingMore.value = true
+  try {
+    const nextPage = notificationPage.value + 1
+    const data = await getNotifications({ page: nextPage, size: NOTIFICATION_PAGE_SIZE })
+    const incoming = data?.items ?? []
+    // SSE로 이미 앞에 추가된 알림과 중복되지 않게, 기존에 없는 id만 이어붙인다.
+    const existingIds = new Set(notifications.value.map((item) => item.id))
+    const added = incoming.filter((item) => !existingIds.has(item.id) && isVisibleNotification(item))
+    notifications.value.push(...added)
+    notificationPage.value = nextPage
+    if (typeof data?.unreadCount === 'number') unreadCount.value = data.unreadCount
+    notificationsHasMore.value = resolveNotificationsHasMore(data, notifications.value.length)
+    // 메타데이터가 없고 새로 추가된 항목도 없으면 더 가져올 게 없다고 보고 버튼을 닫는다(죽은 버튼 방지).
+    if (!added.length
+      && typeof data?.totalPages !== 'number'
+      && typeof data?.totalElements !== 'number'
+      && typeof data?.hasNext !== 'boolean') {
+      notificationsHasMore.value = false
+    }
+  } catch {
+    // 더보기 실패는 조용히 무시한다 — 버튼을 유지해 다시 시도할 수 있게 한다.
+  } finally {
+    notificationsLoadingMore.value = false
+  }
+}
+
+function toggleNotifications() {
+  notificationsOpen.value = !notificationsOpen.value
+  // 열 때마다 최신 목록을 다시 불러와 SSE를 놓친 사이의 알림도 채운다.
+  if (notificationsOpen.value) loadNotifications()
+}
+
+async function handleNotificationClick(item) {
+  notificationsOpen.value = false
+  if (item.read) return
+  try {
+    const result = await markNotificationRead(item.id)
+    // 읽음 처리한 항목은 즉시 목록에서 제거한다 — 안 읽은 알림만 남겨 계속 쌓이지 않게 한다.
+    notifications.value = notifications.value.filter((n) => n.id !== item.id)
+    unreadCount.value = result?.unreadCount ?? Math.max(0, unreadCount.value - 1)
+  } catch {
+    // 읽음 처리 실패는 다음 목록 조회에서 정정된다.
+  }
+}
+
+async function handleMarkAllRead() {
+  try {
+    await markAllNotificationsRead()
+    // 모두 읽음 → 전부 읽음 처리되어 안 읽음 목록이 비고, 재조회해도 읽은 건 필터로 안 보인다.
+    notifications.value = []
+    unreadCount.value = 0
+    notificationsHasMore.value = false
+  } catch {
+    // 전체 읽음 실패 시 목록을 비우지 않는다 — 다음 목록 조회에서 정정된다.
+  }
+}
+
+onMounted(() => {
+  loadNotifications()
+  notificationSource = subscribeNotifications({
+    onNotification: (notification) => {
+      // 같은 id가 이미 있으면 교체하고, 새 알림이면 맨 앞에 추가하며 안 읽음 수를 올린다.
+      const index = notifications.value.findIndex((item) => item.id === notification.id)
+      if (index >= 0) {
+        notifications.value.splice(index, 1, notification)
+      } else {
+        notifications.value.unshift(notification)
+        if (!notification.read) unreadCount.value += 1
+      }
+    },
+  })
+})
+
+onBeforeUnmount(() => {
+  notificationSource?.close()
+})
 
 const visibleSections = computed(() =>
   navSections.filter((section) => section.roles.includes(user.value?.role)),
@@ -191,3 +334,94 @@ async function handleLogout() {
   router.push('/login')
 }
 </script>
+
+<style scoped>
+.notification-button {
+  position: relative;
+}
+
+.notification-badge {
+  position: absolute;
+  top: -6px;
+  right: -6px;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  border-radius: 999px;
+  background: var(--danger, #ef4444);
+  color: #fff;
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 18px;
+  text-align: center;
+}
+
+.notification-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border-bottom: 1px solid var(--border);
+}
+
+.notification-header .panel-title {
+  border-bottom: none;
+}
+
+.notification-mark-all {
+  margin-right: 12px;
+  border: none;
+  background: none;
+  color: var(--primary-dark, #2563eb);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.notification-empty {
+  margin: 0;
+  padding: 18px 14px;
+  font-size: 13px;
+  color: var(--muted-foreground);
+  text-align: center;
+}
+
+.notification.unread {
+  background: var(--muted, #f8fafc);
+}
+
+.notification.unread strong::before {
+  content: '';
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  margin-right: 6px;
+  border-radius: 999px;
+  background: var(--primary-dark, #2563eb);
+  vertical-align: middle;
+}
+
+/* 안 읽은 알림은 제목·내용 텍스트를 굵게 표시한다(읽으면 일반 굵기로 돌아감). */
+.notification.unread strong,
+.notification.unread span {
+  font-weight: 700;
+}
+
+.notification-more {
+  width: 100%;
+  padding: 10px 14px;
+  border: none;
+  border-top: 1px solid var(--border, #e5e7eb);
+  background: transparent;
+  color: var(--primary-dark, #2563eb);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.notification-more:hover {
+  background: var(--muted, #f8fafc);
+}
+.notification-more:disabled {
+  color: var(--muted-foreground);
+  cursor: default;
+}
+</style>

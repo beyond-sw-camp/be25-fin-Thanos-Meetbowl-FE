@@ -208,6 +208,11 @@ async function loadUsers() {
     }
 
     users.value = (data?.items || []).map(normalizeUserSummary)
+
+    const visibleUsers = (data?.items || [])
+      .map(normalizeUserSummary)
+      .filter((user) => user.role === 'USER' && user.loginId !== 'admin')
+    users.value = visibleUsers
   } catch (error) {
     if (error?.status === 403) {
       forbidden.value = true
