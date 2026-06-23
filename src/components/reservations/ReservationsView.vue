@@ -134,12 +134,14 @@ const upcomingMeetings = computed(() => {
     // 날짜순(가까운 예약부터) 정렬.
     .sort((a, b) => new Date(a.scheduledAt).getTime() - new Date(b.scheduledAt).getTime())
 })
-// 취소된 예약 — '취소' 탭 전용. 기간/미종료 제한 없이 취소된 예약 전체를 최근 취소순으로 보여준다.
-const cancelledMeetings = computed(() =>
-  meetings.value
+// 취소된 예약 — '취소' 탭 전용. 기간/미종료 제한 없이 취소된 예약 전체를,
+// 오늘(now)에 가장 가까운 예정일(과거·미래 무관)부터 위로 보여준다.
+const cancelledMeetings = computed(() => {
+  const now = Date.now()
+  return meetings.value
     .filter((meeting) => meeting.status === 'CANCELLED')
-    .sort((a, b) => new Date(b.scheduledAt).getTime() - new Date(a.scheduledAt).getTime()),
-)
+    .sort((a, b) => Math.abs(new Date(a.scheduledAt).getTime() - now) - Math.abs(new Date(b.scheduledAt).getTime() - now))
+})
 // 카운트 전용 — 다가오는 예약 ∩ 활성(SCHEDULED/IN_PROGRESS). 취소/종료는 유효 예약 수에서 제외한다.
 const activeUpcomingMeetings = computed(() => upcomingMeetings.value.filter(isActive))
 
