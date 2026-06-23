@@ -44,6 +44,7 @@ import {
 import { getOrganizationUserSummary } from '../../lib/user-directory'
 import { useAuthStore } from '../../stores/auth'
 import ModalShell from '../../components/common/ModalShell.vue'
+import { Download, Upload, Info, ExternalLink, ChevronRight } from '@lucide/vue'
 
 const auth = useAuthStore()
 
@@ -868,6 +869,11 @@ const visibleExcelValidationErrors = computed(() =>
 const remainingExcelValidationErrorCount = computed(() =>
   Math.max(excelValidationErrors.value.length - visibleExcelValidationErrors.value.length, 0),
 )
+
+// 조직도 helper 함수
+function getDepartmentUsers(departmentId) {
+  return usersByDepartmentId.value.get(departmentId) || []
+}
 </script>
 
 <template>
@@ -891,6 +897,7 @@ const remainingExcelValidationErrorCount = computed(() =>
           :disabled="excelDownloading || excelUploading"
           @click="handleExcelDownload"
         >
+          <Download :size="15" style="margin-right: 6px;" />
           {{ excelDownloading ? '다운로드 중...' : '엑셀 다운로드' }}
         </button>
         <button
@@ -899,6 +906,7 @@ const remainingExcelValidationErrorCount = computed(() =>
           :disabled="excelUploading || excelDownloading"
           @click="openExcelUploadPicker"
         >
+          <Upload :size="15" style="margin-right: 6px;" />
           {{ excelUploading ? '업로드 중...' : '엑셀 업로드' }}
         </button>
       </div>
@@ -964,8 +972,16 @@ const remainingExcelValidationErrorCount = computed(() =>
         </button>
       </div>
 
-      <div class="card info-bar">
-        <span>엑셀로 조직/회원 정보를 내려받거나 수정 파일을 업로드할 수 있습니다. 엑셀 없이 기존 데이터는 삭제되지 않습니다. ADMIN 또는 USER만 입력 가능. 정렬 기준: sortNumber</span>
+      <div class="info-bar-new">
+        <div class="info-left">
+          <Info :size="16" class="info-icon" />
+          <span class="info-text">엑셀로 조직/회원 정보를 내려받거나 수정 파일을 업로드할 수 있습니다.</span>
+        </div>
+        <div class="info-right">
+          <span class="info-chip">엑셀 없이 기존 데이터는 삭제되지 않습니다.</span>
+          <span class="info-chip">ADMIN 또는 USER만 입력 가능</span>
+          <span class="info-chip">정렬 기준: sortNumber</span>
+        </div>
       </div>
 
       <div class="tab-actions">
@@ -1010,12 +1026,28 @@ const remainingExcelValidationErrorCount = computed(() =>
               >
                 <div class="summary-item-head">
                   <strong>{{ department.name }}</strong>
-                  <span>{{ department.userCount }}명</span>
+                  <span class="dept-badge">{{ department.userCount }}명</span>
                 </div>
-                <p>{{ organizationTeamSummary(department.departmentId) || department.teamSummary }}</p>
+                
+                <div v-if="department.hasMembers" class="summary-item-body">
+                  <div
+                    v-for="user in getDepartmentUsers(department.departmentId)"
+                    :key="user.userId"
+                    class="summary-member-name"
+                  >
+                    {{ user.name }} {{ resolvePositionName(user.positionId, user.position) }}
+                  </div>
+                </div>
               </article>
             </div>
             <div v-else class="empty-state-inline">표시할 부서가 없습니다.</div>
+            
+            <div class="card-footer">
+              <button class="footer-link-btn" type="button" @click="switchTab('department')">
+                <span>전체 부서 보기</span>
+                <ChevronRight class="footer-link-icon" :size="16" />
+              </button>
+            </div>
           </article>
 
           <article class="card chart-card">
@@ -1027,32 +1059,46 @@ const remainingExcelValidationErrorCount = computed(() =>
               <span class="badge navy">실제 사용자 기준</span>
             </div>
 
-            <div v-if="departmentSummaries.length" class="chart-list">
+            <div v-if="departmentSummaries.length" class="org-chart-list">
               <article
                 v-for="department in departmentSummaries"
                 :key="`${department.departmentId}-chart`"
-                class="chart-item"
+                class="org-department-card"
               >
-                <div class="chart-item-head">
-                  <strong>{{ department.name }}</strong>
-                  <span>{{ department.userCount }}명</span>
+                <div class="org-tree-container">
+                  <div class="org-tree-root">
+                    <div class="org-node-box root-box">
+                      <div class="org-node-title">{{ department.name }}</div>
+                      <div class="org-node-desc">{{ department.userCount }}명</div>
+                    </div>
+                  </div>
+
+                  <div v-if="department.hasMembers" class="org-tree-connector"></div>
+
+                  <div v-if="department.hasMembers" class="org-tree-children">
+                    <div
+                      v-for="user in getDepartmentUsers(department.departmentId)"
+                      :key="user.userId"
+                      class="org-tree-child"
+                    >
+                      <button type="button" class="org-node-box child-box" @click="openUserSummary(user.userId)">
+                        <div class="org-node-title">{{ user.name }} {{ resolvePositionName(user.positionId, user.position) }}</div>
+                        <div class="org-node-desc">1명</div>
+                      </button>
+                    </div>
+                  </div>
+                  <div v-else class="org-empty-users">배정된 사용자가 없습니다.</div>
                 </div>
-
-                <ul v-if="department.hasMembers" class="member-preview-list">
-                  <li v-for="member in department.previewMembers" :key="member.key">
-                    <button type="button" class="member-preview-button" @click="openUserSummary(member.userId)">
-                      {{ memberPreviewLabel(member.userId) }}
-                    </button>
-                  </li>
-                </ul>
-                <p v-else class="empty-member-text">배정된 사용자가 없습니다.</p>
-
-                <small v-if="department.remainingMemberCount > 0" class="member-overflow">
-                  외 {{ department.remainingMemberCount }}명
-                </small>
               </article>
             </div>
             <div v-else class="empty-state-inline">표시할 조직도가 없습니다.</div>
+            
+            <div class="card-footer">
+              <button class="footer-link-btn" type="button" @click="switchTab('organization')">
+                <span>전체 조직도 보기</span>
+                <ExternalLink class="footer-link-icon" :size="14" />
+              </button>
+            </div>
           </article>
         </section>
 
@@ -1087,6 +1133,7 @@ const remainingExcelValidationErrorCount = computed(() =>
           </table>
         </div>
       </template>
+
 
       <template v-else-if="activeTab === 'department'">
         <div class="table-card admin-data-table organization-table">
@@ -1344,7 +1391,7 @@ const remainingExcelValidationErrorCount = computed(() =>
 .organization-header {
   display: flex;
   justify-content: space-between;
-  align-items: flex-start;
+  align-items: center;
   gap: 16px;
 }
 
@@ -1354,11 +1401,10 @@ const remainingExcelValidationErrorCount = computed(() =>
   justify-content: flex-end;
   align-items: center;
   gap: 10px;
-  margin-top: 28px;
 }
 
 .excel-actions button {
-  min-height: 44px;
+  min-height: 40px;
 }
 
 .feedback-card {
@@ -1366,27 +1412,23 @@ const remainingExcelValidationErrorCount = computed(() =>
   padding-bottom: 14px;
 }
 
-.excel-guide-card,
 .excel-result-card,
 .excel-error-card {
   display: grid;
   gap: 12px;
 }
 
-.excel-guide-card h2,
 .excel-result-card h2,
 .excel-error-card h2 {
   margin: 0;
   font-size: 18px;
 }
 
-.excel-guide-grid,
 .excel-result-grid {
   display: grid;
   gap: 10px;
 }
 
-.excel-guide-grid p,
 .excel-result-grid p,
 .excel-error-summary {
   margin: 0;
@@ -1394,23 +1436,15 @@ const remainingExcelValidationErrorCount = computed(() =>
   line-height: 1.6;
 }
 
-.excel-notice-list,
 .excel-error-list {
   display: grid;
   gap: 8px;
   margin: 0;
   padding-left: 18px;
-  color: var(--foreground);
-}
-
-.excel-error-list {
   color: var(--danger);
 }
 
-.excel-confirm-modal {
-  max-width: 520px;
-}
-
+.excel-confirm-modal,
 .organization-delete-modal {
   max-width: 520px;
 }
@@ -1459,14 +1493,99 @@ const remainingExcelValidationErrorCount = computed(() =>
   margin-top: 12px;
 }
 
+/* 안내 바 스타일 */
+.info-bar-new {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 16px;
+  padding: 10px 16px;
+  background: #ffffff;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  min-height: 48px;
+}
+
+.info-left {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--foreground);
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.info-icon {
+  color: var(--primary); /* orange */
+  flex-shrink: 0;
+}
+
+.info-right {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.info-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  background: #f8fafc;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  font-size: 12px;
+  color: var(--muted-foreground);
+  white-space: nowrap;
+}
+
+.info-chip::before {
+  content: "•";
+  color: var(--primary); /* orange */
+  font-size: 14px;
+  line-height: 1;
+}
+
+/* 탭 스타일 */
 .tab-actions {
   display: flex;
   justify-content: space-between;
   align-items: center;
   gap: 12px;
-  margin-bottom: 8px;
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 24px;
 }
 
+.admin-tabs {
+  display: flex;
+  gap: 2px;
+  border-bottom: none;
+  margin-bottom: 0;
+}
+
+.admin-tabs button {
+  min-height: 44px;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  background: transparent;
+  padding: 0 16px;
+  color: var(--muted-foreground);
+  font-weight: 800;
+  margin-bottom: -1px;
+  position: relative;
+}
+
+.admin-tabs button.active {
+  border-bottom-color: var(--primary);
+  color: var(--primary);
+}
+
+.tab-actions .primary-button {
+  margin-bottom: 6px;
+}
+
+/* 콘텐츠 카드 및 그리드 스타일 */
 .organization-summary-grid {
   display: grid;
   gap: 16px;
@@ -1475,7 +1594,8 @@ const remainingExcelValidationErrorCount = computed(() =>
 .summary-card,
 .chart-card {
   min-width: 0;
-  display: grid;
+  display: flex;
+  flex-direction: column;
   gap: 14px;
 }
 
@@ -1489,84 +1609,57 @@ const remainingExcelValidationErrorCount = computed(() =>
 .summary-card-head p {
   margin: 6px 0 0;
   font-size: 13px;
+  color: var(--muted-foreground);
 }
 
-.summary-list,
-.chart-list {
+.summary-list {
   display: grid;
   gap: 12px;
+  flex: 1;
 }
 
-.summary-item,
-.chart-item {
+.summary-item {
   border: 1px solid var(--border);
-  border-radius: 12px;
-  background: linear-gradient(180deg, #fbfcfe 0%, #f8fafc 100%);
-  padding: 16px;
+  border-radius: 8px;
+  background: #ffffff;
+  padding: 14px;
+  display: grid;
+  gap: 10px;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.02);
 }
 
-.summary-item-head,
-.chart-item-head {
+.summary-item-head {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  gap: 10px;
-  margin-bottom: 8px;
 }
 
-.summary-item strong,
-.chart-item strong {
-  font-size: 16px;
-}
-
-.summary-item span,
-.chart-item span,
-.member-overflow {
-  color: var(--muted-foreground);
-  font-size: 12px;
+.summary-item strong {
+  font-size: 15px;
   font-weight: 700;
-}
-
-.summary-item p,
-.empty-member-text {
-  margin: 0;
-  color: var(--muted-foreground);
-  font-size: 13px;
-  line-height: 1.6;
-}
-
-.member-preview-list {
-  display: grid;
-  gap: 7px;
-  margin: 0;
-  padding: 0;
-  list-style: none;
-}
-
-.member-preview-list li {
   color: var(--foreground);
+}
+
+.dept-badge {
+  padding: 2px 8px;
+  background: #f1f5f9;
+  border-radius: 4px;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--muted-foreground);
+}
+
+.summary-item-body {
+  display: grid;
+  gap: 6px;
+  padding-top: 8px;
+  border-top: 1px dashed var(--border);
+}
+
+.summary-member-name {
   font-size: 13px;
-  font-weight: 600;
-}
-
-.member-preview-button {
-  width: 100%;
-  border: 0;
-  background: transparent;
-  padding: 0;
-  color: inherit;
-  text-align: left;
-  font: inherit;
-  cursor: pointer;
-}
-
-.member-preview-button:hover {
-  color: var(--primary);
-}
-
-.member-overflow {
-  display: inline-block;
-  margin-top: 10px;
+  color: var(--muted-foreground);
+  font-weight: 500;
 }
 
 .empty-state-inline {
@@ -1587,8 +1680,177 @@ const remainingExcelValidationErrorCount = computed(() =>
   vertical-align: top;
 }
 
+/* 카드 푸터 스타일 */
+.card-footer {
+  margin: 14px -18px -18px;
+  padding: 12px 18px;
+  border-top: 1px solid var(--border);
+  background: #f8fafc;
+  border-radius: 0 0 8px 8px;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+.footer-link-btn {
+  width: 100%;
+  border: 0;
+  background: transparent;
+  display: inline-flex;
+  justify-content: center;
+  align-items: center;
+  gap: 6px;
+  color: var(--muted-foreground);
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: color 0.15s;
+}
+
+.footer-link-btn:hover {
+  color: var(--primary);
+}
+
+.footer-link-icon {
+  flex-shrink: 0;
+}
+
+/* 조직도 트리 구조 스타일 */
+.org-chart-list {
+  display: grid;
+  gap: 16px;
+  flex: 1;
+}
+
+.org-department-card {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: white;
+  padding: 16px;
+  display: grid;
+  gap: 16px;
+  overflow-x: auto;
+}
+
+.org-tree-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  position: relative;
+  width: 100%;
+}
+
+.org-tree-root {
+  display: flex;
+  justify-content: center;
+}
+
+.org-node-box {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: white;
+  padding: 10px 20px;
+  text-align: center;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.02);
+}
+
+.root-box {
+  background: #ffffff;
+  min-width: 140px;
+}
+
+.child-box {
+  background: #ffffff;
+  min-width: 120px;
+  transition: all 0.15s;
+  cursor: pointer;
+}
+
+.child-box:hover {
+  border-color: var(--primary);
+  background: #fff7ed;
+}
+
+.org-node-title {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--foreground);
+}
+
+.org-node-desc {
+  font-size: 11px;
+  color: var(--muted-foreground);
+  margin-top: 4px;
+}
+
+.org-tree-connector {
+  width: 1px;
+  height: 16px;
+  background: #e2e8f0;
+  margin: 0 auto;
+}
+
+.org-tree-children {
+  position: relative;
+  display: flex;
+  justify-content: center;
+  gap: 16px;
+  width: 100%;
+}
+
+.org-tree-child {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  flex: 1;
+  padding-top: 16px;
+}
+
+.org-tree-child::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 1px;
+  background: #e2e8f0;
+}
+
+.org-tree-child:first-child::before {
+  left: 50%;
+}
+
+.org-tree-child:last-child::before {
+  right: 50%;
+}
+
+.org-tree-child:only-child::before {
+  display: none;
+}
+
+.org-tree-child::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 50%;
+  width: 1px;
+  height: 16px;
+  background: #e2e8f0;
+}
+
+.org-empty-users {
+  color: var(--muted-foreground);
+  font-size: 13px;
+  padding: 16px;
+  text-align: center;
+  background: #f8fafc;
+  border-radius: 8px;
+  width: 100%;
+}
+
+/* 반응형 스타일 */
 @media (min-width: 960px) {
-  .excel-guide-grid,
   .excel-result-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
@@ -1603,24 +1865,34 @@ const remainingExcelValidationErrorCount = computed(() =>
   .tab-actions {
     flex-direction: column;
     align-items: stretch;
+    gap: 12px;
   }
 
   .header-actions {
     width: 100%;
     justify-content: flex-start;
-    margin-top: 10px;
+  }
+
+  .info-bar-new {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 12px;
+  }
+
+  .info-right {
+    width: 100%;
   }
 }
 
-.info-bar {
-  padding: 10px 14px;
-  font-size: 12px;
-  color: var(--muted-foreground);
-  background: var(--muted);
-  border-radius: 8px;
-}
+@media (max-width: 576px) {
+  .info-right {
+    flex-direction: column;
+    align-items: flex-start;
+  }
 
-.info-bar span {
-  display: block;
+  .info-chip {
+    width: 100%;
+    box-sizing: border-box;
+  }
 }
 </style>
