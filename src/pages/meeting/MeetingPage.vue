@@ -607,6 +607,7 @@
 	          :feedbacks="realtimeFeedbacks"
           :connected="Boolean(meetingRoom)"
         />
+        </div>
       </div>
 
       <div v-else-if="tab === 'people'" class="side-body meeting-people-body">
@@ -857,7 +858,7 @@ import {
 } from '../../lib/caption-store'
 import RealtimeFeedbackPanel from '../../components/meeting/RealtimeFeedbackPanel.vue'
 import { sortedFeedbacks, upsertFeedback } from '../../lib/feedback-store'
-import { guestMeetingRoute, openMeetingWindow } from '../../lib/meeting-route'
+import { guestMeetingRoute } from '../../lib/meeting-route'
 import { resolveLiveKitConnection } from '../../lib/livekit-meeting'
 import { useAuthStore } from '../../stores/auth'
 

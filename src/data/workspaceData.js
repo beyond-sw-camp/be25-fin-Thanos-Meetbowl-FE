@@ -61,5 +61,8 @@ export function workspaceMonthCells(year, month) {
 }
 
 export function workspaceNow() {
-  return '2026-05-21 10:00'
+  // 캘린더는 항상 현재 달로 열려야 하므로 실제 현재 시각을 'YYYY-MM-DD HH:mm'로 반환한다.
+  const now = new Date()
+  const pad = (value) => String(value).padStart(2, '0')
+  return `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())} ${pad(now.getHours())}:${pad(now.getMinutes())}`
 }

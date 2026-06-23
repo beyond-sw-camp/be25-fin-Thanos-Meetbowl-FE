@@ -70,6 +70,7 @@ import MailList from '../../components/mail/MailList.vue'
 import {
   backupMails,
   changeMailRead,
+  downloadMailAttachment,
   getMail,
   listMails,
   moveMailToTrash,
@@ -451,16 +452,25 @@ function printMail() {
   window.print()
 }
 
-function downloadAttachment(attachment) {
+async function downloadAttachment(attachment) {
   const fileName = attachment.originalFileName || attachment.fileName || attachment.name || attachment.storedFileName || 'attachment'
+  // 작성 중 로컬 첨부(미전송)는 메모리 URL로 바로 받는다.
   if (attachment.localUrl) {
     triggerDownload(attachment.localUrl, fileName)
     return
   }
-  const blob = createAttachmentDownloadBlob(attachment, fileName)
-  const url = URL.createObjectURL(blob)
-  triggerDownload(url, fileName)
-  setTimeout(() => URL.revokeObjectURL(url), 1000)
+  const attachmentId = attachment.attachmentId || attachment.id
+  const mailId = open.value?.mailId
+  if (!mailId || !attachmentId) return
+  try {
+    const { blob } = await downloadMailAttachment(mailId, attachmentId)
+    const url = URL.createObjectURL(blob)
+    triggerDownload(url, fileName)
+    setTimeout(() => URL.revokeObjectURL(url), 1000)
+  } catch (error) {
+    console.error('첨부 다운로드 실패:', error)
+    showToast('첨부 다운로드 실패', '첨부파일을 받지 못했습니다.')
+  }
 }
 
 function createAttachmentDownloadBlob(attachment, fileName) {
