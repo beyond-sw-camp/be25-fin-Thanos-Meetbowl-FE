@@ -600,11 +600,10 @@
               {{ currentCaptionEmptyStateMessage }}
             </p>
           </div>
-	        </section>
-
-	        <RealtimeFeedbackPanel
-	          class="meeting-realtime-feedback"
-	          :feedbacks="realtimeFeedbacks"
+        </section>
+        <RealtimeFeedbackPanel
+          class="meeting-realtime-feedback"
+          :feedbacks="realtimeFeedbacks"
           :connected="Boolean(meetingRoom)"
         />
         </div>
