@@ -132,7 +132,10 @@ async function scrollToBottom() {
 
 function sourceLabel(sources = []) {
   if (!sources.length) return ''
-  const primarySource = [...sources].sort((sourceA, sourceB) => (sourceA.displayOrder ?? 0) - (sourceB.displayOrder ?? 0))[0]
-  return `출처: ${primarySource.title || primarySource.type || '자료'}`
+  const sorted = [...sources].sort((sourceA, sourceB) => (sourceA.displayOrder ?? 0) - (sourceB.displayOrder ?? 0))
+  const primaryName = sorted[0].title || sorted[0].type || '자료'
+  const restCount = sorted.length - 1
+  // 출처가 여러 개면 대표 1개만 보여주고 나머지는 "외 N개"로 요약한다.
+  return restCount > 0 ? `출처: ${primaryName} 외 ${restCount}개` : `출처: ${primaryName}`
 }
 </script>
