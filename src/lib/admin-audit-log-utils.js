@@ -1,10 +1,41 @@
 const SENSITIVE_KEY_PATTERN =
-  /(password|passwordHash|passwd|pwd|token|secret|api[-_]?key|authorization|credential|refresh|bearer)/i
+  /(password|passwordHash|passwd|pwd|token|secret|api[-_]?key|authorization|credential|refresh|bearer|jwt|mailBody|비밀번호|토큰|인증|시크릿|메일본문)/i
 
 const SENSITIVE_TEXT_PATTERNS = [
   /(bearer\s+)[A-Za-z0-9\-._~+/]+=*/gi,
-  /("(?:password|passwordHash|passwd|pwd|token|secret|apiKey|accessToken|refreshToken|authorization)"\s*:\s*")[^"]*(")/gi,
+  /("(?:password|passwordHash|passwd|pwd|token|secret|apiKey|accessToken|refreshToken|authorization|resetToken|jwt)"\s*:\s*")[^"]*(")/gi,
 ]
+
+const INTERNAL_FIELD_SET = new Set([
+  'id',
+  'createdAt',
+  'updatedAt',
+  'deletedAt',
+  'modifiedAt',
+  'lastModifiedAt',
+  'version',
+  'createdBy',
+  'updatedBy',
+])
+
+const USER_RELATED_ACTION_TYPES = new Set([
+  'USER_CREATE',
+  'USER_CREATED',
+  'USER_UPDATE',
+  'USER_UPDATED',
+  'USER_DELETE',
+  'USER_DELETED',
+  'USER_STATUS_CHANGE',
+  'USER_STATUS_CHANGED',
+  'USER_ACTIVATE',
+  'USER_DEACTIVATE',
+  'USER_LOCK',
+  'USER_UNLOCK',
+  'PASSWORD_RESET',
+  'USER_PASSWORD_RESET',
+  'USER_PASSWORD_INITIALIZE',
+  'ADMIN_PASSWORD_RESET',
+])
 
 const DISPLAY_DATE_TIME_FORMATTER = new Intl.DateTimeFormat('ko-KR', {
   timeZone: 'Asia/Seoul',
@@ -26,10 +57,21 @@ const DISPLAY_DATE_FORMATTER = new Intl.DateTimeFormat('ko-KR', {
 
 const ACTION_TYPE_LABELS = {
   USER_CREATE: '회원 생성',
+  USER_CREATED: '회원 생성',
   USER_UPDATE: '회원 수정',
+  USER_UPDATED: '회원 수정',
   USER_DELETE: '회원 삭제',
+  USER_DELETED: '회원 삭제',
   USER_STATUS_CHANGE: '회원 상태 변경',
+  USER_STATUS_CHANGED: '회원 상태 변경',
+  USER_ACTIVATE: '회원 상태 변경',
+  USER_DEACTIVATE: '회원 상태 변경',
+  USER_LOCK: '회원 상태 변경',
+  USER_UNLOCK: '회원 상태 변경',
+  PASSWORD_RESET: '회원 비밀번호 초기화',
   USER_PASSWORD_RESET: '회원 비밀번호 초기화',
+  USER_PASSWORD_INITIALIZE: '회원 비밀번호 초기화',
+  ADMIN_PASSWORD_RESET: '회원 비밀번호 초기화',
   USER_PASSWORD_RESET_REQUEST: '비밀번호 재설정 요청',
   ORGANIZATION_MEMBER_EXCEL_IMPORT: '조직/회원 엑셀 업로드',
   ORGANIZATION_MEMBER_EXCEL_DOWNLOAD: '조직/회원 엑셀 다운로드',
@@ -37,33 +79,34 @@ const ACTION_TYPE_LABELS = {
   ORGANIZATION_EXCEL_DOWNLOAD: '조직/회원 엑셀 다운로드',
   ORGANIZATION_CREATE: '조직 생성',
   ORGANIZATION_UPDATE: '조직 수정',
-  ORGANIZATION_STATUS_CHANGE: '조직 비활성화',
+  ORGANIZATION_STATUS_CHANGE: '조직 상태 변경',
   AFFILIATE_CREATE: '조직 생성',
   AFFILIATE_UPDATE: '조직 수정',
   AFFILIATE_DELETE: '조직 삭제',
-  AFFILIATE_STATUS_CHANGE: '조직 비활성화',
+  AFFILIATE_STATUS_CHANGE: '조직 상태 변경',
+  AFFILIATE_UPDATE_STATUS: '조직 상태 변경',
   DEPARTMENT_CREATE: '부서 생성',
   DEPARTMENT_UPDATE: '부서 수정',
   DEPARTMENT_DELETE: '부서 삭제',
-  DEPARTMENT_STATUS_CHANGE: '부서 비활성화',
+  DEPARTMENT_STATUS_CHANGE: '부서 상태 변경',
+  DEPARTMENT_UPDATE_STATUS: '부서 상태 변경',
   TEAM_CREATE: '팀 생성',
   TEAM_UPDATE: '팀 수정',
   TEAM_DELETE: '팀 삭제',
-  TEAM_STATUS_CHANGE: '팀 비활성화',
+  TEAM_STATUS_CHANGE: '팀 상태 변경',
+  TEAM_UPDATE_STATUS: '팀 상태 변경',
   POSITION_CREATE: '직급 생성',
   POSITION_UPDATE: '직급 수정',
   POSITION_DELETE: '직급 삭제',
-  POSITION_STATUS_CHANGE: '직급 비활성화',
+  POSITION_STATUS_CHANGE: '직급 상태 변경',
+  POSITION_UPDATE_STATUS: '직급 상태 변경',
   MEETING_ROOM_CREATE: '회의실 생성',
   MEETING_ROOM_UPDATE: '회의실 수정',
   MEETING_ROOM_DELETE: '회의실 삭제',
-  MEETING_ROOM_STATUS_CHANGE: '회의실 비활성화',
-  RETENTION_POLICY_UPDATE: '보관 정책 수정',
+  MEETING_ROOM_STATUS_CHANGE: '회의실 상태 변경',
+  RETENTION_POLICY_UPDATE: '회의록 보관 정책 수정',
   MAIL_POLICY_UPDATE: '메일 정책 수정',
   MAIL_RETENTION_POLICY_UPDATE: '메일 보관 정책 수정',
-  ADMIN_PERMISSION_CREATE: '관리자 권한 생성',
-  ADMIN_PERMISSION_UPDATE: '관리자 권한 수정',
-  ADMIN_PERMISSION_DELETE: '관리자 권한 삭제',
 }
 
 const TARGET_TYPE_LABELS = {
@@ -95,11 +138,13 @@ const FIELD_LABELS = {
   activeFrom: '활성 시작일',
   activeUntil: '활성 종료일',
   retentionDays: '보관 기간',
+  inboxRetentionDays: '보관 기간',
   autoDeleteEnabled: '자동 삭제',
   meetingStartReminderMinutes: '회의 시작 전 알림',
   minutesReviewReminderMinutes: '회의록 미검토 알림',
   fileName: '파일명',
   message: '실패 사유',
+  failureReason: '실패 사유',
   errorCount: '오류 건수',
   requestSource: '요청 경로',
   initialPasswordChangeRequired: '초기 비밀번호 변경 필요',
@@ -142,17 +187,18 @@ export const AUDIT_ACTION_TYPE_OPTIONS = [
   { value: 'ORGANIZATION_MEMBER_EXCEL_DOWNLOAD', label: '조직/회원 엑셀 다운로드' },
   { value: 'AFFILIATE_CREATE', label: '조직 생성' },
   { value: 'AFFILIATE_UPDATE', label: '조직 수정' },
-  { value: 'AFFILIATE_STATUS_CHANGE', label: '조직 비활성화' },
+  { value: 'AFFILIATE_STATUS_CHANGE', label: '조직 상태 변경' },
   { value: 'DEPARTMENT_CREATE', label: '부서 생성' },
   { value: 'DEPARTMENT_UPDATE', label: '부서 수정' },
-  { value: 'DEPARTMENT_STATUS_CHANGE', label: '부서 비활성화' },
+  { value: 'DEPARTMENT_STATUS_CHANGE', label: '부서 상태 변경' },
   { value: 'TEAM_CREATE', label: '팀 생성' },
   { value: 'TEAM_UPDATE', label: '팀 수정' },
-  { value: 'TEAM_STATUS_CHANGE', label: '팀 비활성화' },
+  { value: 'TEAM_STATUS_CHANGE', label: '팀 상태 변경' },
   { value: 'POSITION_CREATE', label: '직급 생성' },
   { value: 'POSITION_UPDATE', label: '직급 수정' },
-  { value: 'POSITION_STATUS_CHANGE', label: '직급 비활성화' },
+  { value: 'POSITION_STATUS_CHANGE', label: '직급 상태 변경' },
   { value: 'MAIL_RETENTION_POLICY_UPDATE', label: '메일 보관 정책 수정' },
+  { value: 'RETENTION_POLICY_UPDATE', label: '회의록 보관 정책 수정' },
 ]
 
 export const AUDIT_TARGET_TYPE_OPTIONS = [
@@ -182,8 +228,13 @@ export function formatTargetTypeLabel(targetType) {
   return TARGET_TYPE_LABELS[targetType] || targetType || '-'
 }
 
+export function isUserRelatedAuditAction(actionType) {
+  return USER_RELATED_ACTION_TYPES.has(actionType)
+}
+
 export function getAuditActionDisplay(log) {
   if (log?.actionLabel) return sanitizeSensitiveText(String(log.actionLabel))
+  if (log?.displayTitle) return sanitizeSensitiveText(String(log.displayTitle))
   return formatActionTypeLabel(log?.actionType)
 }
 
@@ -194,23 +245,50 @@ export function getAuditTargetTypeDisplay(log) {
 
 export function getAuditDisplayTitle(log) {
   if (log?.displayTitle) return sanitizeSensitiveText(String(log.displayTitle))
-  return getAuditActionDisplay(log)
+  if (log?.actionLabel) return sanitizeSensitiveText(String(log.actionLabel))
+  return formatActionTypeLabel(log?.actionType)
+}
+
+export function getAuditTargetLoginId(log = {}) {
+  const fallbackTarget = isComparableObject(log.target) ? log.target : null
+  return (
+    normalizePriorityValue(log.targetLoginId) ||
+    normalizePriorityValue(log.targetUserLoginId) ||
+    normalizePriorityValue(fallbackTarget?.loginId) ||
+    '-'
+  )
+}
+
+export function getAuditTargetName(log = {}) {
+  const fallbackTarget = isComparableObject(log.target) ? log.target : null
+  return (
+    normalizePriorityValue(log.targetName) ||
+    normalizePriorityValue(log.targetUserName) ||
+    normalizePriorityValue(log.targetDisplayName) ||
+    normalizePriorityValue(fallbackTarget?.name) ||
+    '-'
+  )
 }
 
 export function getAuditDisplayChangeItems(log, options = {}) {
   if (Array.isArray(log?.displayChangeItems) && log.displayChangeItems.length) {
-    // BE가 화면용 요약을 내려주면 FE에서 그대로 우선 사용한다.
+    // BE 표시용 작업 내용이 있으면 FE fallback보다 우선해서 그대로 렌더링한다.
     return log.displayChangeItems
       .map((item, index) => normalizeDisplayChangeItem(item, index))
       .filter(Boolean)
   }
 
-  const summaryChanges = summarizeAuditLogChanges(log?.beforeSnapshot, log?.afterSnapshot, options)
+  const summaryChanges = summarizeAuditLogChanges(log?.beforeSnapshot, log?.afterSnapshot, {
+    ...options,
+    actionType: log?.actionType,
+    result: log?.result,
+  })
   if (summaryChanges.length) {
     return summaryChanges.map((change, index) => ({
       key: change.key || `change-${index}`,
       label: change.label || '작업 내용',
-      text: `${change.before} → ${change.after}`,
+      text:
+        change.value !== undefined ? change.value : `${change.before} → ${change.after}`,
       title: formatChangeTitle(change.beforeTitle, change.afterTitle),
     }))
   }
@@ -238,7 +316,7 @@ export function sanitizeSnapshot(snapshot) {
   if (typeof snapshot === 'object') {
     return Object.fromEntries(
       Object.entries(snapshot)
-        .filter(([key]) => !SENSITIVE_KEY_PATTERN.test(key))
+        .filter(([key]) => !isSensitiveKey(key))
         .map(([key, value]) => [key, sanitizeSnapshot(value)]),
     )
   }
@@ -254,26 +332,39 @@ export function summarizeAuditLogChanges(beforeSnapshot, afterSnapshot, options 
   const before = sanitizeSnapshot(beforeSnapshot)
   const after = sanitizeSnapshot(afterSnapshot)
 
+  if (isExcelRelatedAction(options?.actionType)) {
+    return summarizeExcelChangeItems(after, options)
+  }
+
   if (!isComparableObject(before) || !isComparableObject(after)) {
-    if (formatComparisonValue(before) === formatComparisonValue(after)) return []
     return []
   }
 
   const keys = new Set([...Object.keys(before), ...Object.keys(after)])
   const changes = []
 
+  // 과거 raw snapshot fallback에서도 내부 필드와 민감정보는 기본 화면에서 숨긴다.
   for (const key of keys) {
-    if (SENSITIVE_KEY_PATTERN.test(key)) continue
+    if (isSensitiveKey(key) || isInternalField(key)) continue
 
     const beforeValue = before[key]
     const afterValue = after[key]
-    if (formatComparisonValue(beforeValue, key, options) === formatComparisonValue(afterValue, key, options)) continue
+    if (
+      formatComparisonValue(beforeValue, key, options) ===
+      formatComparisonValue(afterValue, key, options)
+    ) {
+      continue
+    }
+
+    const beforeDisplay = formatDisplayValue(beforeValue, key, options)
+    const afterDisplay = formatDisplayValue(afterValue, key, options)
+    if (beforeDisplay === '-' && afterDisplay === '-') continue
 
     changes.push({
       key,
       label: FIELD_LABELS[key] || key,
-      before: formatDisplayValue(beforeValue, key, options),
-      after: formatDisplayValue(afterValue, key, options),
+      before: beforeDisplay,
+      after: afterDisplay,
       beforeTitle: formatDebugValue(beforeValue, key),
       afterTitle: formatDebugValue(afterValue, key),
     })
@@ -282,25 +373,35 @@ export function summarizeAuditLogChanges(beforeSnapshot, afterSnapshot, options 
   return changes
 }
 
-export function extractAuditLogTargetDisplay(targetId, beforeSnapshot, afterSnapshot) {
+export function extractAuditLogTargetDisplay(log = {}, beforeSnapshot = null, afterSnapshot = null) {
   const before = sanitizeSnapshot(beforeSnapshot)
   const after = sanitizeSnapshot(afterSnapshot)
 
-  const loginId = pickSnapshotValue(after, 'loginId') || pickSnapshotValue(before, 'loginId') || '-'
-  const targetName = pickSnapshotValue(after, 'name') || pickSnapshotValue(before, 'name') || '-'
+  const loginId =
+    normalizePriorityValue(getAuditTargetLoginId(log)) ||
+    pickSnapshotValue(after, 'loginId') ||
+    pickSnapshotValue(before, 'loginId') ||
+    '-'
+
+  const targetName =
+    normalizePriorityValue(getAuditTargetName(log)) ||
+    pickSnapshotValue(after, 'name') ||
+    pickSnapshotValue(before, 'name') ||
+    '-'
 
   return {
     loginId: formatDisplayValue(loginId, 'loginId'),
     name: formatDisplayValue(targetName, 'name'),
-    rawTargetId: targetId ? String(targetId) : '',
+    rawTargetId: log?.targetId ? String(log.targetId) : '',
   }
 }
 
 function normalizeDisplayChangeItem(item, index) {
   if (!item || typeof item !== 'object') return null
+  if (isInternalField(item.label)) return null
 
   const label = sanitizeSensitiveText(String(item.label || '작업 내용'))
-  const text = buildDisplayChangeItemText(item)
+  const text = buildDisplayChangeItemText(item, label)
   if (!text) return null
 
   return {
@@ -311,16 +412,21 @@ function normalizeDisplayChangeItem(item, index) {
   }
 }
 
-function buildDisplayChangeItemText(item) {
+function buildDisplayChangeItemText(item, label = '') {
+  if (isSensitiveKey(label)) {
+    return '***'
+  }
+
   const hasBeforeAfter = item.beforeValue !== undefined || item.afterValue !== undefined
   if (hasBeforeAfter) {
     const before = formatDisplayValue(item.beforeValue)
     const after = formatDisplayValue(item.afterValue)
+    if (before === '-' && after === '-') return ''
     return `${before} → ${after}`
   }
 
   if (item.value !== undefined && item.value !== null && item.value !== '') {
-    return formatDisplayValue(item.value)
+    return formatDisplayValue(item.value, label)
   }
 
   return ''
@@ -332,7 +438,7 @@ function buildSnapshotFallbackItems(log, options) {
 
   if (isComparableObject(preferredSnapshot)) {
     const items = Object.entries(preferredSnapshot)
-      .filter(([key]) => !SENSITIVE_KEY_PATTERN.test(key))
+      .filter(([key]) => !isSensitiveKey(key) && !isInternalField(key))
       .map(([key, value], index) => ({
         key: `${key}-${index}`,
         label: FIELD_LABELS[key] || key,
@@ -344,9 +450,9 @@ function buildSnapshotFallbackItems(log, options) {
     if (items.length) return items
   }
 
-  const fallbackTexts = []
+  const fallbackItems = []
   if (log?.result) {
-    fallbackTexts.push({
+    fallbackItems.push({
       key: 'result',
       label: '작업 결과',
       text: formatAuditResultLabel(log.result),
@@ -354,14 +460,68 @@ function buildSnapshotFallbackItems(log, options) {
     })
   }
   if (log?.reason) {
-    fallbackTexts.push({
+    fallbackItems.push({
       key: 'reason',
       label: '실패 사유',
       text: formatDisplayValue(log.reason),
       title: '',
     })
   }
-  return fallbackTexts
+  return fallbackItems.filter((item) => item.text && item.text !== '-')
+}
+
+function summarizeExcelChangeItems(snapshot, options) {
+  if (!isComparableObject(snapshot)) return []
+
+  const items = []
+  addSummaryItem(items, 'fileName', '파일명', snapshot.fileName, options)
+  addSummaryItem(
+    items,
+    'result',
+    '작업 결과',
+    options?.result ? formatAuditResultLabel(options.result) : null,
+    options,
+  )
+  addSummaryItem(
+    items,
+    'message',
+    '실패 사유',
+    snapshot.message || snapshot.failureReason,
+    options,
+  )
+  addSummaryItem(items, 'errorCount', '오류 건수', snapshot.errorCount, options)
+
+  if (isComparableObject(snapshot.result)) {
+    const processedCount = [
+      'createdAffiliates',
+      'updatedAffiliates',
+      'createdDepartments',
+      'updatedDepartments',
+      'createdTeams',
+      'updatedTeams',
+      'createdPositions',
+      'updatedPositions',
+      'createdUsers',
+      'updatedUsers',
+    ].reduce((sum, key) => sum + Number(snapshot.result[key] || 0), 0)
+
+    addSummaryItem(items, 'processedCount', '처리 건수', processedCount || null, options)
+  }
+
+  return items
+}
+
+function addSummaryItem(items, key, label, value, options) {
+  const text = formatDisplayValue(value, key, options)
+  if (!text || text === '-') return
+
+  items.push({
+    key,
+    label,
+    value: text,
+    beforeTitle: '',
+    afterTitle: '',
+  })
 }
 
 function isComparableObject(value) {
@@ -382,7 +542,7 @@ function formatComparisonValue(value, key = '', options = {}) {
     return JSON.stringify(
       Object.fromEntries(
         Object.entries(value)
-          .filter(([entryKey]) => !SENSITIVE_KEY_PATTERN.test(entryKey))
+          .filter(([entryKey]) => !isSensitiveKey(entryKey) && !isInternalField(entryKey))
           .map(([entryKey, entryValue]) => [
             entryKey,
             formatComparisonValue(entryValue, entryKey, options),
@@ -405,8 +565,12 @@ function formatTranslatedValue(value, key = '', options = {}) {
 
   if (typeof value === 'object') {
     const compactItems = Object.entries(value)
-      .filter(([entryKey]) => !SENSITIVE_KEY_PATTERN.test(entryKey))
-      .map(([entryKey, entryValue]) => `${FIELD_LABELS[entryKey] || entryKey}: ${formatDisplayValue(entryValue, entryKey, options)}`)
+      .filter(([entryKey]) => !isSensitiveKey(entryKey) && !isInternalField(entryKey))
+      .map(
+        ([entryKey, entryValue]) =>
+          `${FIELD_LABELS[entryKey] || entryKey}: ${formatDisplayValue(entryValue, entryKey, options)}`,
+      )
+      .filter(Boolean)
     return compactItems.length ? compactItems.join(', ') : '-'
   }
 
@@ -414,6 +578,10 @@ function formatTranslatedValue(value, key = '', options = {}) {
   if (!normalized) return '-'
 
   if (VALUE_LABELS[normalized] !== undefined) return VALUE_LABELS[normalized]
+
+  if (isRetentionDayField(key) && /^\d+(\.\d+)?$/.test(normalized)) {
+    return `${Number(normalized)}일`
+  }
 
   const formattedDate = formatDateLikeValue(normalized, key)
   if (formattedDate) return formattedDate
@@ -434,6 +602,8 @@ function resolveReferenceLabel(value, key, options) {
 }
 
 function formatDateLikeValue(value, key) {
+  if (isInternalField(key)) return null
+
   if (looksLikeIsoDateTime(value)) {
     const date = new Date(value)
     if (!Number.isNaN(date.getTime())) {
@@ -469,7 +639,7 @@ function looksLikeIsoDateTime(value) {
 
 function looksLikeEpoch(value, key) {
   if (!/(At|From|Until|Date|Time)$/.test(key)) return false
-  if (!/^\d{10,13}$/.test(value)) return false
+  if (!/^\d{10,13}(\.\d+)?$/.test(value)) return false
   return true
 }
 
@@ -510,7 +680,7 @@ function truncateValue(value) {
 function sanitizeSensitiveText(text) {
   return SENSITIVE_TEXT_PATTERNS.reduce(
     (current, pattern) => current.replace(pattern, '$1***$2'),
-    text,
+    String(text),
   )
 }
 
@@ -519,5 +689,32 @@ function pickSnapshotValue(snapshot, key) {
 
   const value = snapshot[key]
   if (value === null || value === undefined || value === '') return null
-  return value
+  return isSensitiveKey(key) || isInternalField(key) ? null : value
+}
+
+function normalizePriorityValue(value) {
+  if (value === null || value === undefined) return ''
+  const normalized = String(value).trim()
+  return normalized && normalized !== '-' ? normalized : ''
+}
+
+function isSensitiveKey(key) {
+  return typeof key === 'string' && SENSITIVE_KEY_PATTERN.test(key)
+}
+
+function isInternalField(key) {
+  return typeof key === 'string' && INTERNAL_FIELD_SET.has(key)
+}
+
+function isRetentionDayField(key) {
+  return key === 'retentionDays' || key === 'inboxRetentionDays'
+}
+
+function isExcelRelatedAction(actionType) {
+  return (
+    actionType === 'ORGANIZATION_MEMBER_EXCEL_IMPORT' ||
+    actionType === 'ORGANIZATION_MEMBER_EXCEL_DOWNLOAD' ||
+    actionType === 'ORGANIZATION_EXCEL_IMPORT' ||
+    actionType === 'ORGANIZATION_EXCEL_DOWNLOAD'
+  )
 }

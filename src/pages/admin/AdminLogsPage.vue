@@ -85,7 +85,7 @@ const isAdmin = computed(() => auth.user?.role === 'ADMIN')
 const useCustomDateRange = computed(() => filterForm.dateRange === 'custom')
 const hasFilters = computed(() =>
   Boolean(
-      filterForm.actionType ||
+    filterForm.actionType ||
       filterForm.targetType ||
       filterForm.result ||
       filterForm.from ||
@@ -273,7 +273,7 @@ function closeDetail() {
 
 function normalizeAuditLog(item) {
   const targetDisplay = extractAuditLogTargetDisplay(
-    item?.targetId || '',
+    item || {},
     item?.beforeSnapshot ?? null,
     item?.afterSnapshot ?? null,
   )
@@ -389,9 +389,7 @@ function toIsoUtc(value) {
       </div>
     </header>
 
-    <article v-if="loading" class="card empty-state">
-      관리자 작업 로그를 불러오는 중입니다.
-    </article>
+    <article v-if="loading" class="card empty-state">관리자 작업 로그를 불러오는 중입니다.</article>
 
     <article v-else-if="forbidden" class="card empty-state">
       <h2>접근 권한 없음</h2>
@@ -408,21 +406,32 @@ function toIsoUtc(value) {
     <template v-else>
       <article class="card admin-toolbar admin-log-toolbar">
         <form class="admin-log-filter-form" @submit.prevent="submitFilters">
-
-          <select v-model="filterForm.actionType" aria-label="작업 유형">
-            <option v-for="option in AUDIT_ACTION_TYPE_OPTIONS" :key="option.value || 'all-action'" :value="option.value">
+          <select v-model="filterForm.actionType" aria-label="작업 내용">
+            <option
+              v-for="option in AUDIT_ACTION_TYPE_OPTIONS"
+              :key="option.value || 'all-action'"
+              :value="option.value"
+            >
               {{ option.label }}
             </option>
           </select>
 
           <select v-model="filterForm.targetType" aria-label="대상 유형">
-            <option v-for="option in AUDIT_TARGET_TYPE_OPTIONS" :key="option.value || 'all-target'" :value="option.value">
+            <option
+              v-for="option in AUDIT_TARGET_TYPE_OPTIONS"
+              :key="option.value || 'all-target'"
+              :value="option.value"
+            >
               {{ option.label }}
             </option>
           </select>
 
           <select v-model="filterForm.result" aria-label="결과">
-            <option v-for="option in RESULT_OPTIONS" :key="option.value || 'all-result'" :value="option.value">
+            <option
+              v-for="option in RESULT_OPTIONS"
+              :key="option.value || 'all-result'"
+              :value="option.value"
+            >
               {{ option.label }}
             </option>
           </select>
@@ -476,10 +485,18 @@ function toIsoUtc(value) {
                 <strong>{{ log.ipAddress || '-' }}</strong>
                 <small>{{ log.actorName || '-' }}</small>
               </td>
-              <td class="ellipsis-cell" :title="getAuditActionDisplay(log)">{{ getAuditActionDisplay(log) }}</td>
-              <td class="ellipsis-cell" :title="getAuditTargetTypeDisplay(log)">{{ getAuditTargetTypeDisplay(log) }}</td>
-              <td class="target-id-cell" :title="log.targetId || ''">{{ log.targetLoginId || '-' }}</td>
-              <td class="ellipsis-cell" :title="log.targetName || '-'">{{ log.targetName || '-' }}</td>
+              <td class="ellipsis-cell" :title="getAuditActionDisplay(log)">
+                {{ getAuditActionDisplay(log) }}
+              </td>
+              <td class="ellipsis-cell" :title="getAuditTargetTypeDisplay(log)">
+                {{ getAuditTargetTypeDisplay(log) }}
+              </td>
+              <td class="target-id-cell" :title="log.targetLoginId || '-'">
+                {{ log.targetLoginId || '-' }}
+              </td>
+              <td class="ellipsis-cell" :title="log.targetName || '-'">
+                {{ log.targetName || '-' }}
+              </td>
               <td>
                 <span :class="['badge', resultBadgeClass(log.result)]">
                   {{ formatAuditResultLabel(log.result) }}
@@ -511,20 +528,14 @@ function toIsoUtc(value) {
             <button type="button" @click="closeDetail">닫기</button>
           </header>
 
-          <div v-if="detailLoading" class="empty-state">
-            작업 로그 상세 정보를 불러오는 중입니다.
-          </div>
+          <div v-if="detailLoading" class="empty-state">작업 로그 상세 정보를 불러오는 중입니다.</div>
           <div v-else-if="detailError" class="error-box">{{ detailError }}</div>
           <template v-else-if="selectedLog">
             <section class="detail-section">
               <h3>작업 내용</h3>
               <div class="detail-section-body">
                 <ul v-if="changeSummary.length" class="change-summary-list prominent">
-                  <li
-                    v-for="change in changeSummary"
-                    :key="change.key"
-                    :title="change.title || ''"
-                  >
+                  <li v-for="change in changeSummary" :key="change.key" :title="change.title || ''">
                     <strong>{{ change.label }}</strong>
                     <span>{{ change.text }}</span>
                   </li>
@@ -673,6 +684,7 @@ function toIsoUtc(value) {
 }
 
 .ellipsis-cell {
+  max-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
