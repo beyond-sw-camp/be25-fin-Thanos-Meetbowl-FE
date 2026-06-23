@@ -606,12 +606,33 @@ function writeStoredJson(key, value) {
   }
 }
 
-async function uploadPersonalFile(event) {
-  const file = event.target.files?.[0]
-  if (!file) return
-  await uploadDriveFile(file)
-  event.target.value = ''
-  await loadDriveFiles()
+async function uploadPersonalFiles(fileList) {
+  const files = Array.from(fileList || [])
+  if (!files.length || driveUploading.value) return
+
+  driveUploading.value = true
+  let uploadedCount = 0
+  try {
+    // 백엔드는 요청 하나당 file 파트 하나를 받으므로 다중 선택 파일을 순서대로 업로드한다.
+    for (const file of files) {
+      await uploadDriveFile(file)
+      uploadedCount += 1
+    }
+    await loadDriveFiles()
+    showToast('파일 업로드 완료', `${uploadedCount}개 파일을 개인 드라이브에 추가했습니다.`)
+  } catch (error) {
+    // 일부 파일이 이미 저장된 경우에도 목록을 다시 받아 화면과 서버 상태를 일치시킨다.
+    await loadDriveFiles()
+    showToast(
+      '파일 업로드 실패',
+      uploadedCount
+        ? `${uploadedCount}/${files.length}개 업로드 후 실패했습니다. ${error?.message || ''}`.trim()
+        : error?.message || '파일을 업로드하지 못했습니다.',
+    )
+  } finally {
+    driveUploading.value = false
+    if (driveInput.value) driveInput.value.value = ''
+  }
 }
 
 async function removeDriveFile(fileId) {
