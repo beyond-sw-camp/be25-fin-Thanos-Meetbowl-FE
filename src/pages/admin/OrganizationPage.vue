@@ -30,6 +30,12 @@ import {
   createTeamForm,
 } from '../../lib/admin-organization-form'
 import { getAllAdminUsers } from '../../lib/admin-users'
+import {
+  buildOrganizationMemberLabel,
+  buildOrganizationSummaryText,
+  buildOrganizationUserHeadline,
+  normalizeOrganizationUserDisplay,
+} from '../../lib/admin-organization-user-display.js'
 import { getOrganizationUserSummary } from '../../lib/user-directory'
 import { useAuthStore } from '../../stores/auth'
 import ModalShell from '../../components/common/ModalShell.vue'
@@ -548,18 +554,19 @@ function normalizeUser(item) {
 }
 
 function normalizeUserSummary(item) {
-  return {
+  // 로컬 관리자 공용 계정은 조직 정보가 비어 있어야 하므로 FE 기본값으로 채우지 않는다.
+  return normalizeOrganizationUserDisplay({
     userId: item?.userId || '',
     loginId: item?.loginId || '',
     name: item?.name || '-',
     email: item?.email || '-',
     affiliate: item?.affiliate || '-',
-    department: item?.department || '-',
-    team: item?.team || '-',
-    position: item?.position || '-',
+    department: item?.department || '',
+    team: item?.team || '',
+    position: item?.position || '',
     role: `${item?.role || ''}`.toUpperCase(),
     status: `${item?.status || ''}`.toUpperCase(),
-  }
+  })
 }
 
 function normalizeStatus(status) {
@@ -602,6 +609,26 @@ function findAffiliateName(affiliateId) {
 
 function resolvePositionName(positionId, fallbackName = '-') {
   return positionMap.value.get(positionId)?.name || fallbackName || '-'
+}
+
+function findUserById(userId) {
+  return users.value.find((user) => user.userId === userId) || null
+}
+
+function organizationTeamSummary(departmentId) {
+  return buildOrganizationSummaryText(
+    ...(teamsByDepartmentId.value.get(departmentId) || []).map((team) => team.name),
+  )
+}
+
+function memberPreviewLabel(userId) {
+  const user = findUserById(userId)
+  if (!user) return '-'
+  return buildOrganizationMemberLabel(user, resolvePositionName(user.positionId, user.position)) || user.name || '-'
+}
+
+function userSummaryHeadline(user) {
+  return buildOrganizationUserHeadline(user)
 }
 
 function statusLabel(status) {
@@ -968,7 +995,7 @@ const remainingExcelValidationErrorCount = computed(() =>
                   <strong>{{ department.name }}</strong>
                   <span>{{ department.userCount }}명</span>
                 </div>
-                <p>{{ department.teamSummary }}</p>
+                <p>{{ organizationTeamSummary(department.departmentId) || department.teamSummary }}</p>
               </article>
             </div>
             <div v-else class="empty-state-inline">표시할 부서가 없습니다.</div>
@@ -997,7 +1024,7 @@ const remainingExcelValidationErrorCount = computed(() =>
                 <ul v-if="department.hasMembers" class="member-preview-list">
                   <li v-for="member in department.previewMembers" :key="member.key">
                     <button type="button" class="member-preview-button" @click="openUserSummary(member.userId)">
-                      {{ member.label }}
+                      {{ memberPreviewLabel(member.userId) }}
                     </button>
                   </li>
                 </ul>
@@ -1030,7 +1057,7 @@ const remainingExcelValidationErrorCount = computed(() =>
               <tr v-for="department in departmentSummaries" :key="department.departmentId">
                 <td>{{ department.name }}</td>
                 <td>{{ department.userCount }}명</td>
-                <td>{{ department.teamCount ? department.teamSummary : '-' }}</td>
+                <td>{{ department.teamCount ? organizationTeamSummary(department.departmentId) : '-' }}</td>
                 <td>{{ department.sortOrder ?? '-' }}</td>
                 <td>
                   <button class="icon-text" type="button" @click="openEditModal(department)">수정</button>
@@ -1065,7 +1092,7 @@ const remainingExcelValidationErrorCount = computed(() =>
                 <td>{{ department.name }}</td>
                 <td>{{ department.affiliateName }}</td>
                 <td>{{ department.userCount }}명</td>
-                <td>{{ department.teamSummary }}</td>
+                <td>{{ organizationTeamSummary(department.departmentId) || department.teamSummary }}</td>
                 <td>{{ department.sortOrder ?? '-' }}</td>
                 <td>
                   <button class="icon-text" type="button" @click="openEditModal(department)">수정</button>
@@ -1265,7 +1292,7 @@ const remainingExcelValidationErrorCount = computed(() =>
           <header>
             <div>
               <h2>{{ userSummaryLoading ? '회원 요약 조회 중' : selectedUserSummary?.name || '-' }}</h2>
-              <p v-if="!userSummaryLoading">{{ selectedUserSummary?.department || '-' }} 쨌 {{ selectedUserSummary?.position || '-' }}</p>
+              <p v-if="!userSummaryLoading">{{ userSummaryHeadline(selectedUserSummary) }}</p>
             </div>
             <button type="button" @click="userSummaryOpen = false">닫기</button>
           </header>
