@@ -964,24 +964,9 @@ const remainingExcelValidationErrorCount = computed(() =>
         </button>
       </div>
 
-      <article class="card excel-guide-card">
-        <div class="excel-guide-grid">
-          <section>
-            <h2>다운로드 안내</h2>
-            <p>현재 계열사, 부서, 팀, 직급, 회원 정보를 엑셀로 내려받습니다.</p>
-          </section>
-          <section>
-            <h2>업로드 안내</h2>
-            <p>수정한 엑셀 파일을 업로드하면 조직도와 회원 정보에 일괄 반영됩니다.</p>
-          </section>
-        </div>
-        <ul class="excel-notice-list">
-          <li>엑셀에 없는 기존 데이터는 삭제되지 않습니다.</li>
-          <li>신규 회원은 초기 비밀번호 1234로 생성됩니다.</li>
-          <li>권한은 ADMIN 또는 USER만 입력할 수 있습니다.</li>
-          <li>부서, 팀, 직급의 순서는 sortNumber 기준으로 반영됩니다.</li>
-        </ul>
-      </article>
+      <div class="card info-bar">
+        <span>엑셀로 조직/회원 정보를 내려받거나 수정 파일을 업로드할 수 있습니다. 엑셀 없이 기존 데이터는 삭제되지 않습니다. ADMIN 또는 USER만 입력 가능. 정렬 기준: sortNumber</span>
+      </div>
 
       <div class="tab-actions">
         <div class="admin-tabs">
@@ -1479,6 +1464,7 @@ const remainingExcelValidationErrorCount = computed(() =>
   justify-content: space-between;
   align-items: center;
   gap: 12px;
+  margin-bottom: 8px;
 }
 
 .organization-summary-grid {
@@ -1624,5 +1610,17 @@ const remainingExcelValidationErrorCount = computed(() =>
     justify-content: flex-start;
     margin-top: 10px;
   }
+}
+
+.info-bar {
+  padding: 10px 14px;
+  font-size: 12px;
+  color: var(--muted-foreground);
+  background: var(--muted);
+  border-radius: 8px;
+}
+
+.info-bar span {
+  display: block;
 }
 </style>
