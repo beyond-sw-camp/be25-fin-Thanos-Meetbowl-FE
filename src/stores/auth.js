@@ -7,6 +7,15 @@ import {
   writeStoredAuthSession,
 } from '../lib/auth-session.js'
 
+const ACCESS_TOKEN_REFRESH_SAFETY_WINDOW_MS = 60 * 1000
+const API_BASE_URL = import.meta.env?.VITE_API_BASE_URL || '/api/v1'
+
+function buildApiUrl(path) {
+  const normalizedBaseUrl = API_BASE_URL.replace(/\/+$/, '')
+  const normalizedPath = path.startsWith('/') ? path : `/${path}`
+  return `${normalizedBaseUrl}${normalizedPath}`
+}
+
 function createState() {
   const session = readStoredAuthSession()
 
@@ -16,6 +25,8 @@ function createState() {
     tokenType: session?.tokenType || 'Bearer',
     accessTokenExpiresIn: session?.accessTokenExpiresIn || 0,
     refreshTokenExpiresIn: session?.refreshTokenExpiresIn || 0,
+    accessTokenExpiresAt: session?.accessTokenExpiresAt || 0,
+    refreshTokenExpiresAt: session?.refreshTokenExpiresAt || 0,
     user: session?.user || null,
   }
 }
@@ -42,17 +53,33 @@ export const useAuthStore = defineStore('auth', {
         tokenType: this.tokenType,
         accessTokenExpiresIn: this.accessTokenExpiresIn,
         refreshTokenExpiresIn: this.refreshTokenExpiresIn,
+        accessTokenExpiresAt: this.accessTokenExpiresAt,
+        refreshTokenExpiresAt: this.refreshTokenExpiresAt,
         user: this.user,
       })
     },
     applySession(session) {
+      const now = Date.now()
       this.accessToken = session?.accessToken || ''
       this.refreshToken = session?.refreshToken || ''
       this.tokenType = session?.tokenType || 'Bearer'
       this.accessTokenExpiresIn = session?.accessTokenExpiresIn || 0
       this.refreshTokenExpiresIn = session?.refreshTokenExpiresIn || 0
+      this.accessTokenExpiresAt =
+        Number(session?.accessTokenExpiresAt) > 0
+          ? Number(session.accessTokenExpiresAt)
+          : this.accessTokenExpiresIn > 0
+            ? now + (this.accessTokenExpiresIn * 1000)
+            : 0
+      this.refreshTokenExpiresAt =
+        Number(session?.refreshTokenExpiresAt) > 0
+          ? Number(session.refreshTokenExpiresAt)
+          : this.refreshTokenExpiresIn > 0
+            ? now + (this.refreshTokenExpiresIn * 1000)
+            : 0
       this.user = normalizeUser(session?.user)
       this.persistSession()
+      this.scheduleTokenRefresh()
     },
     clearSession() {
       this.accessToken = ''
@@ -60,11 +87,17 @@ export const useAuthStore = defineStore('auth', {
       this.tokenType = 'Bearer'
       this.accessTokenExpiresIn = 0
       this.refreshTokenExpiresIn = 0
+      this.accessTokenExpiresAt = 0
+      this.refreshTokenExpiresAt = 0
       this.user = null
+      this.clearTokenRefreshTimer()
+      this.refreshSessionPromise = null
       clearStoredAuthSession()
     },
     async initialize() {
       if (!this.accessToken) return
+
+      await this.ensureSessionFresh()
 
       try {
         await this.fetchCurrentUser()
@@ -73,10 +106,14 @@ export const useAuthStore = defineStore('auth', {
       }
     },
     async login(loginId, password) {
-      const data = await postJson('/auth/login', {
-        loginId: loginId.trim(),
-        password,
-      })
+      const data = await postJson(
+        '/auth/login',
+        {
+          loginId: loginId.trim(),
+          password,
+        },
+        { skipAuth: true, skipAuthRefresh: true },
+      )
 
       this.applySession({
         accessToken: data.accessToken,
@@ -105,12 +142,83 @@ export const useAuthStore = defineStore('auth', {
       this.persistSession()
       return this.user
     },
+    clearTokenRefreshTimer() {
+      if (this.tokenRefreshTimerId) {
+        window.clearTimeout(this.tokenRefreshTimerId)
+        this.tokenRefreshTimerId = null
+      }
+    },
+    scheduleTokenRefresh() {
+      this.clearTokenRefreshTimer()
+
+      if (!this.accessToken || !this.refreshToken || !this.accessTokenExpiresAt) return
+
+      const refreshAt = Math.max(
+        Date.now() + 1000,
+        this.accessTokenExpiresAt - ACCESS_TOKEN_REFRESH_SAFETY_WINDOW_MS,
+      )
+      const delay = Math.max(1000, refreshAt - Date.now())
+      this.tokenRefreshTimerId = window.setTimeout(() => {
+        void this.ensureSessionFresh()
+      }, delay)
+    },
+    async refreshSession() {
+      if (!this.refreshToken) return false
+      if (this.refreshSessionPromise) return this.refreshSessionPromise
+
+      this.refreshSessionPromise = (async () => {
+        try {
+          const response = await fetch(buildApiUrl('/auth/token/refresh'), {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ refreshToken: this.refreshToken }),
+          })
+          const payload = await response.json().catch(() => null)
+          if (!response.ok || !payload?.success) {
+            return false
+          }
+
+          this.applySession({
+            ...payload.data,
+            user: this.user,
+          })
+          return true
+        } catch {
+          return false
+        } finally {
+          this.refreshSessionPromise = null
+        }
+      })()
+
+      return this.refreshSessionPromise
+    },
+    async ensureSessionFresh() {
+      if (!this.accessToken || !this.refreshToken) return false
+      if (!this.accessTokenExpiresAt) {
+        this.scheduleTokenRefresh()
+        return true
+      }
+
+      const remainingMs = this.accessTokenExpiresAt - Date.now()
+      if (remainingMs <= ACCESS_TOKEN_REFRESH_SAFETY_WINDOW_MS) {
+        return this.refreshSession()
+      }
+
+      this.scheduleTokenRefresh()
+      return true
+    },
     async logout() {
       try {
         if (this.accessToken && this.refreshToken) {
           await postJson('/auth/logout', {
             refreshToken: this.refreshToken,
-          })
+          }, { skipAuthRefresh: true })
+        }
+      } catch (error) {
+        if (error?.status !== 401 && error?.status !== 403) {
+          throw error
         }
       } finally {
         this.clearSession()

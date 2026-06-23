@@ -122,7 +122,7 @@ import RoomTimelineRow from '../../components/rooms/RoomTimelineRow.vue'
 import ReservationModal from '../../components/rooms/ReservationModal.vue'
 import { useAuthStore } from '../../stores/auth'
 import { cancelMeeting, getMeeting, getMyReservations, getRoomReservations, getRooms } from '../../lib/reservations'
-import { meetingRoute, openMeetingWindow } from '../../lib/meeting-route'
+import { openMeetingWindow } from '../../lib/meeting-route'
 import { useUserNames } from '../../composables/useUserNames'
 import { kstDayRangeUtc, shiftDateKst, todayKst, utcToKstClock, utcToKstDate } from '../../utils/dateTime'
 import { TIMELINE, timelineHours } from '../../utils/timeline'
@@ -184,10 +184,11 @@ const detailAttendeeList = computed(() =>
     (attendee) => nameMap[attendee.userId] || '이름 미확인',
   ),
 )
-// 종료시각이 지난 회의는 취소·입장 불가(백엔드도 차단). detailFull이 있으면 우선 사용.
+// 종료 여부는 백엔드 status 기준으로만 판단한다. 예정 종료 시각은 입장 차단 기준으로 쓰지 않는다.
 const detailEnded = computed(() => {
-  const end = detailFull.value?.scheduledEndAt || detail.value?.scheduledEndAt
-  return end ? new Date(end).getTime() < Date.now() : false
+  const status = String(detailFull.value?.status || '').toUpperCase()
+  if (status === 'ENDED' || status === 'CANCELLED') return true
+  return false
 })
 
 onMounted(loadAll)
@@ -242,11 +243,9 @@ async function loadMyReservations() {
       getMyReservations('host'),
       getMyReservations('invited'),
     ])
-    // my-reservations와 동일 기준: 아직 안 끝난(종료시각 >= now) 예약만. (백엔드가 활성만 반환)
-    const now = Date.now()
-    const notEnded = (item) => new Date(item.scheduledEndAt).getTime() >= now
-    myBooked.value = (hostData || []).filter(notEnded).map((item) => normalizeMine(item, true))
-    myInvited.value = (invitedData || []).filter(notEnded).map((item) => normalizeMine(item, false))
+    // 백엔드가 활성 회의만 내려주므로, 프론트에서 예정 종료 시각으로 추가 필터링하지 않는다.
+    myBooked.value = (hostData || []).map((item) => normalizeMine(item, true))
+    myInvited.value = (invitedData || []).map((item) => normalizeMine(item, false))
   } catch {
     // 요약 카드는 보조 정보라 실패해도 화면 전체를 막지 않는다.
   }
@@ -329,15 +328,21 @@ function enterMeeting(targetMeetingId) {
   const normalizedMeetingId = String(targetMeetingId || '').trim()
   if (!normalizedMeetingId) return
 
-  closeDetail()
-  const opened = openMeetingWindow(normalizedMeetingId, {
-    scheduledAt: detailFull.value?.scheduledAt || detail.value?.scheduledAt,
-  })
-  if (!opened) {
-    if (!detailFull.value?.scheduledAt && !detail.value?.scheduledAt) {
-      window.location.assign(meetingRoute(normalizedMeetingId))
-    }
+  const scheduledAt = detailFull.value?.scheduledAt || detail.value?.scheduledAt
+  const scheduledAtMs = scheduledAt ? new Date(scheduledAt).getTime() : null
+  if (detailEnded.value) {
+    window.alert('해당 회의는 종료되었습니다.')
+    return
   }
+  if (scheduledAtMs && Date.now() < scheduledAtMs - (15 * 60 * 1000)) {
+    window.alert('회의 시작 15분 전부터 입장할 수 있습니다.')
+    return
+  }
+
+  closeDetail()
+  openMeetingWindow(normalizedMeetingId, {
+    scheduledAt,
+  })
 }
 
 async function cancelReservation(meetingId) {

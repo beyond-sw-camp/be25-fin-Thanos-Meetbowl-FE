@@ -1,5 +1,5 @@
 <template>
-  <section v-if="meetingEndedScreenVisible" class="meeting-ended-page">
+  <section v-if="shouldShowMeetingEndedScreen" class="meeting-ended-page">
     <div class="meeting-ended-card">
       <span class="badge muted">회의 종료</span>
       <h1>{{ meetingTitle }}</h1>
@@ -7,6 +7,9 @@
       <div class="guest-link-actions">
         <button class="secondary-button" type="button" @click="goToMeetingsPage">
           회의 목록으로 이동
+        </button>
+        <button class="secondary-button" type="button" @click="closeMeetingPage">
+          창 닫기
         </button>
         <button
           v-if="auth.isAuthenticated"
@@ -416,7 +419,7 @@
 
     <aside class="meeting-side">
       <nav>
-        <button :class="{ active: tab === 'stt' }" @click="tab = 'stt'">회의 원문</button>
+        <button :class="{ active: tab === 'stt' }" @click="tab = 'stt'">실시간 자막</button>
         <button :class="{ active: tab === 'people' }" @click="tab = 'people'">참석자</button>
         <button :class="{ active: tab === 'chat' }" @click="tab = 'chat'">채팅</button>
       </nav>
@@ -426,10 +429,10 @@
         회의 중 오디오 스트림이 분석된 결과를 DataChannel을 통해 수신하여 화면에 표시합니다.
       -->
       <div v-if="tab === 'stt'" class="side-body meeting-caption-panel">
-        <div class="toolbar meeting-caption-toolbar">
-          <span class="chip active">원문 자막</span>
-          <span class="meeting-caption-status">{{ captionPanelStatus }}</span>
-        </div>
+<!--        <div class="toolbar meeting-caption-toolbar">-->
+<!--          <span class="chip active">실시간 자막</span>-->
+<!--          <span class="meeting-caption-status">{{ captionPanelStatus }}</span>-->
+<!--        </div>-->
 
         <!-- 
           [네트워크 및 연결 진단 모니터링]
@@ -498,54 +501,113 @@
 <!--        <p v-if="sttStatusHint" class="meeting-caption-hint">-->
 <!--          {{ sttStatusHint }}-->
 <!--        </p>-->
+        <section class="meeting-caption-language-panel" aria-label="원문 언어 탭">
+          <header class="meeting-caption-language-panel-head">
+            <div>
+              <strong>{{ activeCaptionTabLabel }}</strong>
+              <p>회의 원문 영역 안에서 언어별 자막을 전환해 확인합니다.</p>
+            </div>
+            <span class="meeting-caption-language-status">{{ captionPanelStatus }}</span>
+          </header>
 
+          <div class="meeting-caption-tabs" role="tablist" aria-label="자막 언어">
+            <button
+              id="meeting-caption-tab-source"
+              type="button"
+              class="meeting-caption-tab"
+              :class="{ active: captionDisplayMode === 'source' }"
+              :aria-selected="captionDisplayMode === 'source'"
+              aria-controls="meeting-caption-panel-source"
+              @click="captionDisplayMode = 'source'"
+            >
+              <span class="meeting-caption-tab-label">원문</span>
+              <small>Source</small>
+            </button>
+            <button
+              id="meeting-caption-tab-ko"
+              type="button"
+              class="meeting-caption-tab"
+              :class="{ active: captionDisplayMode === 'ko' }"
+              :aria-selected="captionDisplayMode === 'ko'"
+              aria-controls="meeting-caption-panel-ko"
+              @click="captionDisplayMode = 'ko'"
+            >
+              <span class="meeting-caption-tab-label">KOR</span>
+              <small>한국어</small>
+            </button>
+            <button
+              id="meeting-caption-tab-en"
+              type="button"
+              class="meeting-caption-tab"
+              :class="{ active: captionDisplayMode === 'en' }"
+              :aria-selected="captionDisplayMode === 'en'"
+              aria-controls="meeting-caption-panel-en"
+              @click="captionDisplayMode = 'en'"
+            >
+              <span class="meeting-caption-tab-label">ENG</span>
+              <small>English</small>
+            </button>
+          </div>
 
+          <p v-if="sttStatusHint" class="meeting-caption-hint meeting-caption-hint-inline">
+            {{ sttStatusHint }}
+          </p>
 
-        <div
-          ref="captionLog"
-          class="meeting-caption-scroll"
-          @scroll="handleCaptionScroll"
-        >
-          <p
-            v-for="caption in finalizedCaptions"
-            :key="caption.segmentId"
-            class="transcript"
-            :class="{ finalized: caption.status === 'FINALIZED' }"
+          <div
+            :id="activeCaptionPanelId"
+            ref="captionLog"
+            class="meeting-caption-scroll meeting-caption-scroll-panel"
+            :aria-labelledby="activeCaptionTabId"
+            @scroll="handleCaptionScroll"
           >
-            <small>
-              {{ formatCaptionTime(caption.startedAtMs) }}
-              · 확정
-            </small>
-            <small class="transcript-debug">
-              seq {{ caption.sequence ?? '-' }}
-              · {{ caption.segmentId.slice(0, 8) }}
-              · {{ caption.language }}
-            </small>
-            {{ caption.text }}
-          </p>
-          <p
-            v-if="streamingCaptionPreview"
-            class="transcript transcript-preview"
-          >
-            <small>
-              {{ formatCaptionTime(streamingCaptionPreview.startedAtMs) }}
-              · 말하는 중
-            </small>
-            <small class="transcript-debug">
-              seq {{ streamingCaptionPreview.sequence ?? '-' }}
-              · {{ streamingCaptionPreview.segmentId.slice(0, 8) }}
-              · {{ streamingCaptionPreview.language }}
-            </small>
-            {{ streamingCaptionPreview.text }}
-          </p>
-          <p v-if="!finalizedCaptions.length && !streamingCaptionPreview" class="meeting-caption-empty">
-            {{ sttEmptyStateMessage }}
-          </p>
+            <p
+              v-for="caption in visibleFinalizedCaptions"
+              :key="caption.segmentId"
+              class="transcript"
+              :class="{ finalized: caption.status === 'FINALIZED' }"
+            >
+              <small>
+                {{ formatCaptionTime(caption.startedAtMs) }}
+                · 확정
+              </small>
+              <small class="transcript-debug">
+                seq {{ caption.sequence ?? '-' }}
+                · {{ caption.segmentId.slice(0, 8) }}
+                <template v-if="captionDebugLanguageLabel(caption)">
+                  · {{ captionDebugLanguageLabel(caption) }}
+                </template>
+              </small>
+              {{ caption.displayText }}
+            </p>
+            <p
+              v-if="visibleStreamingCaptionPreview"
+              class="transcript transcript-preview"
+            >
+              <small>
+                {{ formatCaptionTime(visibleStreamingCaptionPreview.startedAtMs) }}
+                · 말하는 중
+              </small>
+              <small class="transcript-debug">
+                seq {{ visibleStreamingCaptionPreview.sequence ?? '-' }}
+                · {{ visibleStreamingCaptionPreview.segmentId.slice(0, 8) }}
+                <template v-if="captionDebugLanguageLabel(visibleStreamingCaptionPreview)">
+                  · {{ captionDebugLanguageLabel(visibleStreamingCaptionPreview) }}
+                </template>
+              </small>
+              {{ visibleStreamingCaptionPreview.displayText }}
+            </p>
+            <p v-if="!visibleFinalizedCaptions.length && !visibleStreamingCaptionPreview" class="meeting-caption-empty">
+              {{ currentCaptionEmptyStateMessage }}
+            </p>
+          </div>
+        </section>
+
         </div>
-        <div class="ai-box">
-          <strong>AI 실시간 피드백</strong>
-          <p>{{ feedbackMessage }}</p>
-        </div>
+        <RealtimeFeedbackPanel
+          class="meeting-realtime-feedback"
+          :feedbacks="realtimeFeedbacks"
+          :connected="Boolean(meetingRoom)"
+        />
       </div>
 
       <div v-else-if="tab === 'people'" class="side-body meeting-people-body">
@@ -787,7 +849,16 @@ import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { Room, RoomEvent, Track, createLocalAudioTrack, createLocalVideoTrack } from 'livekit-client'
 import { useRoute, useRouter } from 'vue-router'
 import { postJson } from '../../lib/api-client'
-import { displayFinalizedCaptions, latestStreamingCaption, sortedCaptions, upsertCaption } from '../../lib/caption-store'
+import {
+  displayFinalizedCaptions,
+  latestStreamingCaption,
+  selectCaptionTextByMode,
+  sortedCaptions,
+  upsertCaption,
+} from '../../lib/caption-store'
+import RealtimeFeedbackPanel from '../../components/meeting/RealtimeFeedbackPanel.vue'
+import { API_BASE_URL, postJson } from '../../lib/api-client'
+import { sortedFeedbacks, upsertFeedback } from '../../lib/feedback-store'
 import { guestMeetingRoute, openMeetingWindow } from '../../lib/meeting-route'
 import { resolveLiveKitConnection } from '../../lib/livekit-meeting'
 import { useAuthStore } from '../../stores/auth'
@@ -800,6 +871,7 @@ const inLobby = ref(true)
 const mic = ref(true)
 const cam = ref(true)
 const tab = ref('stt')
+const captionDisplayMode = ref('source')
 const chatInput = ref('')
 const displayName = ref(auth.user?.name || '')
 const previewVideo = ref(null)
@@ -827,7 +899,8 @@ const connectingMeeting = ref(false)
 const meetingRoom = ref(null)
 const meetingConnectionStatus = ref('연결 대기')
 const meetingConnectionError = ref('')
-const feedbackMessage = ref('실시간 피드백이 도착하면 여기에 표시됩니다.')
+const feedbackMap = ref(new Map())
+const feedbackSessionId = ref('')
 const lastCaptionReceivedAt = ref(null)
 const lastCaptionText = ref('')
 const lastCaptionPublishedAtMs = ref(null)
@@ -852,6 +925,7 @@ const lastDataChannelReceivedAt = ref(null)
 const lastDataChannelEventType = ref('')
 const lastMicPublishError = ref('')
 const meetingEndPending = ref(false)
+const meetingStartReported = ref(false)
 const meetingEndHandled = ref(false)
 const meetingEndConfirmOpen = ref(false)
 const meetingEndedScreenVisible = ref(false)
@@ -897,8 +971,6 @@ const elapsedSeconds = ref(0)
 const LOCAL_SPEECH_MEASUREMENT_RMS_THRESHOLD = 0.01
 const LOCAL_SPEECH_MEASUREMENT_SILENCE_MS = 160
 const LOCAL_SPEECH_TO_CAPTION_MATCH_WINDOW_MS = 15000
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8080/api/v1'
-
 const meetingTitle = computed(() => {
   const titleFromRoute = typeof route.query.title === 'string' ? route.query.title.trim() : ''
   return titleFromRoute || 'Q2 캠페인 킥오프'
@@ -917,9 +989,6 @@ const popupReturnPath = computed(() => {
   if (!raw.startsWith('/')) return '/app/meetings'
   return raw
 })
-const shouldPromoteToDedicatedWindow = computed(() =>
-  route.path.startsWith('/app/meeting/') && !isDedicatedMeetingWindow.value,
-)
 const hasVideoTrack = computed(() => Boolean(previewStream.value?.getVideoTracks().length))
 const hasAudioTrack = computed(() => Boolean(previewStream.value?.getAudioTracks().length))
 const pendingParticipantName = computed(() => displayName.value.trim() || auth.user?.name || '')
@@ -932,6 +1001,39 @@ const currentUserId = computed(() => String(auth.user?.id || '').trim())
 const orderedCaptions = computed(() => sortedCaptions(captionMap.value))
 const finalizedCaptions = computed(() => displayFinalizedCaptions(captionMap.value))
 const streamingCaptionPreview = computed(() => latestStreamingCaption(captionMap.value))
+const visibleFinalizedCaptions = computed(() =>
+  finalizedCaptions.value
+    .map((caption) => ({
+      ...caption,
+      displayText: selectCaptionTextByMode(caption, captionDisplayMode.value),
+    }))
+    .filter((caption) => caption.displayText),
+)
+const visibleStreamingCaptionPreview = computed(() => {
+  if (!streamingCaptionPreview.value) return null
+  if (captionDisplayMode.value !== 'source') return null
+  const displayText = selectCaptionTextByMode(
+    streamingCaptionPreview.value,
+    captionDisplayMode.value,
+  )
+  if (!displayText) return null
+  return {
+    ...streamingCaptionPreview.value,
+    displayText,
+  }
+})
+const activeCaptionTabLabel = computed(() => {
+  if (captionDisplayMode.value === 'ko') return '한국어 자막'
+  if (captionDisplayMode.value === 'en') return '영어 자막'
+  return '원문 자막'
+})
+const shouldShowMeetingEndedScreen = computed(() =>
+  meetingEndedScreenVisible.value
+  || (meetingEndHandled.value && !meetingRoom.value && !inLobby.value),
+)
+const activeCaptionTabId = computed(() => `meeting-caption-tab-${captionDisplayMode.value}`)
+const activeCaptionPanelId = computed(() => `meeting-caption-panel-${captionDisplayMode.value}`)
+const realtimeFeedbacks = computed(() => sortedFeedbacks(feedbackMap.value))
 const supportsSpeakerSelection = computed(() =>
   typeof HTMLMediaElement !== 'undefined' && 'setSinkId' in HTMLMediaElement.prototype,
 )
@@ -1075,12 +1177,13 @@ const sttEmptyStateMessage = computed(() => {
   if (meetingConnectionError.value) return meetingConnectionError.value
   if (!meetingRoom.value) return '회의 연결이 완료되면 원문 자막이 여기에 표시됩니다.'
   if (finalizedCaptions.value.length > 0 || streamingCaptionPreview.value) return ''
-  if (!mic.value) return '마이크가 꺼져 있어서 자막이 생성되지 않습니다.'
+  if (!mic.value && participantCount.value <= 1) return '마이크가 꺼져 있어서 자막이 생성되지 않습니다.'
   if (lastCaptionReceivedAt.value) {
     return `마지막 자막 수신: ${formatCaptionReceivedTime(lastCaptionReceivedAt.value)}`
   }
   return 'STT 세션은 준비되었습니다. 아직 음성이 감지되지 않았거나 자막이 도착하지 않았습니다.'
 })
+const currentCaptionEmptyStateMessage = computed(() => sttEmptyStateMessage.value)
 const sttStatusHint = computed(() => {
   if (!meetingRoom.value) return ''
   if (finalizedCaptions.value.length > 0 || streamingCaptionPreview.value) {
@@ -1095,6 +1198,14 @@ const captionPanelStatus = computed(() => {
   if (sttRuntimeStatus.value) return `자막 ${sttRuntimeStatus.value}`
   return meetingConnectionStatus.value
 })
+
+function captionDebugLanguageLabel(caption) {
+  const language = String(caption?.language || '').trim()
+  if (!language || language === 'unknown') return ''
+  if (captionDisplayMode.value !== 'source') return ''
+  return language
+}
+
 const livekitRoomName = computed(() => meetingConnection.value?.roomName || '연결 전')
 const livekitParticipantIdentity = computed(() => currentParticipantIdentity() || '확인 중')
 const localParticipantState = computed(() =>
@@ -1313,6 +1424,14 @@ function showMeetingEndedScreen(message = '해당 회의는 종료되었습니�
   meetingConnectionStatus.value = '회의 종료됨'
   meetingConnectionError.value = ''
   meetingEndConfirmOpen.value = false
+}
+
+function resolveMeetingEndedMessage(event) {
+  const rawReason = String(event?.reason || '').trim()
+  if (!rawReason || rawReason === 'host-ended' || rawReason === 'host-unload') {
+    return '해당 회의는 종료되었습니다.'
+  }
+  return rawReason
 }
 
 function goToMeetingsPage() {
@@ -2067,11 +2186,13 @@ function clearRemoteAudioBindings() {
   remoteAudioBindings.clear()
 }
 
-function resetMeetingSessionState() {
+function resetMeetingSessionState(options = {}) {
+  const { preserveEndedView = false } = options
   captionMap.value = new Map()
+  feedbackMap.value = new Map()
+  feedbackSessionId.value = ''
   participantStateMap.value = new Map()
   chatMessages.value = []
-  feedbackMessage.value = '실시간 피드백이 도착하면 여기에 표시됩니다.'
   lastCaptionReceivedAt.value = null
   lastCaptionText.value = ''
   lastCaptionPublishedAtMs.value = null
@@ -2101,9 +2222,12 @@ function resetMeetingSessionState() {
   ignoreNextCaptionScrollEvent.value = false
   screenShareInactiveParticipantIds.value = new Set()
   meetingEndPending.value = false
-  meetingEndHandled.value = false
-  meetingEndedScreenVisible.value = false
-  meetingEndedScreenMessage.value = '해당 회의는 종료되었습니다.'
+  meetingStartReported.value = false
+  if (!preserveEndedView) {
+    meetingEndHandled.value = false
+    meetingEndedScreenVisible.value = false
+    meetingEndedScreenMessage.value = '해당 회의는 종료되었습니다.'
+  }
   hostTransferDialogOpen.value = false
   hostTransferTargetUserId.value = ''
   hostTransferStatus.value = ''
@@ -2263,6 +2387,10 @@ async function toggleScreenShare() {
 
 async function enterMeeting() {
   if (connectingMeeting.value) return
+  if (meetingEndHandled.value || meetingEndedScreenVisible.value) {
+    showMeetingEndedScreen()
+    return
+  }
   connectingMeeting.value = true
   meetingConnectionError.value = ''
   meetingEndedScreenVisible.value = false
@@ -2275,6 +2403,8 @@ async function enterMeeting() {
     await disconnectMeetingRoom().catch(() => {})
     if (error?.code === 'MEETING_ALREADY_ENDED') {
       showMeetingEndedScreen(error?.message || '해당 회의는 종료되었습니다.')
+    } else if (error?.code === 'COMMON_CONFLICT' && String(error?.message || '').includes('취소된 회의')) {
+      showMeetingEndedScreen(error?.message || '취소된 회의는 입장할 수 없습니다.')
     } else if (error?.code === 'MEETING_JOIN_TOO_EARLY') {
       meetingConnectionStatus.value = '입장 대기'
       meetingConnectionError.value = error?.message || '회의 시작 15분 전부터 입장할 수 있습니다.'
@@ -2315,6 +2445,7 @@ async function connectMeetingRoom() {
 
   meetingRoom.value = room
   connectedAt.value = Date.now()
+  await reportMeetingStarted()
   startElapsedTimer()
 
   await ensureLocalMicrophonePublished(room)
@@ -2327,6 +2458,24 @@ async function connectMeetingRoom() {
   }
   meetingConnectionStatus.value = '회의 연결됨'
   pushSystemChat('회의에 입장했습니다.')
+}
+
+async function reportMeetingStarted() {
+  if (meetingStartReported.value) return
+
+  try {
+    await postJson(`/meetings/${meetingId.value}/start`, {})
+    meetingStartReported.value = true
+  } catch (error) {
+    if (
+      error?.code === 'MEETING_ALREADY_ENDED' ||
+      (error?.code === 'COMMON_CONFLICT' && String(error?.message || '').includes('취소된 회의'))
+    ) {
+      throw error
+    }
+
+    console.warn('회의 시작 상태를 저장하지 못했습니다.', error)
+  }
 }
 
 function bindMeetingRoomEvents(room) {
@@ -2392,8 +2541,8 @@ function bindMeetingRoomEvents(room) {
     }
     syncParticipantsFromRoom(room)
   })
-  room.on(RoomEvent.DataReceived, (payload, participant) => {
-    handleDataChannelMessage(payload, participant)
+  room.on(RoomEvent.DataReceived, (payload, participant, _kind, topic) => {
+    handleDataChannelMessage(payload, participant, topic)
   })
   room.on(RoomEvent.Reconnecting, () => {
     meetingConnectionStatus.value = '재연결 중'
@@ -2401,17 +2550,21 @@ function bindMeetingRoomEvents(room) {
   room.on(RoomEvent.Reconnected, () => {
     meetingConnectionStatus.value = '회의 연결됨'
     syncParticipantsFromRoom(room)
+    if (!meetingStartReported.value) {
+      void reportMeetingStarted()
+    }
   })
   room.on(RoomEvent.Disconnected, () => {
     // 브라우저 탭 종료, 네트워크 단절, 명시적 leave/end 모두 결국 RTC disconnect로 보일 수 있다.
     // 즉 이 이벤트만으로는 "회의 종료"와 "내가 그냥 나감"을 구분할 수 없으므로,
     // 실제 세션 종료 판단은 별도의 `meeting.ended` DataChannel 또는 BE 종료 API 결과를 기준으로 한다.
     meetingConnectionStatus.value = '연결 종료'
+    if (meetingEndHandled.value || meetingEndedScreenVisible.value) return
     resetMeetingSessionState()
   })
 }
 
-function handleDataChannelMessage(payload, participant) {
+function handleDataChannelMessage(payload, participant, topic) {
   try {
     const event = JSON.parse(textDecoder.decode(payload))
     lastDataChannelReceivedAt.value = Date.now()
@@ -2491,8 +2644,19 @@ function handleDataChannelMessage(payload, participant) {
       return
     }
 
-    if (event?.eventType === 'feedback.generated' || event?.eventType === 'meeting.feedback.generated') {
-      feedbackMessage.value = event.payload?.message || event.message || feedbackMessage.value
+    if (event?.eventType === 'feedback.generated') {
+      if (topic && topic !== 'feedback.generated') return
+
+      const nextFeedbackMap = upsertFeedback(feedbackMap.value, event, {
+        meetingId: meetingId.value,
+        sessionId: feedbackSessionId.value,
+      })
+      if (nextFeedbackMap === feedbackMap.value) return
+
+      feedbackMap.value = nextFeedbackMap
+      if (!feedbackSessionId.value) {
+        feedbackSessionId.value = sortedFeedbacks(nextFeedbackMap)[0]?.sessionId || ''
+      }
       return
     }
 
@@ -2511,16 +2675,17 @@ async function handleMeetingEndedEvent(event) {
   if (meetingEndHandled.value) return
   meetingEndHandled.value = true
   meetingConnectionStatus.value = '회의 종료됨'
-  pushSystemChat('회의가 종료되었습니다.')
+  const message = resolveMeetingEndedMessage(event)
+  pushSystemChat(message)
   meetingConnectionError.value = ''
   hostTransferStatus.value = ''
-  // 종료 이벤트는 "호스트가 회의를 끝냈다" 또는 "시스템이 세션 종료를 확정했다"는 의미다.
-  // 단순한 브라우저 창 닫기와는 의미가 다르므로, 여기서는 room disconnect보다 상위 개념으로 처리한다.
-  // 종료 이벤트는 중복 수신될 수 있으므로 먼저 화면 상태를 정리하고, 그 다음 room을 떠난다.
-  await disconnectMeetingRoom().catch(() => {})
-  showMeetingEndedScreen(
-    String(event?.reason || '').trim() || '회의가 종료되었습니다.',
-  )
+  showMeetingEndedScreen(message)
+
+  // 종료 화면을 먼저 그린 뒤 room 정리를 한 틱 뒤로 미룬다.
+  // 이렇게 해야 로비가 잠깐 다시 그려졌다가 종료 화면으로 바뀌는 깜빡임을 줄일 수 있다.
+  nextTick(() => {
+    void disconnectMeetingRoom({ preserveEndedView: true }).catch(() => {})
+  })
 }
 
 function pushChatMessage(message) {
@@ -2595,11 +2760,12 @@ function handleChatEnter(event) {
   void sendChat()
 }
 
-async function disconnectMeetingRoom() {
+async function disconnectMeetingRoom(options = {}) {
+  const { preserveEndedView = false } = options
   const room = meetingRoom.value
   meetingRoom.value = null
   if (!room) {
-    resetMeetingSessionState()
+    resetMeetingSessionState({ preserveEndedView })
     return
   }
 
@@ -2607,7 +2773,7 @@ async function disconnectMeetingRoom() {
   await room.localParticipant.setMicrophoneEnabled(false).catch(() => {})
   await room.localParticipant.setCameraEnabled(false).catch(() => {})
   room.disconnect()
-  resetMeetingSessionState()
+  resetMeetingSessionState({ preserveEndedView })
 }
 
 function disconnectMeetingRoomForUnload() {
@@ -2729,18 +2895,18 @@ async function endMeeting() {
   try {
     hostTransferDialogOpen.value = false
     meetingEndConfirmOpen.value = false
+    meetingEndHandled.value = true
+    showMeetingEndedScreen('해당 회의는 종료되었습니다.')
     if (isCurrentUserHost.value) {
-      // authoritative 종료 기준은 먼저 BE에 `회의 종료`를 기록하는 것이다.
-      // DataChannel은 다른 참가자 화면을 빨리 정리하기 위한 보조 신호이고,
-      // 저장 보장이나 후속 AI 작업 시작 기준은 BE의 `/meetings/{id}/end` 성공이다.
-      await postJson(`/meetings/${meetingId.value}/end`, {})
-      meetingEndHandled.value = true
+      await postJson(`/meetings/${meetingId.value}/end`, {}, { keepalive: true })
+      meetingConnectionStatus.value = '회의 종료됨'
+      meetingConnectionError.value = ''
       await publishMeetingEndedSignal('host-ended').catch((error) => {
-        meetingConnectionError.value = error?.message || '회의 종료 신호를 전송하지 못했습니다.'
+        meetingConnectionError.value = error?.message || ''
       })
     }
-    await disconnectMeetingRoom()
-    showMeetingEndedScreen('회의가 종료되었습니다.')
+    await nextTick()
+    await disconnectMeetingRoom({ preserveEndedView: true })
   } catch (error) {
     meetingConnectionError.value = error?.message || '회의를 종료하지 못했습니다.'
   } finally {
@@ -2854,14 +3020,6 @@ watch([meetingId, popupSessionId], () => {
 }, { immediate: true })
 
 onMounted(() => {
-  if (shouldPromoteToDedicatedWindow.value) {
-    const opened = openMeetingWindow(meetingId.value)
-    if (opened) {
-      router.replace('/app/meetings')
-      return
-    }
-  }
-
   initializeDevices()
   navigator.mediaDevices?.addEventListener?.('devicechange', handleDeviceChange)
   window.addEventListener('beforeunload', handleBeforeUnload)
