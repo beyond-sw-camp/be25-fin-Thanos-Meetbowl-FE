@@ -270,6 +270,17 @@ export function getAuditTargetName(log = {}) {
   )
 }
 
+export function getAuditActorIp(log = {}) {
+  return (
+    normalizePriorityValue(log.actorIp) ||
+    normalizePriorityValue(log.operatorIp) ||
+    normalizePriorityValue(log.clientIp) ||
+    normalizePriorityValue(log.ipAddress) ||
+    normalizePriorityValue(log.requestIp) ||
+    '-'
+  )
+}
+
 export function getAuditDisplayChangeItems(log, options = {}) {
   if (Array.isArray(log?.displayChangeItems) && log.displayChangeItems.length) {
     // BE 표시용 작업 내용이 있으면 FE fallback보다 우선해서 그대로 렌더링한다.

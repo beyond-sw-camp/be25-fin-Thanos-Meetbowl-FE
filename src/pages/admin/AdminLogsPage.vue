@@ -5,6 +5,7 @@ import { getAdminAuditLogDetail, getAdminAuditLogs } from '../../lib/admin-audit
 import {
   AUDIT_ACTION_TYPE_OPTIONS,
   AUDIT_TARGET_TYPE_OPTIONS,
+  getAuditActorIp,
   extractAuditLogTargetDisplay,
   formatAuditResultLabel,
   getAuditActionDisplay,
@@ -296,7 +297,7 @@ function normalizeAuditLog(item) {
   return {
     auditLogId: item?.auditLogId || '',
     actorName: item?.actorName || '-',
-    ipAddress: item?.ipAddress || '',
+    ipAddress: getAuditActorIp(item || {}),
     actionType: item?.actionType || '-',
     actionLabel: item?.actionLabel || '',
     targetType: item?.targetType || '-',

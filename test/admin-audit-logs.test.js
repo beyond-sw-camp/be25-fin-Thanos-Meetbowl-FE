@@ -12,6 +12,7 @@ import {
   formatAuditResultLabel,
   formatTargetTypeLabel,
   getAuditActionDisplay,
+  getAuditActorIp,
   getAuditDisplayChangeItems,
   getAuditDisplayTitle,
   getAuditTargetLoginId,
@@ -295,6 +296,24 @@ test('audit log target display falls back to snapshots and dash for older logs',
       rawTargetId: '00000000-0000-0000-0000-000000000205',
     },
   )
+})
+
+test('audit log actor IP priority prefers direct backend fields and falls back to dash', () => {
+  assert.equal(
+    getAuditActorIp({
+      actorIp: '198.51.100.1',
+      operatorIp: '198.51.100.2',
+      clientIp: '198.51.100.3',
+      ipAddress: '198.51.100.4',
+      requestIp: '198.51.100.5',
+    }),
+    '198.51.100.1',
+  )
+  assert.equal(getAuditActorIp({ operatorIp: '198.51.100.2' }), '198.51.100.2')
+  assert.equal(getAuditActorIp({ clientIp: '198.51.100.3' }), '198.51.100.3')
+  assert.equal(getAuditActorIp({ ipAddress: '198.51.100.4' }), '198.51.100.4')
+  assert.equal(getAuditActorIp({ requestIp: '198.51.100.5' }), '198.51.100.5')
+  assert.equal(getAuditActorIp({}), '-')
 })
 
 test('audit log change summaries replace organization UUIDs with names', () => {
