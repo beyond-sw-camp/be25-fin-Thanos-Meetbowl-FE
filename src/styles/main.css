@@ -219,7 +219,7 @@ input:focus { border-color: var(--primary); box-shadow: 0 0 0 3px rgba(243,115,3
 .selected-device-summary { display: flex; flex-wrap: wrap; gap: 8px; margin: 22px 0 14px; }
 .selected-device-summary span { border-radius: 999px; background: var(--muted); padding: 6px 10px; color: var(--muted-foreground); font-size: 12px; font-weight: 700; }
 .meeting-enter-button { width: 100%; min-height: 46px; }
-.meeting-enter-button:disabled, .secondary-button:disabled { opacity: .55; cursor: not-allowed; }
+.meeting-enter-button:disabled, .secondary-button:disabled, .primary-button:disabled { opacity: .55; cursor: not-allowed; }
 .sr-only-audio { position: absolute; width: 0; height: 0; opacity: 0; pointer-events: none; }
 .guest-join-page { min-height: 100vh; display: grid; place-items: center; background: #f4f6fa; padding: 24px; }
 .guest-join-card { width: min(460px, 100%); display: grid; gap: 26px; border: 1px solid var(--border); border-radius: 14px; background: white; padding: clamp(24px, 5vw, 38px); box-shadow: 0 18px 50px rgba(15,23,42,.08); }
@@ -509,10 +509,11 @@ input:focus { border-color: var(--primary); box-shadow: 0 0 0 3px rgba(243,115,3
   overflow-y: auto;
 }
 .meeting-realtime-feedback {
+  flex: 0 0 auto;
   width: 100%;
   height: min(210px, 32vh);
   min-height: 140px;
-  margin-top: 12px;
+  margin-top: 0;
   box-shadow: 0 -14px 26px rgba(9,9,11,.5);
 }
 .guest-link-modal { width: min(640px, calc(100vw - 32px)); }
@@ -1111,12 +1112,24 @@ input:focus { border-color: var(--primary); box-shadow: 0 0 0 3px rgba(243,115,3
 .minute-title-row input { height: 38px; border: 1px solid var(--border); border-radius: 8px; padding: 0 10px; font-weight: 800; }
 .minute-title-row button { width: 34px; height: 34px; border: 0; border-radius: 8px; background: transparent; color: var(--primary); font-size: 18px; }
 .minute-detail-panel header p { margin: 6px 0 0; color: var(--muted-foreground); font-size: 12px; }
+.minute-status { display: block; margin-top: 6px; color: var(--muted-foreground); font-size: 12px; font-weight: 700; }
 .minute-actions { display: flex; flex-wrap: wrap; gap: 8px; justify-content: flex-end; }
 .ai-minutes-box { display: grid; gap: 12px; margin: 22px 24px; border: 1px solid #fed7aa; border-radius: 10px; background: #fff7ed; padding: 18px; }
 .ai-minutes-box > strong { color: var(--primary-dark); font-size: 12px; letter-spacing: .08em; text-transform: uppercase; }
 .ai-minutes-box textarea { width: 100%; border: 1px solid var(--border); border-radius: 8px; padding: 12px; resize: vertical; font: inherit; }
+.minute-edit-label { color: var(--muted-foreground); font-size: 12px; font-weight: 800; }
+.minutes-editor { overflow: hidden; border: 1px solid var(--border); border-radius: 10px; background: white; }
+.minutes-editor-toolbar { display: flex; flex-wrap: wrap; gap: 6px; border-bottom: 1px solid var(--border); background: #f8fafc; padding: 8px; }
+.minutes-editor-toolbar button { min-height: 30px; border: 1px solid var(--border); border-radius: 7px; background: white; padding: 0 10px; color: var(--foreground); font-size: 12px; font-weight: 800; }
+.minutes-editor-toolbar button.active { border-color: var(--primary); background: #fff7ed; color: var(--primary-dark); }
+.minutes-editor-content { min-height: 280px; padding: 14px 16px; }
+.minutes-editor-content .ProseMirror { min-height: 250px; outline: none; line-height: 1.7; }
+.minutes-editor-content .ProseMirror p { margin: 0 0 10px; }
+.minutes-editor-content .ProseMirror h2 { margin: 16px 0 8px; font-size: 18px; }
+.minutes-editor-content .ProseMirror ul { margin: 8px 0 12px; padding-left: 22px; }
 .key-summary { border: 1px solid #fed7aa; border-radius: 8px; background: rgba(255,255,255,.72); padding: 12px; }
 .key-summary ul { margin: 8px 0 0; padding-left: 18px; color: var(--muted-foreground); }
+.key-summary pre { margin: 10px 0 0; white-space: pre-wrap; font: inherit; line-height: 1.7; color: var(--foreground); }
 .minute-detail-panel > .secondary-button { margin: 0 24px 20px; }
 
 .chatbot-floating-button { position: fixed; right: 24px; bottom: 24px; z-index: 40; width: 56px; height: 56px; display: grid; place-items: center; border: 0; border-radius: 50%; background: var(--primary); color: white; box-shadow: 0 16px 34px rgba(243,115,33,.3); transition: transform .15s ease, box-shadow .15s ease; }

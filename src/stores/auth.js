@@ -144,6 +144,7 @@ export const useAuthStore = defineStore('auth', {
     },
     clearTokenRefreshTimer() {
       if (this.tokenRefreshTimerId) {
+        globalThis.clearTimeout(this.tokenRefreshTimerId)
         window.clearTimeout(this.tokenRefreshTimerId)
         this.tokenRefreshTimerId = null
       }
@@ -158,9 +159,10 @@ export const useAuthStore = defineStore('auth', {
         this.accessTokenExpiresAt - ACCESS_TOKEN_REFRESH_SAFETY_WINDOW_MS,
       )
       const delay = Math.max(1000, refreshAt - Date.now())
-      this.tokenRefreshTimerId = window.setTimeout(() => {
+      this.tokenRefreshTimerId = globalThis.setTimeout(() => {
         void this.ensureSessionFresh()
       }, delay)
+      this.tokenRefreshTimerId?.unref?.()
     },
     async refreshSession() {
       if (!this.refreshToken) return false
