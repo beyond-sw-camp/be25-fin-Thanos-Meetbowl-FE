@@ -106,3 +106,33 @@ export function shiftDateKst(date, deltaDays) {
 export function todayKst() {
   return new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Seoul' }).format(new Date())
 }
+
+// ISO/Date → epoch ms. 값이 없거나 파싱 불가면 null(정렬에서 '맨 뒤'로 보낼 수 있게).
+export function toEpochMs(value) {
+  if (!value) return null
+  const ms = new Date(value).getTime()
+  return Number.isNaN(ms) ? null : ms
+}
+
+// 정렬 비교자: 시각 오름차순(가까운 날짜=빠른 시각부터). 값이 비정상이면 항상 뒤로 보낸다.
+export function compareByEpochAsc(aValue, bValue) {
+  const a = toEpochMs(aValue)
+  const b = toEpochMs(bValue)
+  if (a === null && b === null) return 0
+  if (a === null) return 1
+  if (b === null) return -1
+  return a - b
+}
+
+// 정렬 비교자: 기준 시각(now)과의 거리 오름차순(오늘에 가장 가까운 것부터, 과거·미래 무관).
+// 값이 비정상이면 항상 뒤로 보낸다.
+export function compareByDistanceTo(now) {
+  return (aValue, bValue) => {
+    const a = toEpochMs(aValue)
+    const b = toEpochMs(bValue)
+    if (a === null && b === null) return 0
+    if (a === null) return 1
+    if (b === null) return -1
+    return Math.abs(a - now) - Math.abs(b - now)
+  }
+}

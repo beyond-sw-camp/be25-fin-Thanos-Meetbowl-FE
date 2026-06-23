@@ -4,7 +4,7 @@ import { openMeetingWindow } from '../../lib/meeting-route'
 import { useAuthStore } from '../../stores/auth'
 import { getMeetings, getRooms } from '../../lib/reservations'
 import { useUserNames } from '../../composables/useUserNames'
-import { todayKst, utcToKstClock, utcToKstDate } from '../../utils/dateTime'
+import { compareByEpochAsc, todayKst, utcToKstClock, utcToKstDate } from '../../utils/dateTime'
 // 메일·회의록·개인 일정 카드는 이번 작업 범위 밖이라 아직 목업 데이터를 쓴다.
 import { mails, minutes, myMeetings } from '../../data/mockData'
 
@@ -24,6 +24,7 @@ export default defineComponent({
     const rawMeetings = ref([])
     const rooms = ref([])
     const selectedId = ref('')
+    const loadError = ref(false)
 
     const roomNameMap = computed(() => {
       const map = {}
@@ -64,7 +65,7 @@ export default defineComponent({
     const todays = computed(() =>
       meetings.value
         .filter((meeting) => meeting.dateKst === todayKst() && meeting.status !== 'cancelled')
-        .sort((a, b) => a.scheduledAtMs - b.scheduledAtMs),
+        .sort((a, b) => compareByEpochAsc(a.scheduledAt, b.scheduledAt)),
     )
     // 현재 진행 중 — 날짜 무관, 모든 IN_PROGRESS.
     const liveMeetings = computed(() => meetings.value.filter((meeting) => meeting.status === 'live'))
@@ -76,7 +77,7 @@ export default defineComponent({
       () =>
         meetings.value
           .filter((meeting) => meeting.status === 'upcoming' || meeting.status === 'live')
-          .sort((a, b) => a.scheduledAtMs - b.scheduledAtMs)[0] || null,
+          .sort((a, b) => compareByEpochAsc(a.scheduledAt, b.scheduledAt))[0] || null,
     )
 
     // 회의 상세 표시 대상: 타임라인에서 고른 회의가 있으면 그것, 없으면 가장 가까운 예정 회의.
@@ -103,6 +104,7 @@ export default defineComponent({
     ])
 
     async function load() {
+      loadError.value = false
       try {
         const [meetingData, roomData] = await Promise.all([
           getMeetings({ role: 'all' }),
@@ -119,7 +121,9 @@ export default defineComponent({
         // 기본 선택 없음(selectedId=''): 회의 상세는 '가장 가까운 예정 회의'(nextMeeting)로 표시된다.
         // 타임라인에서 회의를 클릭하면 그 회의로 바뀐다.
       } catch {
+        // 조회 실패와 '회의 없음'을 구분하기 위해 에러 플래그를 세운다(빈 목록은 정상 상태일 수 있음).
         rawMeetings.value = []
+        loadError.value = true
       }
     }
     onMounted(load)
@@ -138,6 +142,7 @@ export default defineComponent({
       myMeetings,
       todayLabel,
       statusLabel,
+      loadError,
       openSelectedMeeting,
     }
   },
@@ -159,7 +164,8 @@ export default defineComponent({
             <em>{{ meeting.room }}</em>
             <small>{{ meeting.role === 'host' ? '주최' : '참석' }}</small>
           </button>
-          <p v-if="!todays.length" class="empty-text">오늘 예정된 회의가 없습니다.</p>
+          <p v-if="loadError" class="empty-text">회의 정보를 불러오지 못했습니다.</p>
+          <p v-else-if="!todays.length" class="empty-text">오늘 예정된 회의가 없습니다.</p>
         </article>
         <aside class="stack">
           <article class="card"><div class="card-head"><h2>회의 상세</h2></div>
@@ -173,6 +179,7 @@ export default defineComponent({
               </dl>
               <button v-if="selected.status === 'live'" class="primary-button small" @click="openSelectedMeeting">회의 입장</button>
             </template>
+            <p v-else-if="loadError" class="empty-text">회의 정보를 불러오지 못했습니다.</p>
             <p v-else class="empty-text">예정된 회의가 없습니다.</p>
           </article>
           <article class="card"><div class="card-head"><h2>개인 일정</h2></div>
