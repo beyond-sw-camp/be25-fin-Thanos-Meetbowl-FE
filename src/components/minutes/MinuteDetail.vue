@@ -21,8 +21,8 @@
       <template v-if="editing">
         <label class="minute-edit-label">요약</label>
         <textarea v-model="localDraft.summary" rows="5"></textarea>
-        <label class="minute-edit-label">본문 Tiptap JSON</label>
-        <textarea v-model="localDraft.content" rows="12"></textarea>
+        <label class="minute-edit-label">본문</label>
+        <MinutesEditor v-model="localDraft.content" :disabled="actionPending" />
         <div class="modal-actions">
           <button class="secondary-button" :disabled="actionPending" @click="$emit('cancel-edit')">취소</button>
           <button class="primary-button" :disabled="actionPending" @click="$emit('save-edit', { ...localDraft })">수정 저장</button>
@@ -43,8 +43,10 @@
 </template>
 
 <script setup>
-import { reactive, watch } from 'vue'
+import { defineAsyncComponent, reactive, watch } from 'vue'
 import TranscriptBox from './TranscriptBox.vue'
+
+const MinutesEditor = defineAsyncComponent(() => import('./MinutesEditor.vue'))
 
 const props = defineProps({
   minute: { type: Object, required: true },

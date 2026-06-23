@@ -207,3 +207,15 @@
   Tiptap editor 패키지가 아직 없어 본문 편집은 Tiptap JSON textarea로 연결했다. 리치 텍스트 편집기는 별도 단계에서 붙여야 한다.
 - 검증:
   통과: `npm run build`, `npm test`.
+
+2026-06-23 회의록 Tiptap 리치 텍스트 편집기 도입
+
+- 작업 목적: 회의록 본문 편집을 Tiptap JSON textarea에서 실제 리치 텍스트 editor로 교체한다.
+- 변경 파일: `package.json`, `package-lock.json`, `src/components/minutes/MinutesEditor.vue`, `src/components/minutes/MinuteDetail.vue`, `src/lib/minutes-content.js`, `src/styles/main.css`, `test/minutes-content.test.js`, 이 작업 기록 파일.
+- 동작 변경:
+  `@tiptap/vue-3`, `@tiptap/starter-kit`을 추가하고 회의록 본문 편집 시 굵게/목록/제목 toolbar가 있는 editor를 표시한다.
+  editor는 Tiptap JSON을 그대로 읽고 저장하므로 BE `minutes.content` 계약은 유지된다.
+  editor chunk는 async component로 분리해 회의록 상세 보기만 할 때 초기 bundle에 Tiptap 본문 코드를 싣지 않는다.
+  `npm audit fix`로 기존 Vite 취약점 패치 버전도 함께 반영했다.
+- 검증:
+  통과: `npm run build`, `npm test`, `npm audit --omit=dev`, `git diff --check`.

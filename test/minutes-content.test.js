@@ -1,7 +1,12 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
 
-import { extractTiptapText, isValidTiptapDocument } from '../src/lib/minutes-content.js'
+import {
+  extractTiptapText,
+  isValidTiptapDocument,
+  parseTiptapDocument,
+  stringifyTiptapDocument,
+} from '../src/lib/minutes-content.js'
 
 test('extractTiptapText extracts readable text from a Tiptap document', () => {
   const content = JSON.stringify({
@@ -19,4 +24,12 @@ test('isValidTiptapDocument requires doc type and content array', () => {
   assert.equal(isValidTiptapDocument('{"type":"doc","content":[]}'), true)
   assert.equal(isValidTiptapDocument('{"type":"paragraph","content":[]}'), false)
   assert.equal(isValidTiptapDocument('{'), false)
+})
+
+test('parseTiptapDocument falls back to an empty editable document', () => {
+  const parsed = parseTiptapDocument('{')
+
+  assert.equal(parsed.type, 'doc')
+  assert.equal(Array.isArray(parsed.content), true)
+  assert.equal(stringifyTiptapDocument(parsed), '{"type":"doc","content":[{"type":"paragraph","content":[]}]}')
 })

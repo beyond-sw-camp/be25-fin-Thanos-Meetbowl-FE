@@ -1076,6 +1076,15 @@ input:focus { border-color: var(--primary); box-shadow: 0 0 0 3px rgba(243,115,3
 .ai-minutes-box > strong { color: var(--primary-dark); font-size: 12px; letter-spacing: .08em; text-transform: uppercase; }
 .ai-minutes-box textarea { width: 100%; border: 1px solid var(--border); border-radius: 8px; padding: 12px; resize: vertical; font: inherit; }
 .minute-edit-label { color: var(--muted-foreground); font-size: 12px; font-weight: 800; }
+.minutes-editor { overflow: hidden; border: 1px solid var(--border); border-radius: 10px; background: white; }
+.minutes-editor-toolbar { display: flex; flex-wrap: wrap; gap: 6px; border-bottom: 1px solid var(--border); background: #f8fafc; padding: 8px; }
+.minutes-editor-toolbar button { min-height: 30px; border: 1px solid var(--border); border-radius: 7px; background: white; padding: 0 10px; color: var(--foreground); font-size: 12px; font-weight: 800; }
+.minutes-editor-toolbar button.active { border-color: var(--primary); background: #fff7ed; color: var(--primary-dark); }
+.minutes-editor-content { min-height: 280px; padding: 14px 16px; }
+.minutes-editor-content .ProseMirror { min-height: 250px; outline: none; line-height: 1.7; }
+.minutes-editor-content .ProseMirror p { margin: 0 0 10px; }
+.minutes-editor-content .ProseMirror h2 { margin: 16px 0 8px; font-size: 18px; }
+.minutes-editor-content .ProseMirror ul { margin: 8px 0 12px; padding-left: 22px; }
 .key-summary { border: 1px solid #fed7aa; border-radius: 8px; background: rgba(255,255,255,.72); padding: 12px; }
 .key-summary ul { margin: 8px 0 0; padding-left: 18px; color: var(--muted-foreground); }
 .key-summary pre { margin: 10px 0 0; white-space: pre-wrap; font: inherit; line-height: 1.7; color: var(--foreground); }

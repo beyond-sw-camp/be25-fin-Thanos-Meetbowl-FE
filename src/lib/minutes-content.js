@@ -12,6 +12,27 @@ export function isValidTiptapDocument(content) {
   return Boolean(document && document.type === 'doc' && Array.isArray(document.content))
 }
 
+export function parseTiptapDocument(content) {
+  const document = parseContent(content)
+  return isValidTiptapDocument(document) ? document : emptyTiptapDocument()
+}
+
+export function stringifyTiptapDocument(document) {
+  return JSON.stringify(parseTiptapDocument(document))
+}
+
+export function emptyTiptapDocument() {
+  return {
+    type: 'doc',
+    content: [
+      {
+        type: 'paragraph',
+        content: [],
+      },
+    ],
+  }
+}
+
 function parseContent(content) {
   if (!content) return null
   if (typeof content === 'object') return content
