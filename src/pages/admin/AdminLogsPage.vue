@@ -701,12 +701,45 @@ function toIsoUtc(value) {
   justify-content: space-between;
   align-items: center;
   gap: 12px;
+  padding: 16px 4px 2px;
+  border-top: 1px solid var(--border);
 }
 
 .admin-log-count {
   margin: 0;
   color: var(--muted-foreground);
   font-size: 13px;
+  font-weight: 600;
+}
+
+.admin-log-footer :deep(.pagination) {
+  margin-top: 0;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.admin-log-footer :deep(.pagination button) {
+  min-width: 42px;
+  min-height: 36px;
+  padding: 0 14px;
+  border-radius: 10px;
+  background: white;
+  color: var(--foreground);
+  font-weight: 700;
+  transition: background-color 0.15s ease, border-color 0.15s ease, transform 0.15s ease;
+}
+
+.admin-log-footer :deep(.pagination button:hover:not(:disabled)) {
+  background: var(--muted);
+  transform: translateY(-1px);
+}
+
+.admin-log-footer :deep(.pagination span) {
+  min-width: 54px;
+  color: var(--foreground);
+  font-size: 14px;
+  font-weight: 700;
+  text-align: center;
 }
 
 .audit-log-detail-modal {
@@ -782,6 +815,11 @@ function toIsoUtc(value) {
   .admin-log-footer {
     flex-direction: column;
     align-items: stretch;
+    gap: 10px;
+  }
+
+  .admin-log-footer :deep(.pagination) {
+    justify-content: flex-start;
   }
 }
 </style>
