@@ -111,6 +111,21 @@ const detailSubtitle = computed(() => {
     .filter((value) => value && value !== '-')
     .join(' · ')
 })
+const additionalInfoItems = computed(() => {
+  if (!selectedLog.value) return []
+
+  const items = []
+
+  if (selectedLog.value.reason && selectedLog.value.reason !== '-') {
+    items.push({
+      key: 'reason',
+      label: '사유 또는 메시지',
+      value: selectedLog.value.reason,
+    })
+  }
+
+  return items
+})
 
 onMounted(() => {
   applyDateRangePreset(filterForm.dateRange)
@@ -363,10 +378,6 @@ function formatAuxiliaryId(value) {
   return value || '-'
 }
 
-function formatActorName(value) {
-  return value || '-'
-}
-
 function formatIpAddress(value) {
   return value || '-'
 }
@@ -492,7 +503,6 @@ function toIsoUtc(value) {
               <th>작업 일시</th>
               <th>작업 내용</th>
               <th>대상</th>
-              <th>작업자</th>
               <th>작업자 IP</th>
               <th>결과</th>
               <th>상세</th>
@@ -500,7 +510,7 @@ function toIsoUtc(value) {
           </thead>
           <tbody>
             <tr v-if="!logs.length">
-              <td colspan="7">
+              <td colspan="6">
                 <div class="empty-state-inline">
                   {{ emptyStateMessage }}
                 </div>
@@ -516,9 +526,6 @@ function toIsoUtc(value) {
               <td class="target-cell" :title="buildAuditTargetTooltip(log)">
                 <strong>{{ getAuditTargetTypeDisplay(log) }}</strong>
                 <small>{{ buildAuditTargetSummary(log) }}</small>
-              </td>
-              <td class="actor-cell" :title="formatActorName(log.actorName)">
-                {{ formatActorName(log.actorName) }}
               </td>
               <td class="ip-cell" :title="formatIpAddress(log.ipAddress)">
                 {{ formatIpAddress(log.ipAddress) }}
@@ -543,63 +550,67 @@ function toIsoUtc(value) {
 
       <div v-if="detailOpen" class="modal-backdrop" @click.self="closeDetail">
         <article class="card write-modal detail-modal audit-log-detail-modal">
-          <header>
+          <header class="audit-log-detail-header">
             <div>
               <h2>{{ detailLoading ? '작업 로그 상세 조회 중' : '작업 로그 상세' }}</h2>
               <p v-if="!detailLoading && detailSubtitle" class="detail-subtitle">
                 {{ detailSubtitle }}
               </p>
             </div>
-            <button type="button" @click="closeDetail">닫기</button>
+            <button type="button" class="detail-close-button" @click="closeDetail">닫기</button>
           </header>
 
-          <div v-if="detailLoading" class="empty-state">작업 로그 상세 정보를 불러오는 중입니다.</div>
-          <div v-else-if="detailError" class="error-box">{{ detailError }}</div>
-          <template v-else-if="selectedLog">
-            <section class="detail-section">
-              <h3>작업 내용</h3>
-              <div class="detail-section-body">
-                <ul v-if="changeSummary.length" class="change-summary-list prominent">
-                  <li v-for="change in changeSummary" :key="change.key" :title="change.title || ''">
-                    <strong>{{ change.label }}</strong>
-                    <span>{{ change.text }}</span>
-                  </li>
-                </ul>
-                <p v-else class="empty-change-text">표시할 작업 내용이 없습니다.</p>
+          <div class="detail-modal-body">
+            <div v-if="detailLoading" class="detail-feedback empty-state">작업 로그 상세 정보를 불러오는 중입니다.</div>
+            <div v-else-if="detailError" class="detail-feedback error-box">{{ detailError }}</div>
+            <template v-else-if="selectedLog">
+              <section class="detail-section detail-section-compact">
+                <h3>작업 내용</h3>
+                <div class="detail-section-body">
+                  <ul v-if="changeSummary.length" class="change-summary-list prominent">
+                    <li v-for="change in changeSummary" :key="change.key" :title="change.title || ''">
+                      <strong>{{ change.label }}</strong>
+                      <span>{{ change.text }}</span>
+                    </li>
+                  </ul>
+                  <p v-else class="empty-change-text">표시할 작업 내용이 없습니다.</p>
+                </div>
+              </section>
+
+              <div class="detail-grid">
+                <section class="detail-section">
+                  <h3>기본 정보</h3>
+                  <dl class="detail-list detail-kv-list">
+                    <div><dt>작업 내용</dt><dd>{{ getAuditDisplayTitle(selectedLog) }}</dd></div>
+                    <div><dt>결과</dt><dd>{{ formatAuditResultLabel(selectedLog.result) }}</dd></div>
+                    <div><dt>발생 일시</dt><dd>{{ formatDateTime(selectedLog.createdAt) }}</dd></div>
+                    <div><dt>작업자</dt><dd>{{ selectedLog.actorName || '-' }}</dd></div>
+                    <div><dt>작업자 IP</dt><dd>{{ selectedLog.ipAddress || '-' }}</dd></div>
+                  </dl>
+                </section>
+
+                <section class="detail-section">
+                  <h3>대상 정보</h3>
+                  <dl class="detail-list detail-kv-list">
+                    <div><dt>대상 유형</dt><dd>{{ getAuditTargetTypeDisplay(selectedLog) }}</dd></div>
+                    <div><dt>대상 ID</dt><dd>{{ formatAuxiliaryId(selectedLog.targetId) }}</dd></div>
+                    <div><dt>대상 로그인 ID</dt><dd>{{ selectedLog.targetLoginId || '-' }}</dd></div>
+                    <div><dt>변경 대상 이름</dt><dd>{{ selectedLog.targetName || '-' }}</dd></div>
+                  </dl>
+                </section>
               </div>
-            </section>
 
-            <div class="detail-grid">
-              <section class="detail-section">
-                <h3>작업 정보</h3>
-                <dl class="detail-list">
-                  <div><dt>작업 내용</dt><dd>{{ getAuditDisplayTitle(selectedLog) }}</dd></div>
-                  <div><dt>결과</dt><dd>{{ formatAuditResultLabel(selectedLog.result) }}</dd></div>
-                  <div><dt>작업 일시</dt><dd>{{ formatDateTime(selectedLog.createdAt) }}</dd></div>
-                  <div><dt>작업자 IP</dt><dd>{{ selectedLog.ipAddress || '-' }}</dd></div>
-                  <div><dt>작업자</dt><dd>{{ selectedLog.actorName || '-' }}</dd></div>
+              <section v-if="additionalInfoItems.length" class="detail-section detail-section-compact">
+                <h3>추가 정보</h3>
+                <dl class="detail-list detail-kv-list detail-kv-list-single">
+                  <div v-for="item in additionalInfoItems" :key="item.key">
+                    <dt>{{ item.label }}</dt>
+                    <dd>{{ item.value }}</dd>
+                  </div>
                 </dl>
               </section>
-
-              <section class="detail-section">
-                <h3>대상 정보</h3>
-                <dl class="detail-list">
-                  <div><dt>대상 유형</dt><dd>{{ getAuditTargetTypeDisplay(selectedLog) }}</dd></div>
-                  <div><dt>대상 ID</dt><dd>{{ formatAuxiliaryId(selectedLog.targetId) }}</dd></div>
-                  <div><dt>대상 로그인 ID</dt><dd>{{ selectedLog.targetLoginId || '-' }}</dd></div>
-                  <div><dt>변경 대상 이름</dt><dd>{{ selectedLog.targetName || '-' }}</dd></div>
-                </dl>
-              </section>
-            </div>
-
-            <section class="detail-section">
-              <h3>추가 정보</h3>
-              <dl class="detail-list">
-                <div><dt>사유 또는 메시지</dt><dd>{{ selectedLog.reason || '-' }}</dd></div>
-                <div><dt>감사 로그 ID</dt><dd>{{ formatAuxiliaryId(selectedLog.auditLogId) }}</dd></div>
-              </dl>
-            </section>
-          </template>
+            </template>
+          </div>
         </article>
       </div>
     </template>
@@ -660,27 +671,22 @@ function toIsoUtc(value) {
 
 .admin-log-table th:nth-child(3),
 .admin-log-table td:nth-child(3) {
-  width: 24%;
+  width: 23%;
 }
 
 .admin-log-table th:nth-child(4),
 .admin-log-table td:nth-child(4) {
-  width: 10%;
+  width: 21%;
 }
 
 .admin-log-table th:nth-child(5),
 .admin-log-table td:nth-child(5) {
-  width: 12%;
+  width: 9%;
 }
 
 .admin-log-table th:nth-child(6),
 .admin-log-table td:nth-child(6) {
-  width: 8%;
-}
-
-.admin-log-table th:nth-child(7),
-.admin-log-table td:nth-child(7) {
-  width: 10%;
+  width: 11%;
 }
 
 .admin-log-table th,
@@ -691,7 +697,6 @@ function toIsoUtc(value) {
 }
 
 .date-cell,
-.actor-cell,
 .ip-cell,
 .detail-cell {
   white-space: nowrap;
@@ -727,11 +732,6 @@ function toIsoUtc(value) {
   font-size: 12px;
 }
 
-.actor-cell {
-  color: var(--foreground);
-  font-weight: 600;
-}
-
 .ip-cell {
   color: var(--muted-foreground);
   font-weight: 500;
@@ -759,12 +759,6 @@ function toIsoUtc(value) {
 .detail-link-button:hover {
   color: var(--primary);
   text-decoration: underline;
-}
-
-.detail-list dd,
-.detail-section-body span {
-  word-break: break-word;
-  overflow-wrap: anywhere;
 }
 
 .admin-log-footer {
@@ -815,7 +809,45 @@ function toIsoUtc(value) {
 }
 
 .audit-log-detail-modal {
-  width: min(980px, calc(100vw - 32px));
+  width: min(900px, calc(100vw - 32px));
+  max-height: min(82vh, 760px);
+  display: flex;
+  flex-direction: column;
+  padding: 0;
+  overflow: hidden;
+}
+
+.audit-log-detail-header {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 18px 22px 14px;
+  border-bottom: 1px solid var(--border);
+  background: linear-gradient(180deg, #ffffff 0%, #fcfcfd 100%);
+}
+
+.audit-log-detail-header h2 {
+  margin: 0;
+  font-size: 20px;
+}
+
+.detail-close-button {
+  flex: 0 0 auto;
+  min-height: 34px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: white;
+  padding: 0 12px;
+  color: var(--foreground);
+  font-weight: 600;
+}
+
+.detail-close-button:hover {
+  background: var(--muted);
 }
 
 .detail-subtitle {
@@ -824,16 +856,26 @@ function toIsoUtc(value) {
   font-size: 13px;
 }
 
+.detail-modal-body {
+  min-height: 0;
+  overflow-y: auto;
+  padding: 18px 22px 28px;
+}
+
+.detail-feedback {
+  margin: 0;
+}
+
 .detail-grid {
   display: grid;
-  gap: 16px;
+  gap: 14px;
 }
 
 .detail-section {
-  margin-top: 18px;
-  padding: 18px;
+  margin-top: 14px;
+  padding: 14px 16px;
   border: 1px solid var(--border);
-  border-radius: 14px;
+  border-radius: 12px;
   background: #fcfcfd;
 }
 
@@ -841,14 +883,19 @@ function toIsoUtc(value) {
   margin-top: 0;
 }
 
+.detail-section-compact {
+  padding-top: 12px;
+  padding-bottom: 12px;
+}
+
 .detail-section h3 {
-  margin: 0 0 14px;
-  font-size: 15px;
+  margin: 0 0 10px;
+  font-size: 14px;
 }
 
 .detail-section-body {
   display: grid;
-  gap: 12px;
+  gap: 10px;
 }
 
 .change-summary-list {
@@ -859,7 +906,7 @@ function toIsoUtc(value) {
 }
 
 .change-summary-list li {
-  line-height: 1.6;
+  line-height: 1.5;
   word-break: break-word;
 }
 
@@ -868,13 +915,56 @@ function toIsoUtc(value) {
   gap: 2px;
 }
 
+.change-summary-list.prominent strong {
+  font-size: 13px;
+}
+
 .change-summary-list.prominent span {
   color: var(--muted-foreground);
+  font-size: 13px;
 }
 
 .empty-change-text {
   margin: 0;
   color: var(--muted-foreground);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.detail-list dd,
+.detail-section-body span {
+  word-break: break-word;
+  overflow-wrap: anywhere;
+}
+
+.detail-kv-list {
+  display: grid;
+  gap: 10px;
+  margin: 0;
+}
+
+.detail-kv-list div {
+  display: grid;
+  grid-template-columns: 112px minmax(0, 1fr);
+  gap: 8px 12px;
+  align-items: start;
+}
+
+.detail-kv-list dt {
+  color: var(--muted-foreground);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.detail-kv-list dd {
+  margin: 0;
+  color: var(--foreground);
+  font-size: 13px;
+  line-height: 1.55;
+}
+
+.detail-kv-list-single div {
+  grid-template-columns: 112px minmax(0, 1fr);
 }
 
 @media (min-width: 960px) {
@@ -893,6 +983,23 @@ function toIsoUtc(value) {
 
   .admin-log-footer :deep(.pagination) {
     justify-content: flex-start;
+  }
+
+  .audit-log-detail-modal {
+    width: min(100vw - 20px, 900px);
+    max-height: calc(100vh - 20px);
+  }
+
+  .audit-log-detail-header,
+  .detail-modal-body {
+    padding-left: 16px;
+    padding-right: 16px;
+  }
+
+  .detail-kv-list div,
+  .detail-kv-list-single div {
+    grid-template-columns: 1fr;
+    gap: 4px;
   }
 }
 </style>
