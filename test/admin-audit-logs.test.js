@@ -187,6 +187,14 @@ test('audit log snapshot utilities mask sensitive keys and translate labels', ()
   assert.equal(formatActionTypeLabel('USER_DELETE'), K.userDelete)
   assert.equal(formatActionTypeLabel('USER_PASSWORD_RESET'), K.passwordReset)
   assert.equal(formatActionTypeLabel('ORGANIZATION_MEMBER_EXCEL_IMPORT'), K.excelImport)
+  assert.notEqual(
+    formatActionTypeLabel('USER_PASSWORD_RESET_REQUEST_APPROVE'),
+    'USER_PASSWORD_RESET_REQUEST_APPROVE',
+  )
+  assert.notEqual(
+    formatActionTypeLabel('USER_PASSWORD_RESET_REQUEST_REJECT'),
+    'USER_PASSWORD_RESET_REQUEST_REJECT',
+  )
   assert.equal(formatTargetTypeLabel('MAIL_RETENTION_POLICY'), K.mailRetentionPolicy)
   assert.equal(formatTargetTypeLabel('RETENTION_POLICY'), K.retentionPolicy)
   assert.equal(formatTargetTypeLabel('ORGANIZATION_MEMBER_EXCEL'), K.organizationMemberExcel)
@@ -206,15 +214,17 @@ test('audit log action and target display prefer backend display fields', () => 
   assert.equal(getAuditDisplayTitle(log), `${K.userUpdate}(BE 제목)`)
 })
 
-test('audit log action and target display fall back safely when mapping is missing', () => {
+test('audit log action display localizes raw action codes from backend fields', () => {
   const log = {
-    actionType: 'UNKNOWN_ACTION',
+    actionType: 'USER_PASSWORD_RESET_REQUEST_APPROVE',
+    actionLabel: 'USER_PASSWORD_RESET_REQUEST_APPROVE',
+    displayTitle: 'USER_PASSWORD_RESET_REQUEST_APPROVE',
     targetType: 'UNKNOWN_TARGET',
   }
 
-  assert.equal(getAuditActionDisplay(log), 'UNKNOWN_ACTION')
+  assert.notEqual(getAuditActionDisplay(log), 'USER_PASSWORD_RESET_REQUEST_APPROVE')
   assert.equal(getAuditTargetTypeDisplay(log), 'UNKNOWN_TARGET')
-  assert.equal(getAuditDisplayTitle(log), 'UNKNOWN_ACTION')
+  assert.notEqual(getAuditDisplayTitle(log), 'USER_PASSWORD_RESET_REQUEST_APPROVE')
 })
 
 test('user-related audit action helper recognizes the requested raw action types', () => {

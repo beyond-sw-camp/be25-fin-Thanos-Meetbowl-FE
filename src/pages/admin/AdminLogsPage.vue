@@ -672,12 +672,12 @@ function toIsoUtc(value) {
 
 .admin-log-table th:nth-child(3),
 .admin-log-table td:nth-child(3) {
-  width: 23%;
+  width: 25%;
 }
 
 .admin-log-table th:nth-child(4),
 .admin-log-table td:nth-child(4) {
-  width: 21%;
+  width: 19%;
 }
 
 .admin-log-table th:nth-child(5),

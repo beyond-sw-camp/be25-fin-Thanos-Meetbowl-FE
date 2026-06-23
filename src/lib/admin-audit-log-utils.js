@@ -109,6 +109,71 @@ const ACTION_TYPE_LABELS = {
   MAIL_RETENTION_POLICY_UPDATE: '메일 보관 정책 수정',
 }
 
+const ACTION_SUFFIX_LABELS = [
+  ['STATUS_CHANGED', '\uc0c1\ud0dc \ubcc0\uacbd'],
+  ['STATUS_CHANGE', '\uc0c1\ud0dc \ubcc0\uacbd'],
+  ['UPDATE_STATUS', '\uc0c1\ud0dc \ubcc0\uacbd'],
+  ['PASSWORD_INITIALIZE', '\ube44\ubc00\ubc88\ud638 \ucd08\uae30\ud654'],
+  ['PASSWORD_RESET', '\ube44\ubc00\ubc88\ud638 \ucd08\uae30\ud654'],
+  ['DOWNLOAD', '\ub2e4\uc6b4\ub85c\ub4dc'],
+  ['IMPORT', '\uc5c5\ub85c\ub4dc'],
+  ['EXPORT', '\ub2e4\uc6b4\ub85c\ub4dc'],
+  ['APPROVED', '\uc2b9\uc778'],
+  ['APPROVE', '\uc2b9\uc778'],
+  ['REJECTED', '\uac70\uc808'],
+  ['REJECT', '\uac70\uc808'],
+  ['CREATED', '\uc0dd\uc131'],
+  ['CREATE', '\uc0dd\uc131'],
+  ['UPDATED', '\uc218\uc815'],
+  ['UPDATE', '\uc218\uc815'],
+  ['DELETED', '\uc0ad\uc81c'],
+  ['DELETE', '\uc0ad\uc81c'],
+]
+
+const ACTION_SUBJECT_LABELS = {
+  USER_PASSWORD_RESET_REQUEST: '\ube44\ubc00\ubc88\ud638 \uc7ac\uc124\uc815 \uc694\uccad',
+  USER_PASSWORD_RESET: '\ud68c\uc6d0 \ube44\ubc00\ubc88\ud638 \ucd08\uae30\ud654',
+  PASSWORD_RESET_REQUEST: '\ube44\ubc00\ubc88\ud638 \uc7ac\uc124\uc815 \uc694\uccad',
+  PASSWORD_RESET: '\ube44\ubc00\ubc88\ud638 \ucd08\uae30\ud654',
+  ORGANIZATION_MEMBER_EXCEL: '\uc870\uc9c1/\ud68c\uc6d0 \uc5d1\uc140',
+  ORGANIZATION_EXCEL: '\uc870\uc9c1/\ud68c\uc6d0 \uc5d1\uc140',
+  MAIL_RETENTION_POLICY: '\uba54\uc77c \ubcf4\uad00 \uc815\ucc45',
+  RETENTION_POLICY: '\ubcf4\uad00 \uc815\ucc45',
+  MEETING_ROOM: '\ud68c\uc758\uc2e4',
+  AFFILIATE: '\uc870\uc9c1',
+  DEPARTMENT: '\ubd80\uc11c',
+  TEAM: '\ud300',
+  POSITION: '\uc9c1\uae09',
+  ORGANIZATION: '\uc870\uc9c1',
+  USER: '\ud68c\uc6d0',
+  AUTH: '\uc778\uc99d',
+  ADMIN_PERMISSION: '\uad00\ub9ac\uc790 \uad8c\ud55c',
+}
+
+const ACTION_TOKEN_LABELS = {
+  USER: '\ud68c\uc6d0',
+  PASSWORD: '\ube44\ubc00\ubc88\ud638',
+  RESET: '\uc7ac\uc124\uc815',
+  REQUEST: '\uc694\uccad',
+  ORGANIZATION: '\uc870\uc9c1',
+  MEMBER: '\ud68c\uc6d0',
+  EXCEL: '\uc5d1\uc140',
+  MAIL: '\uba54\uc77c',
+  RETENTION: '\ubcf4\uad00',
+  POLICY: '\uc815\ucc45',
+  MEETING: '\ud68c\uc758',
+  ROOM: '\uc2e4',
+  AFFILIATE: '\uc870\uc9c1',
+  DEPARTMENT: '\ubd80\uc11c',
+  TEAM: '\ud300',
+  POSITION: '\uc9c1\uae09',
+  STATUS: '\uc0c1\ud0dc',
+  CHANGE: '\ubcc0\uacbd',
+  AUTH: '\uc778\uc99d',
+  ADMIN: '\uad00\ub9ac\uc790',
+  PERMISSION: '\uad8c\ud55c',
+}
+
 const TARGET_TYPE_LABELS = {
   USER: '회원',
   ORGANIZATION: '조직',
@@ -221,7 +286,10 @@ export function formatAuditResultLabel(result) {
 }
 
 export function formatActionTypeLabel(actionType) {
-  return ACTION_TYPE_LABELS[actionType] || actionType || '-'
+  const normalized = normalizeActionCode(actionType)
+  if (!normalized) return '-'
+
+  return ACTION_TYPE_LABELS[normalized] || buildActionTypeLabel(normalized)
 }
 
 export function formatTargetTypeLabel(targetType) {
@@ -233,8 +301,8 @@ export function isUserRelatedAuditAction(actionType) {
 }
 
 export function getAuditActionDisplay(log) {
-  if (log?.actionLabel) return sanitizeSensitiveText(String(log.actionLabel))
-  if (log?.displayTitle) return sanitizeSensitiveText(String(log.displayTitle))
+  if (log?.actionLabel) return formatAuditActionText(log.actionLabel, log?.actionType)
+  if (log?.displayTitle) return formatAuditActionText(log.displayTitle, log?.actionType)
   return formatActionTypeLabel(log?.actionType)
 }
 
@@ -244,8 +312,8 @@ export function getAuditTargetTypeDisplay(log) {
 }
 
 export function getAuditDisplayTitle(log) {
-  if (log?.displayTitle) return sanitizeSensitiveText(String(log.displayTitle))
-  if (log?.actionLabel) return sanitizeSensitiveText(String(log.actionLabel))
+  if (log?.displayTitle) return formatAuditActionText(log.displayTitle, log?.actionType)
+  if (log?.actionLabel) return formatAuditActionText(log.actionLabel, log?.actionType)
   return formatActionTypeLabel(log?.actionType)
 }
 
@@ -707,6 +775,63 @@ function normalizePriorityValue(value) {
   if (value === null || value === undefined) return ''
   const normalized = String(value).trim()
   return normalized && normalized !== '-' ? normalized : ''
+}
+
+function formatAuditActionText(primaryValue, fallbackActionType) {
+  const primaryText = normalizePriorityValue(primaryValue)
+  if (primaryText) {
+    const normalizedPrimary = normalizeActionCode(primaryText)
+    if (normalizedPrimary) {
+      return formatActionTypeLabel(normalizedPrimary)
+    }
+
+    return sanitizeSensitiveText(primaryText)
+  }
+
+  const normalizedFallback = normalizeActionCode(fallbackActionType)
+  if (normalizedFallback) {
+    return formatActionTypeLabel(normalizedFallback)
+  }
+
+  return sanitizeSensitiveText(String(primaryValue))
+}
+
+function normalizeActionCode(value) {
+  if (value === null || value === undefined) return ''
+  const normalized = String(value).trim()
+  return /^[A-Z0-9_]+$/.test(normalized) ? normalized : ''
+}
+
+function buildActionTypeLabel(actionType) {
+  for (const [suffix, suffixLabel] of ACTION_SUFFIX_LABELS) {
+    if (!actionType.endsWith(`_${suffix}`)) continue
+
+    const subjectCode = actionType.slice(0, -(`_${suffix}`).length)
+    const subjectLabel =
+      ACTION_TYPE_LABELS[subjectCode] ||
+      ACTION_SUBJECT_LABELS[subjectCode] ||
+      formatActionSubjectLabel(subjectCode)
+
+    if (!subjectLabel || subjectLabel === '-') {
+      return suffixLabel
+    }
+
+    return `${subjectLabel} ${suffixLabel}`
+  }
+
+  return formatActionSubjectLabel(actionType)
+}
+
+function formatActionSubjectLabel(actionCode) {
+  if (!actionCode) return '-'
+  if (ACTION_SUBJECT_LABELS[actionCode]) return ACTION_SUBJECT_LABELS[actionCode]
+
+  const parts = actionCode
+    .split('_')
+    .map((part) => ACTION_SUBJECT_LABELS[part] || ACTION_TOKEN_LABELS[part] || part)
+    .filter(Boolean)
+
+  return parts.length ? parts.join(' ') : actionCode
 }
 
 function isSensitiveKey(key) {
