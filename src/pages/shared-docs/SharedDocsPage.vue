@@ -103,6 +103,7 @@
             <iframe v-else-if="filePreviewKind === 'pdf'" :src="filePreviewUrl" title="파일 미리보기"></iframe>
             <pre v-else-if="filePreviewKind === 'text'">{{ filePreviewText }}</pre>
             <dl v-else class="file-info-list">
+              <div v-if="filePreviewKind === 'unsupported'" class="file-info-notice"><dt>미리보기</dt><dd>지원하지 않는 파일 형식입니다.</dd></div>
               <div><dt>파일명</dt><dd>{{ openDoc.originalFileName }}</dd></div>
               <div><dt>형식</dt><dd>{{ openDoc.contentType || '-' }}</dd></div>
               <div><dt>크기</dt><dd>{{ formatSize(openDoc.sizeBytes) }}</dd></div>
@@ -491,26 +492,34 @@ async function submitUpload() {
   if (!activeSpaceId.value || !uploadDraft.value.files.length || uploadLoading.value) return
   uploadLoading.value = true
   const targetFiles = [...uploadDraft.value.files]
+  let uploadResults = []
   try {
-    // BE는 단일 파일 엔드포인트라, 선택한 파일을 순차로 각각 업로드한다.
-    for (const file of targetFiles) {
-      await uploadSharedWorkspaceFile(activeSpaceId.value, file)
-    }
-  } catch (error) {
-    // 실패를 조용히 삼키지 않고 사용자에게 알린다(모달은 유지해 재시도 가능).
-    showToast('파일 업로드 실패', error?.message || '업로드 중 문제가 발생했습니다.')
-    return
+    // BE는 단일 파일 엔드포인트라, 각 파일 업로드 결과를 따로 집계한다.
+    uploadResults = await Promise.allSettled(targetFiles.map((file) => uploadSharedWorkspaceFile(activeSpaceId.value, file)))
   } finally {
     uploadLoading.value = false
   }
-  uploadOpen.value = false
-  filesBySpace.value.delete(activeSpaceId.value)
-  await selectSpace(activeSpaceId.value)
-  if (openDoc.value) {
-    const refreshed = files.value.find((file) => file.fileId === openDoc.value.fileId)
-    if (refreshed) await openFile(refreshed)
+
+  const failedFiles = targetFiles.filter((_, index) => uploadResults[index]?.status === 'rejected')
+  const successCount = targetFiles.length - failedFiles.length
+  if (successCount > 0) {
+    filesBySpace.value.delete(activeSpaceId.value)
+    await selectSpace(activeSpaceId.value)
+    if (openDoc.value) {
+      const refreshed = files.value.find((file) => file.fileId === openDoc.value.fileId)
+      if (refreshed) await openFile(refreshed)
+    }
   }
-  showToast('파일 업로드 완료', `공유 파일 ${targetFiles.length}개를 업로드했습니다.`)
+
+  if (failedFiles.length > 0) {
+    uploadDraft.value.files = failedFiles
+    showToast('파일 업로드 일부 실패', `${targetFiles.length}개 중 ${successCount}개 성공, ${failedFiles.length}개 실패`)
+    return
+  }
+
+  uploadOpen.value = false
+  uploadDraft.value.files = []
+  showToast('파일 업로드 완료', `공유 파일 ${successCount}개를 업로드했습니다.`)
 }
 
 function toggleFileActionMenu(fileId) {

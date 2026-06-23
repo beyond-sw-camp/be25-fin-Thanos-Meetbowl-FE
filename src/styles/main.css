@@ -660,6 +660,7 @@ input:focus { border-color: var(--primary); box-shadow: 0 0 0 3px rgba(243,115,3
 .file-preview-body pre, .file-preview-panel pre { min-height: 260px; overflow: auto; white-space: pre-wrap; margin: 0; border: 1px solid var(--border); border-radius: 8px; background: white; padding: 14px; color: var(--foreground); font: 13px/1.65 ui-monospace, SFMono-Regular, Menlo, monospace; }
 .file-info-list { display: grid; gap: 8px; margin: 0; }
 .file-info-list div { display: grid; grid-template-columns: 88px minmax(0, 1fr); gap: 12px; border: 1px solid var(--border); border-radius: 8px; background: white; padding: 10px 12px; }
+.file-info-list .file-info-notice { border-color: #fed7aa; background: #fff7ed; }
 .file-info-list dt { color: var(--muted-foreground); font-size: 12px; font-weight: 800; }
 .file-info-list dd { min-width: 0; margin: 0; overflow-wrap: anywhere; }
 .file-preview-panel { display: grid; gap: 12px; }

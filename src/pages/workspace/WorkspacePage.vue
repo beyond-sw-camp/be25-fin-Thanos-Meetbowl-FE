@@ -241,6 +241,7 @@
           <iframe v-else-if="drivePreviewKind === 'pdf'" :src="drivePreviewUrl" title="파일 미리보기"></iframe>
           <pre v-else-if="drivePreviewKind === 'text'">{{ drivePreviewText }}</pre>
           <dl v-else class="file-info-list">
+            <div v-if="drivePreviewKind === 'unsupported'" class="file-info-notice"><dt>미리보기</dt><dd>지원하지 않는 파일 형식입니다.</dd></div>
             <div><dt>파일명</dt><dd>{{ drivePreviewFile?.originalFileName }}</dd></div>
             <div><dt>형식</dt><dd>{{ drivePreviewFile?.contentType || '-' }}</dd></div>
             <div><dt>크기</dt><dd>{{ formatSize(drivePreviewFile?.sizeBytes) }}</dd></div>
@@ -578,16 +579,23 @@ async function uploadPersonalFiles(fileList) {
   const files = Array.from(fileList || [])
   if (!files.length || driveUploading.value) return
   driveUploading.value = true
+  let uploadResults = []
   try {
-    // 업로드 API는 단일 파일이라 선택/드롭한 파일을 순차로 각각 올린다.
-    for (const file of files) {
-      await uploadDriveFile(file)
-    }
+    // 업로드 API는 단일 파일이라, 각 파일 업로드 결과를 따로 집계한다.
+    uploadResults = await Promise.allSettled(files.map((file) => uploadDriveFile(file)))
   } finally {
     driveUploading.value = false
     if (driveInput.value) driveInput.value.value = ''
   }
-  await loadDriveFiles()
+
+  const failedCount = uploadResults.filter((result) => result.status === 'rejected').length
+  const successCount = files.length - failedCount
+  if (successCount > 0) await loadDriveFiles()
+  if (failedCount > 0) {
+    showToast('파일 업로드 일부 실패', `${files.length}개 중 ${successCount}개 성공, ${failedCount}개 실패`)
+    return
+  }
+  showToast('파일 업로드 완료', `개인 드라이브 파일 ${successCount}개를 업로드했습니다.`)
 }
 
 async function removeDriveFile(fileId) {
