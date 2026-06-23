@@ -834,6 +834,10 @@ input:focus { border-color: var(--primary); box-shadow: 0 0 0 3px rgba(243,115,3
 .version-card strong { font-size: 13px; font-weight: 700; letter-spacing: 0; }
 .version-card div small { margin-left: auto; color: var(--muted-foreground); font-size: 12px; }
 .version-card p { margin: 8px 0 0; color: var(--muted-foreground); font-size: 12px; }
+.shared-version-upload { display: grid; gap: 8px; margin: 10px 0 14px; border: 1px dashed var(--border); border-radius: 10px; background: #f8fafc; padding: 12px; }
+.shared-version-upload input[type="file"] { font-size: 12px; }
+.shared-version-upload input:not([type="file"]) { height: 36px; border: 1px solid var(--border); border-radius: 8px; background: white; padding: 0 10px; }
+.shared-version-upload button { justify-self: end; }
 .shared-version-preview { margin-top: 16px; border: 1px solid var(--border); border-radius: 10px; background: #f8fafc; padding: 14px; }
 .shared-version-preview pre { max-height: 260px; overflow: auto; white-space: pre-wrap; margin: 12px 0 0; color: var(--foreground); font: inherit; font-size: 12.5px; line-height: 1.65; }
 .participant-box { border: 1px solid var(--border); border-radius: 8px; padding: 8px; }
