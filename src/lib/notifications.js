@@ -59,9 +59,9 @@ export function subscribeNotifications({ onNotification, onError } = {}) {
 // 알림 종류별 이동할 목록 페이지. 특정 회의/회의록 상세(딥링크)가 아니라, 그 알림과 관련된 목록 화면으로 보낸다.
 // 회의 알림은 수신자가 참석자라 "나의 참석 회의", 회의록 알림은 수신자가 검토자라 "내 회의록"으로 간다.
 const ROUTE_BY_TYPE = {
-  MEETING_REMINDER: '/app/my-attending',
+  MEETING_REMINDER: '/app/meetings',
   MEETING_UPDATED: '/app/my-attending',
-  MEETING_CANCELLED: '/app/my-attending',
+  MEETING_CANCELLED: '/app/meetings',
   MINUTES_REVIEW_REQUEST: '/app/minutes',
   MINUTES_REVIEW_REMINDER: '/app/minutes',
 }

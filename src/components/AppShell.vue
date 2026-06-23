@@ -44,7 +44,7 @@
         <div class="top-actions">
           <div class="dropdown-wrap">
             <button class="icon-button notification-button" type="button" @click="toggleNotifications">
-              ●
+              <Bell :size="20" />
               <span v-if="unreadCount > 0" class="notification-badge">{{ unreadCount > 99 ? '99+' : unreadCount }}</span>
             </button>
             <div v-if="notificationsOpen" class="dropdown panel">
@@ -74,7 +74,7 @@
                 <small>{{ formatNotificationTime(item.createdAt) }}</small>
               </RouterLink>
               <button
-                v-if="notificationsHasMore && !notificationsLoading"
+                v-if="notificationsHasMore && !notificationsLoading && notifications.length > 0"
                 type="button"
                 class="notification-more"
                 :disabled="notificationsLoadingMore"
@@ -117,6 +117,7 @@
 <script setup>
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
+import { Bell } from '@lucide/vue'
 import FloatingChatbot from './FloatingChatbot.vue'
 import {
   formatNotificationTime,
@@ -149,6 +150,10 @@ const notificationPage = ref(1)
 const notificationsHasMore = ref(false)
 const notificationsLoadingMore = ref(false)
 let notificationSource = null
+// 벨에는 '안 읽은 알림'만 노출한다. 읽은 알림(개별 클릭/모두 읽음 모두)은 목록에서 빠져 계속 쌓이지 않는다.
+function isVisibleNotification(item) {
+  return !item?.read
+}
 
 const navSections = [
   {
@@ -202,7 +207,7 @@ async function loadNotifications() {
   notificationPage.value = 1
   try {
     const data = await getNotifications({ page: 1, size: NOTIFICATION_PAGE_SIZE })
-    notifications.value = data?.items ?? []
+    notifications.value = (data?.items ?? []).filter(isVisibleNotification)
     unreadCount.value = data?.unreadCount ?? 0
     notificationsHasMore.value = resolveNotificationsHasMore(data, notifications.value.length)
   } catch {
@@ -221,7 +226,7 @@ async function loadMoreNotifications() {
     const incoming = data?.items ?? []
     // SSE로 이미 앞에 추가된 알림과 중복되지 않게, 기존에 없는 id만 이어붙인다.
     const existingIds = new Set(notifications.value.map((item) => item.id))
-    const added = incoming.filter((item) => !existingIds.has(item.id))
+    const added = incoming.filter((item) => !existingIds.has(item.id) && isVisibleNotification(item))
     notifications.value.push(...added)
     notificationPage.value = nextPage
     if (typeof data?.unreadCount === 'number') unreadCount.value = data.unreadCount
@@ -251,8 +256,8 @@ async function handleNotificationClick(item) {
   if (item.read) return
   try {
     const result = await markNotificationRead(item.id)
-    item.read = true
-    item.readAt = result?.notification?.readAt ?? null
+    // 읽음 처리한 항목은 즉시 목록에서 제거한다 — 안 읽은 알림만 남겨 계속 쌓이지 않게 한다.
+    notifications.value = notifications.value.filter((n) => n.id !== item.id)
     unreadCount.value = result?.unreadCount ?? Math.max(0, unreadCount.value - 1)
   } catch {
     // 읽음 처리 실패는 다음 목록 조회에서 정정된다.
@@ -261,11 +266,13 @@ async function handleNotificationClick(item) {
 
 async function handleMarkAllRead() {
   try {
-    const result = await markAllNotificationsRead()
-    notifications.value = notifications.value.map((item) => ({ ...item, read: true }))
-    unreadCount.value = result?.unreadCount ?? 0
+    await markAllNotificationsRead()
+    // 모두 읽음 → 전부 읽음 처리되어 안 읽음 목록이 비고, 재조회해도 읽은 건 필터로 안 보인다.
+    notifications.value = []
+    unreadCount.value = 0
+    notificationsHasMore.value = false
   } catch {
-    // 전체 읽음 실패도 다음 목록 조회에서 정정된다.
+    // 전체 읽음 실패 시 목록을 비우지 않는다 — 다음 목록 조회에서 정정된다.
   }
 }
 
