@@ -870,9 +870,57 @@ const remainingExcelValidationErrorCount = computed(() =>
   Math.max(excelValidationErrors.value.length - visibleExcelValidationErrors.value.length, 0),
 )
 
-// 조직도 helper 함수
-function getDepartmentUsers(departmentId) {
-  return usersByDepartmentId.value.get(departmentId) || []
+// 조직도 3단계 계층 데이터 생성 helper 함수
+function getDepartmentTreeData(departmentId) {
+  // 1. 해당 부서의 활성 팀 조회 및 정렬
+  const deptTeams = (teams.value || [])
+    .filter((team) => team.departmentId === departmentId && team.status === 'ACTIVE')
+    .sort(compareBySortOrderThenName)
+
+  // 2. 해당 부서의 사용자 목록 조회
+  const deptUsers = usersByDepartmentId.value.get(departmentId) || []
+
+  // 3. 팀별 사용자 그룹핑 및 미지정 사용자 분류
+  const teamUsersMap = new Map()
+  const unassignedUsers = []
+
+  for (const team of deptTeams) {
+    teamUsersMap.set(team.teamId, [])
+  }
+
+  for (const user of deptUsers) {
+    if (user.teamId && teamUsersMap.has(user.teamId)) {
+      teamUsersMap.get(user.teamId).push(user)
+    } else {
+      unassignedUsers.push(user)
+    }
+  }
+
+  // 4. 팀 노드 데이터 구성
+  const teamNodes = []
+  for (const team of deptTeams) {
+    const usersInTeam = teamUsersMap.get(team.teamId) || []
+    teamNodes.push({
+      key: team.teamId,
+      id: team.teamId,
+      name: team.name,
+      isUnassigned: false,
+      users: usersInTeam,
+    })
+  }
+
+  // 5. 미지정 사용자가 있다면 "미지정 팀" 노드 추가
+  if (unassignedUsers.length > 0) {
+    teamNodes.push({
+      key: `unassigned-${departmentId}`,
+      id: 'unassigned',
+      name: '미지정 팀',
+      isUnassigned: true,
+      users: unassignedUsers,
+    })
+  }
+
+  return teamNodes
 }
 </script>
 
@@ -1031,11 +1079,23 @@ function getDepartmentUsers(departmentId) {
                 
                 <div v-if="department.hasMembers" class="summary-item-body">
                   <div
-                    v-for="user in getDepartmentUsers(department.departmentId)"
-                    :key="user.userId"
-                    class="summary-member-name"
+                    v-for="teamNode in getDepartmentTreeData(department.departmentId)"
+                    :key="teamNode.key"
+                    class="summary-team-group"
                   >
-                    {{ user.name }} {{ resolvePositionName(user.positionId, user.position) }}
+                    <div class="summary-team-title">{{ teamNode.name }}</div>
+                    <div class="summary-team-users">
+                      <div
+                        v-for="user in teamNode.users"
+                        :key="user.userId"
+                        class="summary-member-name"
+                      >
+                        {{ user.name }} {{ resolvePositionName(user.positionId, user.position) }}
+                      </div>
+                      <div v-if="teamNode.users.length === 0" class="summary-member-empty">
+                        배정된 사용자가 없습니다.
+                      </div>
+                    </div>
                   </div>
                 </div>
               </article>
@@ -1067,27 +1127,43 @@ function getDepartmentUsers(departmentId) {
               >
                 <div class="org-tree-container">
                   <div class="org-tree-root">
-                    <div class="org-node-box root-box">
+                    <div class="org-node-box dept-box">
                       <div class="org-node-title">{{ department.name }}</div>
                       <div class="org-node-desc">{{ department.userCount }}명</div>
                     </div>
                   </div>
 
-                  <div v-if="department.hasMembers" class="org-tree-connector"></div>
+                  <div v-if="getDepartmentTreeData(department.departmentId).length > 0" class="org-tree-connector"></div>
 
-                  <div v-if="department.hasMembers" class="org-tree-children">
+                  <div v-if="getDepartmentTreeData(department.departmentId).length > 0" class="org-tree-children team-level">
                     <div
-                      v-for="user in getDepartmentUsers(department.departmentId)"
-                      :key="user.userId"
-                      class="org-tree-child"
+                      v-for="teamNode in getDepartmentTreeData(department.departmentId)"
+                      :key="teamNode.key"
+                      class="org-tree-child team-child"
                     >
-                      <button type="button" class="org-node-box child-box" @click="openUserSummary(user.userId)">
-                        <div class="org-node-title">{{ user.name }} {{ resolvePositionName(user.positionId, user.position) }}</div>
-                        <div class="org-node-desc">1명</div>
-                      </button>
+                      <div class="org-node-box team-box" :class="{ 'unassigned-team': teamNode.isUnassigned }">
+                        <div class="org-node-title">{{ teamNode.name }}</div>
+                        <div class="org-node-desc">{{ teamNode.users.length }}명</div>
+                      </div>
+
+                      <div v-if="teamNode.users.length > 0" class="org-tree-connector sub-connector"></div>
+
+                      <div v-if="teamNode.users.length > 0" class="org-tree-children user-level">
+                        <div
+                          v-for="user in teamNode.users"
+                          :key="user.userId"
+                          class="org-tree-child user-child"
+                        >
+                          <button type="button" class="org-node-box child-box" @click="openUserSummary(user.userId)">
+                            <div class="org-node-title">{{ user.name }} {{ resolvePositionName(user.positionId, user.position) }}</div>
+                            <div class="org-node-desc">1명</div>
+                          </button>
+                        </div>
+                      </div>
+                      <div v-else class="org-empty-users-inline">배정된 사용자가 없습니다.</div>
                     </div>
                   </div>
-                  <div v-else class="org-empty-users">배정된 사용자가 없습니다.</div>
+                  <div v-else class="org-empty-users">배정된 팀이 없습니다.</div>
                 </div>
               </article>
             </div>
@@ -1754,9 +1830,22 @@ function getDepartmentUsers(departmentId) {
   box-shadow: 0 1px 3px rgba(0,0,0,0.02);
 }
 
-.root-box {
+.dept-box {
   background: #ffffff;
   min-width: 140px;
+  border-color: var(--primary); /* subtle orange accent */
+}
+
+.team-box {
+  background: #f8fafc;
+  border: 1px solid var(--border);
+  min-width: 120px;
+  font-weight: 600;
+}
+
+.unassigned-team {
+  border-style: dashed;
+  background: #f1f5f9;
 }
 
 .child-box {
@@ -1790,24 +1879,23 @@ function getDepartmentUsers(departmentId) {
   margin: 0 auto;
 }
 
-.org-tree-children {
+/* 3-level tree lines */
+.org-tree-children.team-level {
   position: relative;
   display: flex;
   justify-content: center;
-  gap: 16px;
-  width: 100%;
+  gap: 24px;
 }
 
-.org-tree-child {
+.org-tree-child.team-child {
   position: relative;
   display: flex;
   flex-direction: column;
   align-items: center;
-  flex: 1;
   padding-top: 16px;
 }
 
-.org-tree-child::before {
+.org-tree-child.team-child::before {
   content: "";
   position: absolute;
   top: 0;
@@ -1817,25 +1905,103 @@ function getDepartmentUsers(departmentId) {
   background: #e2e8f0;
 }
 
-.org-tree-child:first-child::before {
+.org-tree-child.team-child:first-child::before {
   left: 50%;
 }
 
-.org-tree-child:last-child::before {
+.org-tree-child.team-child:last-child::before {
   right: 50%;
 }
 
-.org-tree-child:only-child::before {
+.org-tree-child.team-child:only-child::before {
   display: none;
 }
 
-.org-tree-child::after {
+.org-tree-child.team-child::after {
   content: "";
   position: absolute;
   top: 0;
   left: 50%;
   width: 1px;
   height: 16px;
+  background: #e2e8f0;
+}
+
+/* Sub tree connector between Team and User */
+.org-tree-connector.sub-connector {
+  width: 1px;
+  height: 16px;
+  background: #e2e8f0;
+  margin: 0 auto;
+}
+
+.org-tree-children.user-level {
+  position: relative;
+  display: flex;
+  justify-content: center;
+  gap: 12px;
+}
+
+.org-tree-child.user-child {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding-top: 16px;
+}
+
+.org-tree-child.user-child::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 1px;
+  background: #e2e8f0;
+}
+
+.org-tree-child.user-child:first-child::before {
+  left: 50%;
+}
+
+.org-tree-child.user-child:last-child::before {
+  right: 50%;
+}
+
+.org-tree-child.user-child:only-child::before {
+  display: none;
+}
+
+.org-tree-child.user-child::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 50%;
+  width: 1px;
+  height: 16px;
+  background: #e2e8f0;
+}
+
+.org-empty-users-inline {
+  margin-top: 12px;
+  padding: 6px 12px;
+  font-size: 11px;
+  color: var(--muted-foreground);
+  background: #f8fafc;
+  border: 1px dashed var(--border);
+  border-radius: 6px;
+  text-align: center;
+  position: relative;
+  white-space: nowrap;
+}
+
+.org-empty-users-inline::before {
+  content: "";
+  position: absolute;
+  top: -12px;
+  left: 50%;
+  width: 1px;
+  height: 12px;
   background: #e2e8f0;
 }
 
@@ -1847,6 +2013,43 @@ function getDepartmentUsers(departmentId) {
   background: #f8fafc;
   border-radius: 8px;
   width: 100%;
+}
+
+/* Left Card Team list styling */
+.summary-team-group {
+  margin-top: 12px;
+  display: grid;
+  gap: 4px;
+}
+
+.summary-team-group:first-child {
+  margin-top: 0;
+}
+
+.summary-team-title {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--primary); /* orange */
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.summary-team-title::before {
+  content: "•";
+  font-size: 14px;
+}
+
+.summary-team-users {
+  padding-left: 10px;
+  display: grid;
+  gap: 4px;
+}
+
+.summary-member-empty {
+  font-size: 11px;
+  color: var(--muted-foreground);
+  font-style: italic;
 }
 
 /* 반응형 스타일 */
