@@ -846,15 +846,6 @@
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { Room, RoomEvent, Track, createLocalAudioTrack, createLocalVideoTrack } from 'livekit-client'
 import { useRoute, useRouter } from 'vue-router'
-import { postJson } from '../../lib/api-client'
-import {
-  displayFinalizedCaptions,
-  latestStreamingCaption,
-  selectCaptionTextByMode,
-  sortedCaptions,
-  upsertCaption,
-} from '../../lib/caption-store'
-import RealtimeFeedbackPanel from '../../components/meeting/RealtimeFeedbackPanel.vue'
 import { API_BASE_URL, postJson } from '../../lib/api-client'
 import {
   displayFinalizedCaptions,
@@ -863,6 +854,7 @@ import {
   sortedCaptions,
   upsertCaption,
 } from '../../lib/caption-store'
+import RealtimeFeedbackPanel from '../../components/meeting/RealtimeFeedbackPanel.vue'
 import { sortedFeedbacks, upsertFeedback } from '../../lib/feedback-store'
 import { guestMeetingRoute } from '../../lib/meeting-route'
 import { resolveLiveKitConnection } from '../../lib/livekit-meeting'
@@ -1039,38 +1031,6 @@ const shouldShowMeetingEndedScreen = computed(() =>
 const activeCaptionTabId = computed(() => `meeting-caption-tab-${captionDisplayMode.value}`)
 const activeCaptionPanelId = computed(() => `meeting-caption-panel-${captionDisplayMode.value}`)
 const realtimeFeedbacks = computed(() => sortedFeedbacks(feedbackMap.value))
-const visibleFinalizedCaptions = computed(() =>
-  finalizedCaptions.value
-    .map((caption) => ({
-      ...caption,
-      displayText: selectCaptionTextByMode(caption, captionDisplayMode.value),
-    }))
-    .filter((caption) => caption.displayText),
-)
-const visibleStreamingCaptionPreview = computed(() => {
-  if (!streamingCaptionPreview.value) return null
-  if (captionDisplayMode.value !== 'source') return null
-  const displayText = selectCaptionTextByMode(
-    streamingCaptionPreview.value,
-    captionDisplayMode.value,
-  )
-  if (!displayText) return null
-  return {
-    ...streamingCaptionPreview.value,
-    displayText,
-  }
-})
-const activeCaptionTabLabel = computed(() => {
-  if (captionDisplayMode.value === 'ko') return '한국어 자막'
-  if (captionDisplayMode.value === 'en') return '영어 자막'
-  return '원문 자막'
-})
-const shouldShowMeetingEndedScreen = computed(() =>
-  meetingEndedScreenVisible.value
-  || (meetingEndHandled.value && !meetingRoom.value && !inLobby.value),
-)
-const activeCaptionTabId = computed(() => `meeting-caption-tab-${captionDisplayMode.value}`)
-const activeCaptionPanelId = computed(() => `meeting-caption-panel-${captionDisplayMode.value}`)
 const supportsSpeakerSelection = computed(() =>
   typeof HTMLMediaElement !== 'undefined' && 'setSinkId' in HTMLMediaElement.prototype,
 )
