@@ -28,9 +28,12 @@ node_modules/
 dist/
 dist-ssr/
 *.local
+tasks/
 
 # Editor and OS
 .DS_Store
 .idea/
 .vscode/*
 !.vscode/extensions.json
+
+.env
