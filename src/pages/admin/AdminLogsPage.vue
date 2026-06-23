@@ -857,9 +857,11 @@ function toIsoUtc(value) {
 }
 
 .detail-modal-body {
+  display: grid;
+  gap: 18px;
   min-height: 0;
   overflow-y: auto;
-  padding: 18px 22px 28px;
+  padding: 20px 22px 32px;
 }
 
 .detail-feedback {
@@ -868,19 +870,14 @@ function toIsoUtc(value) {
 
 .detail-grid {
   display: grid;
-  gap: 14px;
+  gap: 18px;
 }
 
 .detail-section {
-  margin-top: 14px;
   padding: 14px 16px;
   border: 1px solid var(--border);
   border-radius: 12px;
   background: #fcfcfd;
-}
-
-.detail-section:first-of-type {
-  margin-top: 0;
 }
 
 .detail-section-compact {
