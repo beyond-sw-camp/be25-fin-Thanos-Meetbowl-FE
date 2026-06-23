@@ -6,10 +6,11 @@ import {
   AUDIT_ACTION_TYPE_OPTIONS,
   AUDIT_TARGET_TYPE_OPTIONS,
   extractAuditLogTargetDisplay,
-  formatActionTypeLabel,
   formatAuditResultLabel,
-  formatTargetTypeLabel,
-  summarizeAuditLogChanges,
+  getAuditActionDisplay,
+  getAuditDisplayChangeItems,
+  getAuditDisplayTitle,
+  getAuditTargetTypeDisplay,
 } from '../../lib/admin-audit-log-utils'
 import {
   buildOrganizationNameMaps,
@@ -98,7 +99,7 @@ const emptyStateMessage = computed(() =>
 )
 const changeSummary = computed(() =>
   selectedLog.value
-    ? summarizeAuditLogChanges(selectedLog.value.beforeSnapshot, selectedLog.value.afterSnapshot, {
+    ? getAuditDisplayChangeItems(selectedLog.value, {
         referenceMaps: organizationReferenceMaps.value,
       })
     : [],
@@ -106,7 +107,7 @@ const changeSummary = computed(() =>
 const detailSubtitle = computed(() => {
   if (detailLoading.value) return ''
 
-  return [formatActionTypeLabel(selectedLog.value?.actionType), formatDateTime(selectedLog.value?.createdAt)]
+  return [getAuditDisplayTitle(selectedLog.value), formatDateTime(selectedLog.value?.createdAt)]
     .filter((value) => value && value !== '-')
     .join(' · ')
 })
@@ -282,13 +283,17 @@ function normalizeAuditLog(item) {
     actorName: item?.actorName || '-',
     ipAddress: item?.ipAddress || '',
     actionType: item?.actionType || '-',
+    actionLabel: item?.actionLabel || '',
     targetType: item?.targetType || '-',
+    targetTypeLabel: item?.targetTypeLabel || '',
     targetId: item?.targetId || '',
     targetLoginId: targetDisplay.loginId,
     targetName: targetDisplay.name,
     result: item?.result || '',
     reason: item?.reason || '',
     createdAt: item?.createdAt || '',
+    displayTitle: item?.displayTitle || '',
+    displayChangeItems: Array.isArray(item?.displayChangeItems) ? item.displayChangeItems : [],
     beforeSnapshot: item?.beforeSnapshot ?? null,
     afterSnapshot: item?.afterSnapshot ?? null,
   }
@@ -356,15 +361,6 @@ function formatDateTime(value) {
 
 function formatAuxiliaryId(value) {
   return value || '-'
-}
-
-function formatChangeTitle(change) {
-  const parts = []
-
-  if (change?.beforeTitle) parts.push(`이전 ID: ${change.beforeTitle}`)
-  if (change?.afterTitle) parts.push(`이후 ID: ${change.afterTitle}`)
-
-  return parts.join('\n')
 }
 
 function resultBadgeClass(result) {
@@ -458,7 +454,7 @@ function toIsoUtc(value) {
           <thead>
             <tr>
               <th>작업자 IP</th>
-              <th>작업 유형</th>
+              <th>작업 내용</th>
               <th>대상 유형</th>
               <th>대상 로그인 ID</th>
               <th>변경 대상 이름</th>
@@ -480,10 +476,10 @@ function toIsoUtc(value) {
                 <strong>{{ log.ipAddress || '-' }}</strong>
                 <small>{{ log.actorName || '-' }}</small>
               </td>
-              <td>{{ formatActionTypeLabel(log.actionType) }}</td>
-              <td>{{ formatTargetTypeLabel(log.targetType) }}</td>
+              <td class="ellipsis-cell" :title="getAuditActionDisplay(log)">{{ getAuditActionDisplay(log) }}</td>
+              <td class="ellipsis-cell" :title="getAuditTargetTypeDisplay(log)">{{ getAuditTargetTypeDisplay(log) }}</td>
               <td class="target-id-cell" :title="log.targetId || ''">{{ log.targetLoginId || '-' }}</td>
-              <td>{{ log.targetName || '-' }}</td>
+              <td class="ellipsis-cell" :title="log.targetName || '-'">{{ log.targetName || '-' }}</td>
               <td>
                 <span :class="['badge', resultBadgeClass(log.result)]">
                   {{ formatAuditResultLabel(log.result) }}
@@ -521,19 +517,19 @@ function toIsoUtc(value) {
           <div v-else-if="detailError" class="error-box">{{ detailError }}</div>
           <template v-else-if="selectedLog">
             <section class="detail-section">
-              <h3>변경 내용</h3>
+              <h3>작업 내용</h3>
               <div class="detail-section-body">
                 <ul v-if="changeSummary.length" class="change-summary-list prominent">
                   <li
                     v-for="change in changeSummary"
                     :key="change.key"
-                    :title="formatChangeTitle(change)"
+                    :title="change.title || ''"
                   >
                     <strong>{{ change.label }}</strong>
-                    <span>{{ change.before }} → {{ change.after }}</span>
+                    <span>{{ change.text }}</span>
                   </li>
                 </ul>
-                <p v-else class="empty-change-text">변경된 항목이 없습니다.</p>
+                <p v-else class="empty-change-text">표시할 작업 내용이 없습니다.</p>
               </div>
             </section>
 
@@ -541,7 +537,7 @@ function toIsoUtc(value) {
               <section class="detail-section">
                 <h3>작업 정보</h3>
                 <dl class="detail-list">
-                  <div><dt>작업 유형</dt><dd>{{ formatActionTypeLabel(selectedLog.actionType) }}</dd></div>
+                  <div><dt>작업 내용</dt><dd>{{ getAuditDisplayTitle(selectedLog) }}</dd></div>
                   <div><dt>결과</dt><dd>{{ formatAuditResultLabel(selectedLog.result) }}</dd></div>
                   <div><dt>발생 일시</dt><dd>{{ formatDateTime(selectedLog.createdAt) }}</dd></div>
                   <div><dt>작업자 IP</dt><dd>{{ selectedLog.ipAddress || '-' }}</dd></div>
@@ -552,7 +548,7 @@ function toIsoUtc(value) {
               <section class="detail-section">
                 <h3>대상 정보</h3>
                 <dl class="detail-list">
-                  <div><dt>대상 유형</dt><dd>{{ formatTargetTypeLabel(selectedLog.targetType) }}</dd></div>
+                  <div><dt>대상 유형</dt><dd>{{ getAuditTargetTypeDisplay(selectedLog) }}</dd></div>
                   <div><dt>대상 ID</dt><dd>{{ formatAuxiliaryId(selectedLog.targetId) }}</dd></div>
                   <div><dt>대상 로그인 ID</dt><dd>{{ selectedLog.targetLoginId || '-' }}</dd></div>
                   <div><dt>변경 대상 이름</dt><dd>{{ selectedLog.targetName || '-' }}</dd></div>
@@ -674,6 +670,18 @@ function toIsoUtc(value) {
 
 .target-id-cell {
   word-break: break-word;
+}
+
+.ellipsis-cell {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.detail-list dd,
+.detail-section-body span {
+  word-break: break-word;
+  overflow-wrap: anywhere;
 }
 
 .admin-log-footer {
