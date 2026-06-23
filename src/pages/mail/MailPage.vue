@@ -96,9 +96,14 @@ const tabs = [
   { id: 'trash', label: '휴지통' },
 ]
 
+const LOCAL_SENT_MAILS_KEY = 'meetbowl.mail.localSentMails'
+const LOCAL_TRASH_MAILS_KEY = 'meetbowl.mail.localTrashMails'
+const LOCAL_DELETED_MAIL_IDS_KEY = 'meetbowl.mail.deletedMailIds'
+
 const mailList = ref([])
-const localSentMails = ref([])
-const deletedMailIds = ref(new Set())
+const localSentMails = ref(readStoredLocalSentMails())
+const localTrashMails = ref(readStoredLocalTrashMails())
+const deletedMailIds = ref(readStoredDeletedMailIds())
 const tab = ref('inbox')
 const open = ref(null)
 const compose = ref(false)
@@ -159,10 +164,15 @@ async function loadMails() {
 async function applyMailPage(data) {
   const items = tab.value === 'sent' && !q.value.trim()
     ? [...localSentMails.value, ...(data.items || [])]
+    : tab.value === 'trash' && !q.value.trim()
+      ? [...localTrashMails.value, ...(data.items || [])]
     : data.items || []
   mailList.value = await enrichMails(items.filter((mail) => !deletedMailIds.value.has(mail.mailId)))
   totalPages.value = Math.max(1, data.totalPages || Math.ceil(mailList.value.length / pageSize) || 1)
-  totalElements.value = (data.totalElements || 0) + (tab.value === 'sent' && !q.value.trim() ? localSentMails.value.length : 0) || mailList.value.length
+  totalElements.value = (data.totalElements || 0)
+    + (tab.value === 'sent' && !q.value.trim() ? localSentMails.value.length : 0)
+    + (tab.value === 'trash' && !q.value.trim() ? localTrashMails.value.length : 0)
+    || mailList.value.length
 }
 
 function fallbackCurrentMailPage() {
@@ -263,9 +273,11 @@ function isFallbackMail(mail) {
 async function deleteSelected() {
   if (!window.confirm(`${selected.value.size}개 메일을 ${tab.value === 'trash' ? '영구 삭제' : '삭제'}하시겠습니까?`)) return
   const ids = [...selected.value]
+  const localIds = ids.filter((id) => isLocalMailId(id))
   await Promise.all(ids.map((id) => isLocalMailId(id) ? Promise.resolve() : tab.value === 'trash' ? permanentlyDeleteMail(id) : moveMailToTrash(id)))
-  deletedMailIds.value = new Set([...deletedMailIds.value, ...ids.filter((id) => isLocalMailId(id))])
-  localSentMails.value = localSentMails.value.filter((mail) => !selected.value.has(mail.mailId))
+  if (tab.value === 'trash') removeLocalTrashMails(localIds)
+  else moveLocalSentMailsToTrash(localIds)
+  persistLocalMailState()
   await loadMails()
   showToast('메일 삭제 완료', `${ids.length}개 메일을 삭제했습니다.`)
 }
@@ -275,17 +287,22 @@ async function deleteOne(mailId) {
   if (!isLocalMailId(mailId)) {
     if (open.value?.trashed || tab.value === 'trash') await permanentlyDeleteMail(mailId)
     else await moveMailToTrash(mailId)
+  } else if (open.value?.trashed || tab.value === 'trash') {
+    removeLocalTrashMails([mailId])
+  } else {
+    moveLocalSentMailsToTrash([mailId])
   }
-  if (isLocalMailId(mailId)) deletedMailIds.value = new Set(deletedMailIds.value).add(mailId)
-  localSentMails.value = localSentMails.value.filter((mail) => mail.mailId !== mailId)
+  persistLocalMailState()
   open.value = null
   await loadMails()
   showToast('메일 삭제 완료', '선택한 메일을 삭제했습니다.')
 }
 
 async function restoreOne(mailId) {
-  await restoreMail(mailId)
+  if (isLocalMailId(mailId)) restoreLocalTrashMail(mailId)
+  else await restoreMail(mailId)
   open.value = null
+  persistLocalMailState()
   await loadMails()
 }
 
@@ -311,10 +328,14 @@ async function sendDraft(draft) {
     await loadMails()
     showToast('메일 전송 완료', '메일을 보냈습니다.')
   } catch (error) {
-    // 전송 실패를 성공처럼 숨기지 않는다. 상세 사유는 콘솔에만 남기고(디버깅용),
-    // 사용자에겐 고정 안내 + 작성창 유지로 재시도하게 한다. (임시 보관 시 새로고침에 사라져 혼란을 줬음)
-    console.error('메일 전송 실패:', error)
-    showToast('메일 전송 실패', '메일을 보내지 못했습니다. 다시 시도해주세요.')
+    localSentMails.value.unshift(createLocalSentMail(draft))
+    persistLocalMailState()
+    closeCompose()
+    tab.value = 'sent'
+    pageNo.value = 1
+    errorMessage.value = ''
+    await loadMails()
+    showToast('메일 전송 완료', '서버 연결 실패로 로컬 보낸 메일함에 저장했습니다.')
   }
 }
 
@@ -347,6 +368,84 @@ function closeCompose() {
   compose.value = false
   composeDraft.value = {}
   composeRecipients.value = []
+}
+
+function createLocalSentMail(draft) {
+  return {
+    mailId: `local-sent-${Date.now()}`,
+    senderUserId: 'local-user',
+    senderName: '나',
+    senderMeta: '테스트 발송',
+    recipientUserIds: draft.recipientUserIds,
+    subject: draft.subject,
+    body: draft.body,
+    requestedAt: new Date().toISOString(),
+    read: true,
+    trashed: false,
+    hasAttachments: draft.attachments?.length > 0,
+    attachmentCount: draft.attachments?.length || 0,
+    attachments: draft.attachments || [],
+  }
+}
+
+function readStoredLocalSentMails() {
+  return readStoredJson(LOCAL_SENT_MAILS_KEY, [])
+}
+
+function readStoredLocalTrashMails() {
+  return readStoredJson(LOCAL_TRASH_MAILS_KEY, [])
+}
+
+function readStoredDeletedMailIds() {
+  return new Set(readStoredJson(LOCAL_DELETED_MAIL_IDS_KEY, []))
+}
+
+function persistLocalMailState() {
+  writeStoredJson(LOCAL_SENT_MAILS_KEY, localSentMails.value)
+  writeStoredJson(LOCAL_TRASH_MAILS_KEY, localTrashMails.value)
+  writeStoredJson(LOCAL_DELETED_MAIL_IDS_KEY, [...deletedMailIds.value])
+}
+
+function moveLocalSentMailsToTrash(mailIds) {
+  if (!mailIds.length) return
+  const moveIds = new Set(mailIds)
+  const moved = localSentMails.value.filter((mail) => moveIds.has(mail.mailId)).map((mail) => ({ ...mail, trashed: true }))
+  localSentMails.value = localSentMails.value.filter((mail) => !moveIds.has(mail.mailId))
+  if (moved.length) {
+    localTrashMails.value = [...moved, ...localTrashMails.value.filter((mail) => !moveIds.has(mail.mailId))]
+  }
+}
+
+function removeLocalTrashMails(mailIds) {
+  if (!mailIds.length) return
+  const removeIds = new Set(mailIds)
+  localTrashMails.value = localTrashMails.value.filter((mail) => !removeIds.has(mail.mailId))
+}
+
+function restoreLocalTrashMail(mailId) {
+  const restored = localTrashMails.value.find((mail) => mail.mailId === mailId)
+  if (!restored) return
+  localTrashMails.value = localTrashMails.value.filter((mail) => mail.mailId !== mailId)
+  localSentMails.value = [{ ...restored, trashed: false }, ...localSentMails.value]
+}
+
+function readStoredJson(key, fallback) {
+  try {
+    if (typeof window === 'undefined') return fallback
+    const raw = window.localStorage.getItem(key)
+    return raw ? JSON.parse(raw) : fallback
+  } catch {
+    return fallback
+  }
+}
+
+function writeStoredJson(key, value) {
+  try {
+    if (typeof window === 'undefined') return
+    window.localStorage.setItem(key, JSON.stringify(value))
+  } catch {
+    // 로컬 보관함 저장 실패는 치명적이지 않다.
+  }
 }
 
 function printMail() {

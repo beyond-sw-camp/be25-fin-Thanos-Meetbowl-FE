@@ -1,8 +1,8 @@
 import { addMinutes, timeToMinutes, utcToKstClock } from './dateTime'
 
-// 타임라인 시간축 설정. 백엔드 예약은 임의 시각이 가능하므로 하루 전체(06~24)를 통일 기준으로 둔다.
+// 회의실 예약 운영 시간은 KST 09:00~24:00 구간을 사용한다.
 export const TIMELINE = {
-  startHour: 6,
+  startHour: 9,
   endHour: 24,
   hourPx: 64,
 }
@@ -30,10 +30,12 @@ export function blockStyle(start, end) {
 }
 
 // 트랙 내 클릭 위치(px) → 30분 단위로 스냅한 'HH:MM'
-export function slotTimeFromOffset(offsetPx) {
-  const maxHours = TIMELINE.endHour - TIMELINE.startHour - 0.5
+export function slotTimeFromOffset(offsetPx, snap = 'start') {
+  const isEndSnap = snap === 'end'
+  const maxHours = TIMELINE.endHour - TIMELINE.startHour - (isEndSnap ? 0 : 0.5)
   const raw = clamp(offsetPx / TIMELINE.hourPx, 0, maxHours)
-  const minutes = WINDOW_START + Math.floor(raw * 2) * 30
+  const roundedSlots = isEndSnap ? Math.ceil(raw * 2) : Math.floor(raw * 2)
+  const minutes = WINDOW_START + roundedSlots * 30
   const hour = String(Math.floor(minutes / 60)).padStart(2, '0')
   const minute = String(minutes % 60).padStart(2, '0')
   return `${hour}:${minute}`
@@ -43,7 +45,7 @@ export function slotTimeFromOffset(offsetPx) {
 // 방향 무관(좌/우 드래그 모두), 같은 슬롯이면 최소 30분으로 보정한다.
 export function slotRangeFromOffsets(px1, px2) {
   const start = slotTimeFromOffset(Math.min(px1, px2))
-  const end = slotTimeFromOffset(Math.max(px1, px2))
+  const end = slotTimeFromOffset(Math.max(px1, px2), 'end')
   return { start, end: end === start ? addMinutes(start, 30) : end }
 }
 

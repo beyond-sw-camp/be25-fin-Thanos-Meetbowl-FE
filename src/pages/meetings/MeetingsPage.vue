@@ -270,6 +270,7 @@ onMounted(async () => {
   openMeetingFromQuery()
   window.addEventListener('focus', handleWindowFocus)
   document.addEventListener('visibilitychange', handleVisibilityChange)
+  openMeetingFromQuery()
 })
 
 onBeforeUnmount(() => {

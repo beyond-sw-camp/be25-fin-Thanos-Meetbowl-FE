@@ -9,24 +9,33 @@
     </div>
     <div class="participant-chips">
       <span v-for="attendee in modelValue" :key="attendee.userId">
-        {{ attendee.name }}<button type="button" @click="remove(attendee.userId)">×</button>
+        {{ attendee.name }}
+        <button
+          v-if="!fixedUserIdSet.has(attendee.userId)"
+          type="button"
+          @click="remove(attendee.userId)"
+        >
+          ×
+        </button>
       </span>
     </div>
   </div>
 </template>
 
 <script setup>
-import { onBeforeUnmount, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import { searchUsers } from '../../lib/users'
 
 const props = defineProps({
   modelValue: { type: Array, default: () => [] },
   excludeUserId: { type: String, default: '' },
+  fixedUserIds: { type: Array, default: () => [] },
 })
 const emit = defineEmits(['update:modelValue'])
 
 const query = ref('')
 const results = ref([])
+const fixedUserIdSet = computed(() => new Set(props.fixedUserIds.filter(Boolean)))
 let seq = 0
 let debounceTimer = null
 const DEBOUNCE_MS = 250
@@ -73,6 +82,7 @@ function add(user) {
 }
 
 function remove(userId) {
+  if (fixedUserIdSet.value.has(userId)) return
   emit('update:modelValue', props.modelValue.filter((attendee) => attendee.userId !== userId))
 }
 </script>

@@ -600,14 +600,11 @@
               {{ currentCaptionEmptyStateMessage }}
             </p>
           </div>
-        </section>
-        <div class="ai-box">
-          <strong>AI 실시간 피드백</strong>
-          <p>{{ feedbackMessage }}</p>
+	        </section>
 
-        <RealtimeFeedbackPanel
-          class="meeting-realtime-feedback"
-          :feedbacks="realtimeFeedbacks"
+	        <RealtimeFeedbackPanel
+	          class="meeting-realtime-feedback"
+	          :feedbacks="realtimeFeedbacks"
           :connected="Boolean(meetingRoom)"
         />
         </div>
