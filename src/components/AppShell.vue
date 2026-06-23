@@ -67,7 +67,7 @@
             </button>
             <div v-if="profileOpen" class="dropdown profile-panel">
               <strong>{{ user?.name }}</strong>
-              <span>{{ user?.department }} · {{ user?.position }}</span>
+              <span v-if="!isLocalAdmin && affiliationText">{{ affiliationText }}</span>
               <span>{{ user?.email }}</span>
               <RouterLink
                 v-if="user?.role === 'USER'"
@@ -107,6 +107,24 @@ const profileOpen = ref(false)
 const user = computed(() => auth.user)
 const homePath = computed(() => auth.homePath)
 const liveMeetingPath = meetingRoute(myMeetings.find((meeting) => meeting.status === 'live')?.id)
+
+// 로컬 관리자 계정 식별: role === 'ADMIN', loginId === 'admin', email === 'admin@local.meetbowl'
+const isLocalAdmin = computed(() => 
+  user.value?.role === 'ADMIN' &&
+  user.value?.loginId === 'admin' &&
+  user.value?.email === 'admin@local.meetbowl'
+)
+
+// 소속 정보 조합: 부서/팀/직급 중 있는 값만 사용해 문자열 생성
+const affiliationText = computed(() => {
+  const parts = [
+    user.value?.department,
+    user.value?.team,
+    user.value?.position
+  ].filter(Boolean)
+  
+  return parts.length > 0 ? parts.join(' · ') : ''
+})
 
 const navSections = [
   {
