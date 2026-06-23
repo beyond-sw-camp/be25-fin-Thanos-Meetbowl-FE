@@ -110,7 +110,7 @@
       <RouterView />
     </main>
 
-    <FloatingChatbot />
+    <FloatingChatbot v-if="showFloatingChatbot" />
   </div>
 </template>
 
@@ -137,6 +137,8 @@ const profileOpen = ref(false)
 
 const user = computed(() => auth.user)
 const homePath = computed(() => auth.homePath)
+// 관리자 화면에서는 플로팅 챗봇을 숨긴다(dev 머지로 반영된 동작).
+const showFloatingChatbot = computed(() => !route.path.startsWith('/admin'))
 
 const notifications = ref([])
 const unreadCount = ref(0)

@@ -196,9 +196,12 @@ async function loadUsers() {
       size: props.pageSize,
     })
 
-    users.value = (data?.items || []).map(normalizeUserSummary)
+    const visibleUsers = (data?.items || [])
+      .map(normalizeUserSummary)
+      .filter((user) => user.role === 'USER' && user.loginId !== 'admin')
+    users.value = visibleUsers
     totalPages.value = Number(data?.totalPages || 1)
-    totalElements.value = Number(data?.totalElements || 0)
+    totalElements.value = Number(data?.totalElements || visibleUsers.length)
   } catch (error) {
     if (error?.status === 403) {
       forbidden.value = true

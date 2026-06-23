@@ -330,6 +330,8 @@ const memoPage = ref(1)
 const memoDraft = ref({ memoId: '', title: '', content: '' })
 const backups = ref([])
 const backupKeyword = ref('')
+const LOCAL_RELEASED_BACKUP_IDS_KEY = 'meetbowl.workspace.releasedBackupIds'
+const releasedBackupIds = ref(readStoredReleasedBackupIds())
 const driveFiles = ref([])
 const driveInput = ref(null)
 const driveUploading = ref(false)
@@ -434,11 +436,12 @@ async function loadMemos() {
 }
 
 async function loadBackups() {
-  backups.value = await withFallback(
+  const loaded = await withFallback(
     () => (backupKeyword.value.trim() ? searchBackups(backupKeyword.value.trim()) : getBackups()),
     () => fallbackWorkspaceBackups(backupKeyword.value),
   )
-  if (!backups.value.length) backups.value = fallbackWorkspaceBackups(backupKeyword.value)
+  const next = loaded.length ? loaded : fallbackWorkspaceBackups(backupKeyword.value)
+  backups.value = next.filter((backup) => !releasedBackupIds.value.has(backup.backupId))
 }
 
 async function loadDriveFiles() {
@@ -564,10 +567,11 @@ async function deleteActiveMemo() {
 async function releaseBackup(backup) {
   try {
     await removeBackupBookmark(backup.backupId)
-  } catch {
+  } finally {
+    releasedBackupIds.value = new Set(releasedBackupIds.value).add(backup.backupId)
+    persistReleasedBackupIds()
     backups.value = backups.value.filter((item) => item.backupId !== backup.backupId)
   }
-  backups.value = backups.value.filter((item) => item.backupId !== backup.backupId)
   showToast('백업 해제 완료', backup.title)
 }
 
@@ -575,27 +579,39 @@ function removeFavoriteMinute(minuteId) {
   minuteFavorites.value = toggleMinuteFavorite(minuteId)
 }
 
-async function uploadPersonalFiles(fileList) {
-  const files = Array.from(fileList || [])
-  if (!files.length || driveUploading.value) return
-  driveUploading.value = true
-  let uploadResults = []
-  try {
-    // 업로드 API는 단일 파일이라, 각 파일 업로드 결과를 따로 집계한다.
-    uploadResults = await Promise.allSettled(files.map((file) => uploadDriveFile(file)))
-  } finally {
-    driveUploading.value = false
-    if (driveInput.value) driveInput.value.value = ''
-  }
+function readStoredReleasedBackupIds() {
+  return new Set(readStoredJson(LOCAL_RELEASED_BACKUP_IDS_KEY, []))
+}
 
-  const failedCount = uploadResults.filter((result) => result.status === 'rejected').length
-  const successCount = files.length - failedCount
-  if (successCount > 0) await loadDriveFiles()
-  if (failedCount > 0) {
-    showToast('파일 업로드 일부 실패', `${files.length}개 중 ${successCount}개 성공, ${failedCount}개 실패`)
-    return
+function persistReleasedBackupIds() {
+  writeStoredJson(LOCAL_RELEASED_BACKUP_IDS_KEY, [...releasedBackupIds.value])
+}
+
+function readStoredJson(key, fallback) {
+  try {
+    if (typeof window === 'undefined') return fallback
+    const raw = window.localStorage.getItem(key)
+    return raw ? JSON.parse(raw) : fallback
+  } catch {
+    return fallback
   }
-  showToast('파일 업로드 완료', `개인 드라이브 파일 ${successCount}개를 업로드했습니다.`)
+}
+
+function writeStoredJson(key, value) {
+  try {
+    if (typeof window === 'undefined') return
+    window.localStorage.setItem(key, JSON.stringify(value))
+  } catch {
+    // 로컬 보관 상태 저장 실패는 화면 동작을 막지 않는다.
+  }
+}
+
+async function uploadPersonalFile(event) {
+  const file = event.target.files?.[0]
+  if (!file) return
+  await uploadDriveFile(file)
+  event.target.value = ''
+  await loadDriveFiles()
 }
 
 async function removeDriveFile(fileId) {

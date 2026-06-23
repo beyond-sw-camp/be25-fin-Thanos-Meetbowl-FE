@@ -156,7 +156,6 @@ function createEmptyMailForm() {
 function createRetentionPolicy() {
   return {
     minutesRetentionDays: 60,
-    recordingRetentionDays: 30,
     backupRetentionDays: 90,
     reviewHours: 24,
     autoShare: false,
@@ -241,7 +240,6 @@ function saveNotificationPolicy() {
       </div>
       <div class="settings-form-grid">
         <label>회의록 보관 기간<input v-model.number="retentionPolicy.minutesRetentionDays" type="number"></label>
-        <label>녹음 파일 보관 기간<input v-model.number="retentionPolicy.recordingRetentionDays" type="number"></label>
         <label>백업 문서 보관 기간<input v-model.number="retentionPolicy.backupRetentionDays" type="number"></label>
         <label>검토 지연 알림<input v-model.number="retentionPolicy.reviewHours" type="number"></label>
       </div>

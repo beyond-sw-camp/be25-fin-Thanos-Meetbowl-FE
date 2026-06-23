@@ -32,16 +32,76 @@ const recentAuditLogs = computed(() => summary.value?.recentAuditLogs || [])
 const mailRetentionPolicy = computed(() => summary.value?.mailRetentionPolicy || null)
 const meetingRoomSummary = computed(() => summary.value?.meetingRoomSummary || null)
 const timeSlotUsage = computed(() => meetingRoomSummary.value?.timeSlotUsage || [])
+const visibleTimeSlotUsage = computed(() =>
+  timeSlotUsage.value.filter((item) => {
+    const hour = kstHour(item.slotStartAt)
+    return hour >= 9 && hour < 24
+  }),
+)
 const siteBuildingUsage = computed(() => meetingRoomSummary.value?.siteBuildingUsage || [])
+const chartViewBoxWidth = 960
+const chartViewBoxHeight = 280
+const chartPadding = {
+  top: 24,
+  right: 24,
+  bottom: 48,
+  left: 44,
+}
 const maxReservationCount = computed(() => {
-  const counts = timeSlotUsage.value.map((item) => item.reservationCount)
+  const counts = visibleTimeSlotUsage.value.map((item) => item.reservationCount)
   return counts.length ? Math.max(...counts, 1) : 1
 })
+const usageChartInnerWidth = computed(() =>
+  chartViewBoxWidth - chartPadding.left - chartPadding.right,
+)
+const usageChartInnerHeight = computed(() =>
+  chartViewBoxHeight - chartPadding.top - chartPadding.bottom,
+)
+const usageChartYTicks = computed(() => {
+  const maxValue = maxReservationCount.value
+  const tickCount = Math.min(Math.max(maxValue, 2), 5)
+  return Array.from({ length: tickCount + 1 }, (_, index) => {
+    const value = Math.round((maxValue / tickCount) * (tickCount - index))
+    const y = chartPadding.top + (usageChartInnerHeight.value * index) / tickCount
+    return { value, y }
+  })
+})
+const usageChartPoints = computed(() => {
+  if (!visibleTimeSlotUsage.value.length) return []
+  const denominator = Math.max(visibleTimeSlotUsage.value.length - 1, 1)
+  return visibleTimeSlotUsage.value.map((item, index) => {
+    const x = chartPadding.left + (usageChartInnerWidth.value * index) / denominator
+    const y =
+      chartPadding.top
+      + usageChartInnerHeight.value
+      - (usageChartInnerHeight.value * item.reservationCount) / maxReservationCount.value
+    return {
+      ...item,
+      x,
+      y,
+      label: formatHour(item.slotStartAt),
+      emphasized: index === 0 || index === visibleTimeSlotUsage.value.length - 1 || index % 2 === 1,
+    }
+  })
+})
+const usageChartPolyline = computed(() =>
+  usageChartPoints.value.map((point) => `${point.x},${point.y}`).join(' '),
+)
+const usageChartArea = computed(() => {
+  if (!usageChartPoints.value.length) return ''
+  const first = usageChartPoints.value[0]
+  const last = usageChartPoints.value[usageChartPoints.value.length - 1]
+  return [
+    `${first.x},${chartPadding.top + usageChartInnerHeight.value}`,
+    ...usageChartPoints.value.map((point) => `${point.x},${point.y}`),
+    `${last.x},${chartPadding.top + usageChartInnerHeight.value}`,
+  ].join(' ')
+})
 const peakUsage = computed(() => {
-  if (!timeSlotUsage.value.length) return null
+  if (!visibleTimeSlotUsage.value.length) return null
 
-  // 막대 차트 보조 문구에 쓸 최고 예약 시간대를 계산한다.
-  return timeSlotUsage.value.reduce((top, item) => {
+  // 화면에 표시하는 운영 시간대 안에서 최고 예약 시간대를 계산한다.
+  return visibleTimeSlotUsage.value.reduce((top, item) => {
     if (!top || item.reservationCount > top.reservationCount) return item
     return top
   }, null)
@@ -55,6 +115,34 @@ const busiestSiteBuilding = computed(() => {
     return top
   }, null)
 })
+const activeUsageSlots = computed(() =>
+  visibleTimeSlotUsage.value.filter((item) => item.reservationCount > 0),
+)
+const activeUsageWindow = computed(() => {
+  if (!activeUsageSlots.value.length) return '-'
+  const first = activeUsageSlots.value[0]
+  const last = activeUsageSlots.value[activeUsageSlots.value.length - 1]
+  return `${formatHour(first.slotStartAt)} - ${formatHour(last.slotStartAt)}`
+})
+const averageReservationCount = computed(() => {
+  if (!visibleTimeSlotUsage.value.length) return 0
+  const total = visibleTimeSlotUsage.value.reduce((sum, item) => sum + item.reservationCount, 0)
+  return total / visibleTimeSlotUsage.value.length
+})
+const usageInsightItems = computed(() => [
+  {
+    label: '가장 붐비는 시간',
+    value: peakUsage.value ? `${formatHour(peakUsage.value.slotStartAt)} · ${peakUsage.value.reservationCount}건` : '-',
+  },
+  {
+    label: '예약 발생 구간',
+    value: activeUsageWindow.value,
+  },
+  {
+    label: '시간당 평균 예약',
+    value: `${averageReservationCount.value.toFixed(1)}건`,
+  },
+])
 const kpis = computed(() => {
   if (!meetingRoomSummary.value || !mailRetentionPolicy.value) return []
 
@@ -62,7 +150,7 @@ const kpis = computed(() => {
     {
       label: '오늘 예약 수',
       value: meetingRoomSummary.value.todayReservationCount,
-      sub: `시간대 집계 ${timeSlotUsage.value.length}건`,
+      sub: `운영 시간 집계 ${visibleTimeSlotUsage.value.length}건`,
     },
     {
       label: '현재 사용 중 회의실 수',
@@ -132,7 +220,22 @@ function formatHour(value) {
   const date = new Date(value)
   if (Number.isNaN(date.getTime())) return '-'
 
-  return hourFormatter.format(date)
+  return hourFormatter.format(date).replace(':00', '')
+}
+
+function kstHour(value) {
+  if (!value) return -1
+
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) return -1
+
+  return Number(
+    new Intl.DateTimeFormat('ko-KR', {
+      timeZone: 'Asia/Seoul',
+      hour: '2-digit',
+      hour12: false,
+    }).format(date),
+  )
 }
 
 function formatPercent(value) {
@@ -225,13 +328,13 @@ function resultBadgeClass(result) {
           <div class="card-head">
             <div>
               <h2>시간대별 회의실 사용 빈도</h2>
-              <p>오늘 예약된 회의실의 시간대별 예약 수입니다.</p>
+              <p>오늘 예약된 회의실의 시간대별 예약 수입니다. 운영 시간인 09:00부터 24:00 전까지를 막대그래프로 보여줍니다.</p>
             </div>
-            <span class="badge">{{ timeSlotUsage.length }}개 시간대</span>
+            <span class="badge">{{ visibleTimeSlotUsage.length }}개 시간대</span>
           </div>
-          <p v-if="!timeSlotUsage.length" class="empty-text">집계된 시간대 사용 정보가 없습니다.</p>
+          <p v-if="!visibleTimeSlotUsage.length" class="empty-text">집계된 시간대 사용 정보가 없습니다.</p>
           <div v-else class="admin-bar-chart">
-            <div v-for="item in timeSlotUsage" :key="item.slotStartAt" class="admin-bar-item">
+            <div v-for="item in visibleTimeSlotUsage" :key="item.slotStartAt" class="admin-bar-item">
               <div class="admin-bar-track">
                 <i :style="{ height: `${(item.reservationCount / maxReservationCount) * 100}%` }"></i>
               </div>
@@ -269,40 +372,79 @@ function resultBadgeClass(result) {
         <article class="card admin-table-card wide">
           <div class="card-head">
             <div>
-              <h2>사이트·건물별 상세 사용 현황</h2>
-              <p>회의실 총 개수와 현재 사용 중인 개수를 함께 표시합니다.</p>
+              <h2>시간대별 상세 사용 현황</h2>
+              <p>운영 시간대의 회의실 예약 흐름을 선형 그래프로 확인합니다.</p>
             </div>
-            <span class="badge">실시간 요약</span>
+            <span class="badge">09:00 - 24:00</span>
           </div>
-          <div class="table-card embedded-table">
-            <table>
-              <thead>
-                <tr>
-                  <th>사이트</th>
-                  <th>건물</th>
-                  <th>총 회의실 수</th>
-                  <th>사용 중</th>
-                  <th>사용 가능</th>
-                  <th>사용률</th>
-                </tr>
-              </thead>
-              <tbody>
-                <tr v-if="!siteBuildingUsage.length">
-                  <td colspan="6"><div class="empty-state">표시할 회의실 사용 현황이 없습니다.</div></td>
-                </tr>
-                <tr v-for="site in siteBuildingUsage" :key="`${site.siteId}-${site.buildingId}-table`">
-                  <td>{{ site.siteName }}</td>
-                  <td>{{ site.buildingName }}</td>
-                  <td>{{ site.totalRooms }}</td>
-                  <td>{{ site.usedRooms }}</td>
-                  <td>{{ Math.max(site.totalRooms - site.usedRooms, 0) }}</td>
-                  <td>
-                    <span class="progress-cell"><i :style="{ width: formatPercent(site.usageRate) }"></i></span>
-                    {{ formatPercent(site.usageRate) }}
-                  </td>
-                </tr>
-              </tbody>
-            </table>
+          <p v-if="!visibleTimeSlotUsage.length" class="empty-text">표시할 시간대별 사용 현황이 없습니다.</p>
+          <div v-else class="admin-usage-detail-card">
+            <div class="admin-usage-chart-shell" role="img" aria-label="시간대별 회의실 사용 현황 그래프">
+              <svg
+                class="admin-usage-chart"
+                :viewBox="`0 0 ${chartViewBoxWidth} ${chartViewBoxHeight}`"
+                preserveAspectRatio="none"
+              >
+                <g>
+                  <line
+                    v-for="tick in usageChartYTicks"
+                    :key="`grid-${tick.value}-${tick.y}`"
+                    class="admin-usage-grid-line"
+                    :x1="chartPadding.left"
+                    :x2="chartViewBoxWidth - chartPadding.right"
+                    :y1="tick.y"
+                    :y2="tick.y"
+                  />
+                  <text
+                    v-for="tick in usageChartYTicks"
+                    :key="`label-${tick.value}-${tick.y}`"
+                    class="admin-usage-axis-label"
+                    :x="chartPadding.left - 12"
+                    :y="tick.y + 4"
+                    text-anchor="end"
+                  >
+                    {{ tick.value }}
+                  </text>
+                </g>
+                <polygon
+                  v-if="usageChartArea"
+                  class="admin-usage-area"
+                  :points="usageChartArea"
+                />
+                <polyline
+                  v-if="usageChartPolyline"
+                  class="admin-usage-line"
+                  :points="usageChartPolyline"
+                />
+                <g v-for="point in usageChartPoints" :key="point.slotStartAt">
+                  <circle class="admin-usage-dot" :cx="point.x" :cy="point.y" r="5" />
+                  <text
+                    v-if="point.reservationCount > 0"
+                    class="admin-usage-value"
+                    :x="point.x"
+                    :y="point.y - 12"
+                    text-anchor="middle"
+                  >
+                    {{ point.reservationCount }}
+                  </text>
+                  <text
+                    v-if="point.emphasized"
+                    class="admin-usage-axis-label"
+                    :x="point.x"
+                    :y="chartViewBoxHeight - 16"
+                    text-anchor="middle"
+                  >
+                    {{ point.label }}
+                  </text>
+                </g>
+              </svg>
+            </div>
+            <div class="admin-usage-insights">
+              <article v-for="item in usageInsightItems" :key="item.label" class="admin-usage-insight">
+                <span>{{ item.label }}</span>
+                <strong>{{ item.value }}</strong>
+              </article>
+            </div>
           </div>
         </article>
 

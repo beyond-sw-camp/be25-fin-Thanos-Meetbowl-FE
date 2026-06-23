@@ -265,8 +265,7 @@ async function loadRooms() {
 }
 
 onMounted(async () => {
-  await loadRooms()
-  await loadMeetings()
+  await Promise.all([loadRooms(), loadMeetings()])
   openMeetingFromQuery()
   window.addEventListener('focus', handleWindowFocus)
   document.addEventListener('visibilitychange', handleVisibilityChange)
