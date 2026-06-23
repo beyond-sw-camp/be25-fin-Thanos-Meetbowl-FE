@@ -31,6 +31,7 @@
         :can-edit="canEditSelected"
         :can-approve="canApproveSelected"
         :action-pending="actionPending"
+        :can-share="canShareSelected"
         @toggle-favorite="toggleFavorite"
         @start-edit="editing = true"
         @cancel-edit="editing = false"
@@ -41,7 +42,7 @@
       />
     </div>
 
-    <ShareMailModal v-if="shareOpen" :draft="share" :members="members" @close="shareOpen = false" @send="shareOpen = false" />
+    <ShareMailModal v-if="shareOpen" :draft="share" @close="closeShare" @send="sendShare" />
   </section>
 </template>
 
@@ -51,7 +52,6 @@ import { useRoute, useRouter } from 'vue-router'
 import MinuteDetail from '../../components/minutes/MinuteDetail.vue'
 import MinuteList from '../../components/minutes/MinuteList.vue'
 import ShareMailModal from '../../components/minutes/ShareMailModal.vue'
-import { members } from '../../data/mockData'
 import {
   addMinutesFavorite,
   approveMeetingMinutes,
@@ -60,6 +60,7 @@ import {
   listMinutes,
   removeMinutesFavorite,
   reviseMeetingMinutes,
+  shareMeetingMinutes,
 } from '../../lib/minutes'
 import { extractTiptapText, isValidTiptapDocument } from '../../lib/minutes-content'
 import { useAuthStore } from '../../stores/auth'
@@ -84,7 +85,7 @@ const transcriptError = ref('')
 const transcriptLines = ref([])
 const editing = ref(false)
 const favorites = ref({})
-const share = ref({ recipients: members.slice(4, 7), query: '', subject: '', body: '' })
+const share = ref({ recipients: [], query: '', subject: '', body: '', error: '', sending: false })
 
 const filtered = computed(() => {
   const keyword = q.value.trim().toLowerCase()
@@ -107,6 +108,7 @@ const canApproveSelected = computed(() => {
   if (!selected.value || !['DRAFT', 'IN_REVIEW'].includes(selectedStatus.value)) return false
   return selected.value.reviewerUserId === auth.user?.userId
 })
+const canShareSelected = computed(() => Boolean(selected.value && ['APPROVED', 'SHARED'].includes(selectedStatus.value)))
 
 onMounted(loadMinutes)
 
@@ -245,9 +247,50 @@ async function toggleTranscript() {
 
 function openShare() {
   if (!selected.value) return
-  share.value.subject = `[회의록 공유] ${selected.value.title}`
-  share.value.body = `안녕하세요,\n\n${selected.value.title} 회의록을 공유드립니다.\n\n[AI 요약]\n${selected.value.summary}\n\n확인 부탁드립니다.`
+  if (!canShareSelected.value) {
+    detailError.value = '승인된 회의록만 추가 공유할 수 있습니다.'
+    return
+  }
+  share.value = {
+    recipients: [],
+    query: '',
+    subject: `[회의록 공유] ${selected.value.title}`,
+    body: `안녕하세요,\n\n${selected.value.title} 회의록을 공유드립니다.\n\n[AI 요약]\n${selected.value.summary}\n\n확인 부탁드립니다.`,
+    error: '',
+    sending: false,
+  }
   shareOpen.value = true
+}
+
+function closeShare() {
+  if (share.value.sending) return
+  shareOpen.value = false
+}
+
+async function sendShare() {
+  if (!selected.value || share.value.sending) return
+  const recipientUserIds = share.value.recipients.map((recipient) => recipient.userId)
+  if (recipientUserIds.length === 0) {
+    share.value.error = '받는 사람을 1명 이상 선택하세요.'
+    return
+  }
+  share.value.sending = true
+  share.value.error = ''
+  try {
+    const shared = await shareMeetingMinutes(selected.value.meetingId, {
+      recipientUserIds,
+      subject: share.value.subject,
+      body: share.value.body,
+      idempotencyKey: randomUuid(),
+    })
+    detailByMeetingId.value = { ...detailByMeetingId.value, [shared.meetingId]: shared }
+    replaceListItem(normalizeMinute(shared))
+    shareOpen.value = false
+  } catch (error) {
+    share.value.error = error?.message || '회의록 공유 메일 발송에 실패했습니다.'
+  } finally {
+    share.value.sending = false
+  }
 }
 
 function replaceListItem(next) {
@@ -307,5 +350,13 @@ function formatOffset(ms) {
   const minutes = String(Math.floor(totalSeconds / 60)).padStart(2, '0')
   const seconds = String(totalSeconds % 60).padStart(2, '0')
   return `${minutes}:${seconds}`
+}
+
+function randomUuid() {
+  if (globalThis.crypto?.randomUUID) return globalThis.crypto.randomUUID()
+  return '10000000-1000-4000-8000-100000000000'.replace(/[018]/g, (char) => {
+    const random = globalThis.crypto.getRandomValues(new Uint8Array(1))[0]
+    return (Number(char) ^ (random & (15 >> (Number(char) / 4)))).toString(16)
+  })
 }
 </script>

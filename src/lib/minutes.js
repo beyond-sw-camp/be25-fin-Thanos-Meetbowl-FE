@@ -1,4 +1,4 @@
-import { deleteJson, getJson, patchJson, postJson } from './api-client'
+import { deleteJson, getJson, patchJson, postJson } from './api-client.js'
 
 function query(params = {}) {
   const q = new URLSearchParams()
@@ -27,6 +27,15 @@ export function reviseMeetingMinutes(meetingId, payload) {
 
 export function approveMeetingMinutes(meetingId) {
   return postJson(`/meetings/${meetingId}/minutes/approve`, {})
+}
+
+export function shareMeetingMinutes(meetingId, payload) {
+  return postJson(`/meetings/${meetingId}/minutes/share`, {
+    recipientUserIds: payload.recipientUserIds,
+    subject: payload.subject,
+    body: payload.body,
+    idempotencyKey: payload.idempotencyKey,
+  })
 }
 
 export function addMinutesFavorite(minutesId) {

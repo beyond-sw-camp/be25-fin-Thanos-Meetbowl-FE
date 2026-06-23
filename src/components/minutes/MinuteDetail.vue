@@ -13,7 +13,7 @@
         <button class="secondary-button small">PDF 다운로드</button>
         <button v-if="!editing" class="secondary-button small" :disabled="!canEdit || actionPending" @click="$emit('start-edit')">수정</button>
         <button class="primary-button small" :disabled="!canApprove || actionPending" @click="$emit('approve')">승인</button>
-        <button class="primary-button small" @click="$emit('share')">내부 메일 공유</button>
+        <button class="primary-button small" :disabled="!canShare || actionPending" @click="$emit('share')">내부 메일 공유</button>
       </div>
     </header>
     <section class="ai-minutes-box">
@@ -58,6 +58,7 @@ const props = defineProps({
   transcriptError: { type: String, default: '' },
   canEdit: { type: Boolean, default: false },
   canApprove: { type: Boolean, default: false },
+  canShare: { type: Boolean, default: false },
   actionPending: { type: Boolean, default: false },
 })
 
