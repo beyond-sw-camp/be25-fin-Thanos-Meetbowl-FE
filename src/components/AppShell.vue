@@ -73,7 +73,7 @@
                   class="notification password-reset-notification"
                 >
                   <div class="password-reset-notification__head">
-                    <strong>{{ request.name || '-' }}</strong>
+                    <strong>{{ request.requesterName || request.name || request.userName || request.displayName || '-' }}</strong>
                     <span class="badge danger">PENDING</span>
                   </div>
                   <span>로그인 ID: {{ request.loginId || '-' }}</span>

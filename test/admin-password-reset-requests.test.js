@@ -90,7 +90,7 @@ test('getAdminPasswordResetRequests requests pending items for the admin notific
             items: [
               {
                 requestId: '00000000-0000-0000-0000-000000000003',
-                name: 'User One',
+                requesterName: 'User One',
                 loginId: 'user1',
                 email: 'user1@example.com',
                 requestedAt: '2026-06-23T00:00:00Z',
