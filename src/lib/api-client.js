@@ -221,6 +221,8 @@ function buildRequestInit(options) {
     headers: buildHeaders(options),
     body: options.body,
     keepalive: Boolean(options.keepalive),
+    // 호출부가 지정한 AbortSignal(타임아웃 등)을 fetch로 그대로 전달한다.
+    signal: options.signal,
   }
 }
 
