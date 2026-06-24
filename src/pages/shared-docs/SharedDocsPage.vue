@@ -153,6 +153,8 @@
       <form class="write-modal shared-create-modal" @submit.prevent="createSpace" @click.stop>
         <header><h2>프로젝트 생성</h2><button type="button" @click="createOpen = false">닫기</button></header>
         <label>이름<input v-model="spaceDraft.name" placeholder="예: Q3 신제품 TF"></label>
+        <label>설명<textarea v-model="spaceDraft.description" rows="3" placeholder="프로젝트 목적이나 공유 범위를 입력하세요."></textarea></label>
+        <p v-if="createErrorMessage" class="warning-text">{{ createErrorMessage }}</p>
         <section class="shared-member-invite">
           <div class="shared-member-section-title">
             <strong>프로젝트 멤버</strong>
@@ -321,7 +323,7 @@ const uploadOpen = ref(false)
 const inviteOpen = ref(false)
 const uploadInput = ref(null)
 const uploadLoading = ref(false)
-const spaceDraft = ref({ name: '' })
+const spaceDraft = ref({ name: '', description: '' })
 const uploadDraft = ref({ files: [] })
 const createMemberKeyword = ref('')
 const createMemberCandidates = ref([])
@@ -335,6 +337,7 @@ const inviteSearchOpen = ref(false)
 const inviteSearchRoot = ref(null)
 const userMap = ref(new Map())
 const errorMessage = ref('')
+const createErrorMessage = ref('')
 const toasts = ref([])
 
 const activeSpace = computed(() => spaces.value.find((space) => space.workspaceId === activeSpaceId.value))
@@ -488,20 +491,40 @@ async function submitNewVersion() {
 }
 
 function openCreate() {
-  spaceDraft.value = { name: '' }
+  spaceDraft.value = { name: '', description: '' }
   createSelectedMembers.value = []
   createMemberKeyword.value = ''
   createMemberCandidates.value = []
   createMemberSearchOpen.value = false
+  createErrorMessage.value = ''
   createOpen.value = true
 }
 
 async function createSpace() {
-  if (!spaceDraft.value.name.trim()) return
+  const name = spaceDraft.value.name.trim()
+  const description = spaceDraft.value.description.trim()
+  if (!name) {
+    createErrorMessage.value = '프로젝트 이름을 입력해 주세요.'
+    return
+  }
+  if (name.length > 100) {
+    createErrorMessage.value = '프로젝트 이름은 100자 이하여야 합니다.'
+    return
+  }
+  if (description.length > 1000) {
+    createErrorMessage.value = '프로젝트 설명은 1000자 이하여야 합니다.'
+    return
+  }
+  if (spaces.value.some((space) => space.name?.trim().toLowerCase() === name.toLowerCase())) {
+    createErrorMessage.value = '같은 이름의 프로젝트가 이미 있습니다.'
+    return
+  }
   errorMessage.value = ''
+  createErrorMessage.value = ''
   try {
     const created = await createSharedWorkspace({
-      name: spaceDraft.value.name.trim(),
+      name,
+      description: description || null,
     })
     const selectedMembers = [...createSelectedMembers.value]
     const inviteResults = await Promise.allSettled(
@@ -513,7 +536,7 @@ async function createSpace() {
     await selectSpace(created.workspaceId)
     showToast('프로젝트 생성 완료', selectedMembers.length ? `${created.name} · 멤버 ${invitedCount}/${selectedMembers.length}명 초대` : created.name)
   } catch (error) {
-    errorMessage.value = error?.message || '공유 프로젝트 생성에 실패했습니다.'
+    createErrorMessage.value = error?.message || '공유 프로젝트 생성에 실패했습니다.'
   }
 }
 
