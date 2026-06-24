@@ -336,9 +336,10 @@ watch(
 }
 
 .organization-chart-canvas__team-branch {
-  min-width: 134px;
-  max-width: 148px;
-  flex: 0 0 134px;
+  width: 132px;
+  min-width: 132px;
+  max-width: 132px;
+  flex: 0 0 132px;
   display: grid;
   gap: 8px;
   align-content: start;
@@ -419,7 +420,7 @@ watch(
 }
 
 .organization-chart-canvas__node--team {
-  width: 132px;
+  width: 100%;
   min-height: 38px;
   display: flex;
   align-items: center;
@@ -448,33 +449,34 @@ watch(
 }
 
 .organization-chart-canvas__member-list {
+  width: 100%;
   display: grid;
   gap: 4px;
-  padding: 6px 0 0 0;
-}
-
-.organization-chart-canvas__member-list.is-active {
-  border-top-color: rgba(243, 115, 33, 0.28);
+  padding-top: 6px;
 }
 
 .organization-chart-canvas__member-row {
-  min-height: 24px;
+  width: 100%;
+  min-height: 30px;
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 8px;
-  border: 0;
+  border: 1px solid var(--border);
   border-radius: 8px;
-  background: transparent;
-  padding: 3px 4px;
+  background: #ffffff;
+  padding: 4px 8px;
   color: var(--foreground);
   text-align: left;
-  transition: background-color 0.15s ease, color 0.15s ease;
+  box-shadow: 0 4px 12px rgba(15, 23, 42, 0.03);
+  transition: border-color 0.15s ease, background-color 0.15s ease, box-shadow 0.15s ease;
 }
 
 .organization-chart-canvas__member-row:hover,
 .organization-chart-canvas__member-row.is-active {
+  border-color: rgba(243, 115, 33, 0.35);
   background: #fff7ed;
+  box-shadow: 0 6px 14px rgba(243, 115, 33, 0.08);
 }
 
 .organization-chart-canvas__member-row:focus-visible {
@@ -509,6 +511,10 @@ watch(
   color: var(--muted-foreground);
   font-size: 11px;
   text-align: center;
+}
+
+.organization-chart-canvas__member-empty {
+  width: 100%;
 }
 
 .organization-chart-canvas__empty {
