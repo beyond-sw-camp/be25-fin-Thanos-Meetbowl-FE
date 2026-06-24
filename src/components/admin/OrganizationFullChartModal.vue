@@ -46,6 +46,7 @@
         <OrganizationChartCanvas
           :chart-data="chartData"
           :selected-node-key="selectedNodeKey"
+          :selected-node="selectedNode"
           :show-detail-button="isCompactLayout"
           @select="selectNode"
           @toggle-detail="mobileDetailOpen = true"

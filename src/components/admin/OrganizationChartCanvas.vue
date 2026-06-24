@@ -66,18 +66,45 @@
               </button>
 
               <div v-if="department.teams.length" class="organization-chart-canvas__teams">
-                <button
+                <section
                   v-for="team in department.teams"
                   :key="team.key"
-                  :ref="bindNodeRef(team.key)"
-                  type="button"
-                  class="organization-chart-canvas__node organization-chart-canvas__node--team"
-                  :class="{ 'is-active': selectedNodeKey === team.key }"
-                  @click="$emit('select', team.key)"
+                  class="organization-chart-canvas__team-branch"
                 >
-                  <strong>{{ team.name }}</strong>
-                  <span>{{ team.memberCount }}명</span>
-                </button>
+                  <button
+                    :ref="bindNodeRef(team.key)"
+                    type="button"
+                    class="organization-chart-canvas__node organization-chart-canvas__node--team"
+                    :class="{ 'is-active': selectedNodeKey === team.key }"
+                    @click="$emit('select', team.key)"
+                  >
+                    <strong>{{ team.name }}</strong>
+                    <span>{{ team.memberCount }}명</span>
+                  </button>
+
+                  <div
+                    class="organization-chart-canvas__member-list"
+                    :class="{ 'is-active': isSelectedTeam(team.key) }"
+                  >
+                    <!-- 직원은 팀 아래 세로 리스트로 고정해 부서별 묶음 구조를 한눈에 파악하게 한다. -->
+                    <button
+                      v-for="member in team.members"
+                      :key="member.key"
+                      :ref="bindNodeRef(member.key)"
+                      type="button"
+                      class="organization-chart-canvas__member-row"
+                      :class="{ 'is-active': selectedNodeKey === member.key }"
+                      @click="$emit('select', member.key)"
+                    >
+                      <strong>{{ member.name }}</strong>
+                      <span>{{ member.position || '-' }}</span>
+                    </button>
+
+                    <div v-if="!team.members.length" class="organization-chart-canvas__member-empty">
+                      구성원 없음
+                    </div>
+                  </div>
+                </section>
               </div>
 
               <div v-else class="organization-chart-canvas__member-empty">하위 팀 없음</div>
@@ -100,6 +127,7 @@ const SCALE_STEP = 0.05
 const props = defineProps({
   chartData: { type: Object, required: true },
   selectedNodeKey: { type: String, default: '' },
+  selectedNode: { type: Object, default: null },
   showDetailButton: { type: Boolean, default: false },
 })
 
@@ -139,6 +167,13 @@ function increaseScale() {
 
 function fitScale() {
   currentScale.value = DEFAULT_SCALE
+}
+
+function isSelectedTeam(teamKey) {
+  if (!props.selectedNode) return false
+  if (props.selectedNode.type === 'team') return props.selectedNode.key === teamKey
+  if (props.selectedNode.type === 'member') return props.selectedNode.parentKey === teamKey
+  return false
 }
 
 async function scrollToSelectedNode(nodeKey) {
@@ -272,7 +307,8 @@ watch(
 
 .organization-chart-canvas__department {
   position: relative;
-  width: 156px;
+  width: max-content;
+  min-width: 156px;
   display: grid;
   gap: 12px;
   justify-items: stretch;
@@ -290,8 +326,9 @@ watch(
 
 .organization-chart-canvas__teams {
   position: relative;
-  display: grid;
-  gap: 8px;
+  display: flex;
+  align-items: flex-start;
+  gap: 14px;
   padding-top: 16px;
 }
 
@@ -303,6 +340,14 @@ watch(
   width: 1px;
   height: 16px;
   background: #d8e2ee;
+}
+
+.organization-chart-canvas__team-branch {
+  min-width: 134px;
+  max-width: 148px;
+  display: grid;
+  gap: 8px;
+  align-content: start;
 }
 
 .organization-chart-canvas__node {
@@ -401,6 +446,59 @@ watch(
 }
 
 .organization-chart-canvas__node--team span {
+  color: var(--muted-foreground);
+  white-space: nowrap;
+}
+
+.organization-chart-canvas__member-list {
+  display: grid;
+  gap: 4px;
+  padding: 6px 0 0 0;
+}
+
+.organization-chart-canvas__member-list.is-active {
+  border-top-color: rgba(243, 115, 33, 0.28);
+}
+
+.organization-chart-canvas__member-row {
+  min-height: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  padding: 3px 4px;
+  color: var(--foreground);
+  text-align: left;
+  transition: background-color 0.15s ease, color 0.15s ease;
+}
+
+.organization-chart-canvas__member-row:hover,
+.organization-chart-canvas__member-row.is-active {
+  background: #fff7ed;
+}
+
+.organization-chart-canvas__member-row:focus-visible {
+  outline: 2px solid rgba(243, 115, 33, 0.28);
+  outline-offset: 1px;
+}
+
+.organization-chart-canvas__member-row strong,
+.organization-chart-canvas__member-row span {
+  font-size: 11px;
+  line-height: 1.25;
+}
+
+.organization-chart-canvas__member-row strong {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.organization-chart-canvas__member-row span {
   color: var(--muted-foreground);
   white-space: nowrap;
 }
