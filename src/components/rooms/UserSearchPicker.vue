@@ -1,8 +1,15 @@
 <template>
   <div class="member-picker">
+    <div v-if="warning" class="member-picker-warning">{{ warning }}</div>
     <label>참석자 검색<input v-model="query" placeholder="이름, 부서, 이메일"></label>
     <div v-if="results.length" class="member-picker-results">
-      <button v-for="user in results" :key="user.userId" type="button" @click="add(user)">
+      <button
+        v-for="user in results"
+        :key="user.userId"
+        type="button"
+        :disabled="checking"
+        @click="add(user)"
+      >
         <strong>{{ user.name }}</strong>
         <span>{{ user.department }} · {{ user.email }}</span>
       </button>
@@ -30,11 +37,17 @@ const props = defineProps({
   modelValue: { type: Array, default: () => [] },
   excludeUserId: { type: String, default: '' },
   fixedUserIds: { type: Array, default: () => [] },
+  // 추가 직전 비동기 검증 훅(선택). user를 받아 차단 사유 문자열을 반환하면 추가하지 않고 reject 이벤트로 알린다.
+  // null(미지정)이면 검증 없이 바로 추가한다.
+  validateAdd: { type: Function, default: null },
+  // 참석자 겹침 경고 문구(선택). '참석자 검색' 라벨 바로 위에 폼 너비의 중앙 오버레이로 표시한다. 빈 문자열이면 숨김.
+  warning: { type: String, default: '' },
 })
-const emit = defineEmits(['update:modelValue'])
+const emit = defineEmits(['update:modelValue', 'reject'])
 
 const query = ref('')
 const results = ref([])
+const checking = ref(false)
 const fixedUserIdSet = computed(() => new Set(props.fixedUserIds.filter(Boolean)))
 let seq = 0
 let debounceTimer = null
@@ -74,8 +87,22 @@ watch(query, (value) => {
 // 입력 도중 컴포넌트가 닫히면 예약된 검색 타이머를 정리한다.
 onBeforeUnmount(() => clearTimeout(debounceTimer))
 
-function add(user) {
+async function add(user) {
+  if (checking.value) return
   if (props.modelValue.some((attendee) => attendee.userId === user.userId)) return
+  // 추가 직전 검증(시간 겹침 등). 차단 사유가 오면 추가하지 않고 reject로 알린다.
+  if (props.validateAdd) {
+    checking.value = true
+    try {
+      const rejection = await props.validateAdd(user)
+      if (rejection) {
+        emit('reject', rejection)
+        return
+      }
+    } finally {
+      checking.value = false
+    }
+  }
   emit('update:modelValue', [...props.modelValue, { userId: user.userId, name: user.name }])
   query.value = ''
   results.value = []
@@ -86,3 +113,29 @@ function remove(userId) {
   emit('update:modelValue', props.modelValue.filter((attendee) => attendee.userId !== userId))
 }
 </script>
+
+<style scoped>
+/* '참석자 검색' 라벨 바로 위에 폼(참석자 영역) 너비로 뜨는 중앙 오버레이. 레이아웃을 밀지 않도록 absolute로 띄운다. */
+.member-picker {
+  position: relative;
+}
+.member-picker-warning {
+  position: absolute;
+  left: 50%;
+  bottom: calc(100% + 8px);
+  transform: translateX(-50%);
+  z-index: 2;
+  width: 100%;
+  box-sizing: border-box;
+  border: 1px solid #fdba74;
+  border-radius: 10px;
+  background: #fff7ed;
+  color: #c2410c;
+  padding: 10px 12px;
+  font-size: 13px;
+  font-weight: 700;
+  text-align: center;
+  box-shadow: 0 12px 28px rgba(194, 65, 12, 0.16);
+  pointer-events: none;
+}
+</style>

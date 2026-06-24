@@ -15,9 +15,12 @@
         :host-user-id="myUserId"
         :room-usage-enabled="roomUsageEnabled"
         :allow-remote="allowRemote"
+        :attendee-validate="validateAttendeeAdd"
+        :attendee-warning="attendeeWarning"
         @submit="save"
         @enable-room-usage="enableRoomUsage"
         @disable-room-usage="disableRoomUsage"
+        @attendee-reject="onAttendeeReject"
       >
         <template #actions>
           <div class="modal-actions">
@@ -48,7 +51,7 @@ import ModalShell from '../common/ModalShell.vue'
 import ReservationForm from './ReservationForm.vue'
 import ReservationTimeline from './ReservationTimeline.vue'
 import { useAuthStore } from '../../stores/auth'
-import { createMeeting, getMeeting, getRoomReservations, updateMeeting } from '../../lib/reservations'
+import { checkAttendeeAvailability, createMeeting, getMeeting, getRoomReservations, updateMeeting } from '../../lib/reservations'
 import { useUserNames } from '../../composables/useUserNames'
 import { addMinutes, kstDayRangeUtc, kstToUtcIso, shiftDateKst, todayKst, utcToKstClock, utcToKstDate } from '../../utils/dateTime'
 
@@ -86,8 +89,14 @@ const roomUsageEnabled = ref(!props.allowRemote || Boolean(props.initialRoomId) 
 const saving = ref(false)
 const loading = ref(false)
 const actionError = ref('')
+// 참석자 겹침 경고는 모달 오버레이 대신 '참석자 검색' 라벨 위 오버레이(폼 너비)에 따로 띄운다.
+const attendeeWarning = ref('')
 const blocksByRoom = ref({})
 let errorOverlayTimerId = null
+let attendeeWarningTimerId = null
+// 초기 prefill/마운트가 끝나기 전에는 참석자 시간 재검사를 돌리지 않는다(열자마자 기존 참석자가 빠지는 것 방지).
+const ready = ref(false)
+let attendeeRecheckTimer = null
 
 const submitLabel = computed(() => {
   if (saving.value) return isEdit.value ? '수정 중...' : '예약 중...'
@@ -133,6 +142,8 @@ onMounted(async () => {
   if (!props.allowRemote) roomUsageEnabled.value = true
   if (props.allowRemote && props.initialRemote) roomUsageEnabled.value = false
   await loadDay()
+  // prefill로 인한 시간 변화는 재검사 대상이 아니다 — 이후 사용자가 시간을 바꿀 때부터 검사한다.
+  ready.value = true
 })
 
 // 수정 모드: 상세 조회로 기존 값(회의실·참석자·검토자·내용 포함)을 폼에 채운다.
@@ -175,6 +186,12 @@ async function prefillFromMeeting() {
 // 시작 날짜를 바꾸면 그날 예약 현황만 다시 불러온다(시간 변경은 재조회 없이 computed로 처리).
 watch(() => form.value.date, loadDay)
 
+// 시간(시작/종료)이 바뀌면 이미 추가된 참석자들이 그 시간대에 겹치게 됐는지 디바운스로 재검사한다.
+watch(
+  () => [form.value.date, form.value.endDate, form.value.start, form.value.end],
+  scheduleAttendeeRecheck,
+)
+
 watch(
   hostAttendee,
   (host) => {
@@ -194,6 +211,19 @@ watch(actionError, (message) => {
     actionError.value = ''
     errorOverlayTimerId = null
   }, 3000)
+})
+
+// 참석자 경고도 동일하게 일정 시간 뒤 자동으로 사라진다(제외 안내를 읽을 수 있게 조금 더 길게).
+watch(attendeeWarning, (message) => {
+  if (attendeeWarningTimerId) {
+    window.clearTimeout(attendeeWarningTimerId)
+    attendeeWarningTimerId = null
+  }
+  if (!message) return
+  attendeeWarningTimerId = window.setTimeout(() => {
+    attendeeWarning.value = ''
+    attendeeWarningTimerId = null
+  }, 4000)
 })
 
 // 참석자에서 빠진 사용자가 검토자였다면 검토자 선택을 비운다.
@@ -286,9 +316,98 @@ function normalizeAttendees(attendees = []) {
   return normalized
 }
 
+// 현재 폼 시간대 기준으로 userIds의 회의 겹침을 조회한다. 시간이 비었거나 종료<=시작이면 검사하지 않는다(빈 배열).
+// 수정 시 자기 회의는 excludeMeetingId로 제외한다. 네트워크/일시 오류는 차단하지 않는다(저장 시 백엔드 가드가 최종 방어).
+async function fetchConflicts(userIds) {
+  if (!userIds.length) return []
+  const scheduledAt = kstToUtcIso(form.value.date, form.value.start)
+  const scheduledEndAt = kstToUtcIso(form.value.endDate, form.value.end)
+  if (Number.isNaN(new Date(scheduledAt).getTime()) || Number.isNaN(new Date(scheduledEndAt).getTime())) return []
+  if (new Date(scheduledEndAt) <= new Date(scheduledAt)) return []
+  try {
+    const data = await checkAttendeeAvailability({
+      userIds,
+      scheduledAt,
+      scheduledEndAt,
+      excludeMeetingId: isEdit.value ? props.meeting?.meetingId : undefined,
+    })
+    return data?.conflicts || []
+  } catch {
+    return []
+  }
+}
+
+// 겹친 사용자들을 userId별로 한 번씩 묶어 경고 문구로 만든다(이름은 폼/이름맵에서, 회의 제목이 있으면 함께 표시).
+function describeConflicts(conflicts) {
+  const byUser = new Map()
+  for (const conflict of conflicts) {
+    if (!byUser.has(conflict.userId)) byUser.set(conflict.userId, conflict)
+  }
+  return [...byUser.values()]
+    .map((conflict) => {
+      const name =
+        form.value.attendees.find((a) => a.userId === conflict.userId)?.name ||
+        nameMap[conflict.userId] ||
+        '참석자'
+      return conflict.meetingTitle
+        ? `${name}님은 '${conflict.meetingTitle}' 회의에 참석 중입니다`
+        : `${name}님은 이미 회의 참석 중입니다`
+    })
+    .join(' / ')
+}
+
+// 참석자 추가 직전 검증(UserSearchPicker로 전달). 겹치면 차단 사유 문구를 반환하고, 안 겹치면 null.
+async function validateAttendeeAdd(user) {
+  const conflicts = await fetchConflicts([user.userId])
+  if (!conflicts.length) return null
+  const conflict = conflicts[0]
+  return conflict.meetingTitle
+    ? `${user.name}님은 '${conflict.meetingTitle}' 회의에 참석 중입니다.`
+    : `${user.name}님은 이미 회의 참석 중입니다.`
+}
+
+// 추가가 차단되면(겹침) '참석자 검색' 라벨 위 경고로 알린다.
+function onAttendeeReject(message) {
+  attendeeWarning.value = message
+}
+
+function scheduleAttendeeRecheck() {
+  if (!ready.value) return
+  window.clearTimeout(attendeeRecheckTimer)
+  attendeeRecheckTimer = window.setTimeout(recheckAttendeesForTime, 400)
+}
+
+// 시간 변경으로 기존 참석자가 겹치게 됐는지 재검사한다. 겹친 일반 참석자는 목록에서 제거하고, 주최자(고정)는 제거 없이 경고만 한다.
+async function recheckAttendeesForTime() {
+  const current = form.value.attendees
+  const conflicts = await fetchConflicts(current.map((attendee) => attendee.userId))
+  if (!conflicts.length) return
+
+  const byUser = new Map()
+  for (const conflict of conflicts) {
+    if (!byUser.has(conflict.userId)) byUser.set(conflict.userId, conflict)
+  }
+
+  const phrases = []
+  const removableIds = new Set()
+  for (const [userId, conflict] of byUser) {
+    const name = current.find((a) => a.userId === userId)?.name || nameMap[userId] || '참석자'
+    const isHost = userId === myUserId.value
+    const where = conflict.meetingTitle ? `'${conflict.meetingTitle}' 회의에` : '이미'
+    phrases.push(`${name}님은 ${where} 참석 중입니다${isHost ? '' : ' (제외됨)'}`)
+    if (!isHost) removableIds.add(userId)
+  }
+
+  if (removableIds.size) {
+    form.value.attendees = current.filter((attendee) => !removableIds.has(attendee.userId))
+  }
+  attendeeWarning.value = phrases.join(' / ')
+}
+
 async function save() {
   if (saving.value) return
   actionError.value = ''
+  attendeeWarning.value = ''
 
   const title = form.value.title.trim()
   if (!title) {
@@ -335,9 +454,15 @@ async function save() {
     }
     emit('saved')
   } catch (error) {
-    // 서버 거부 메시지를 그대로 노출한다.
-    // 409 MEETING_ROOM_ALREADY_RESERVED(시간 겹침), MEETING_ROOM_UNAVAILABLE(사용제한 회의실) 등.
-    actionError.value = error?.message || (isEdit.value ? '회의 수정에 실패했습니다.' : '예약에 실패했습니다.')
+    // 참석자 겹침(409 ATTENDEE_TIME_CONFLICT)이면 겹친 사용자명을 다시 조회해 '참석자 검색' 라벨 위 경고로 알린다.
+    if (error?.code === 'ATTENDEE_TIME_CONFLICT') {
+      const conflicts = await fetchConflicts(form.value.attendees.map((attendee) => attendee.userId))
+      attendeeWarning.value = conflicts.length ? describeConflicts(conflicts) : error.message
+    } else {
+      // 그 외 서버 거부 메시지는 그대로 노출한다.
+      // 409 MEETING_ROOM_ALREADY_RESERVED(시간 겹침), MEETING_ROOM_UNAVAILABLE(사용제한 회의실) 등.
+      actionError.value = error?.message || (isEdit.value ? '회의 수정에 실패했습니다.' : '예약에 실패했습니다.')
+    }
   } finally {
     saving.value = false
   }
@@ -348,6 +473,11 @@ onBeforeUnmount(() => {
     window.clearTimeout(errorOverlayTimerId)
     errorOverlayTimerId = null
   }
+  if (attendeeWarningTimerId) {
+    window.clearTimeout(attendeeWarningTimerId)
+    attendeeWarningTimerId = null
+  }
+  window.clearTimeout(attendeeRecheckTimer)
 })
 </script>
 
