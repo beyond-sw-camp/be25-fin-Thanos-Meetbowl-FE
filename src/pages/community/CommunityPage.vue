@@ -1,5 +1,6 @@
 <script>
 import { defineComponent, onMounted, ref, watch } from 'vue'
+import AppSelect from '../../components/common/AppSelect.vue'
 import {
   COMMUNITY_CATEGORIES,
   createComment,
@@ -19,7 +20,7 @@ import { utcToKstClock, utcToKstDate } from '../../utils/dateTime'
 import { Eye, Heart, MessageSquare } from '@lucide/vue'
 
 export default defineComponent({
-  components: { Eye, Heart, MessageSquare },
+  components: { AppSelect, Eye, Heart, MessageSquare },
   setup() {
     // '전체'는 필터 미적용, 'Hot'은 카테고리가 아니라 hot=true(좋아요 N개 이상) 모드. 나머지는 백엔드 enum 라벨.
     const categories = ['전체', ...COMMUNITY_CATEGORIES.map((item) => item.label), 'Hot']
@@ -410,9 +411,9 @@ export default defineComponent({
             <h2>새 글 작성 (익명)</h2>
             <button type="button" @click="writing = false">닫기</button>
           </header>
-          <select v-model="draft.category">
+          <AppSelect v-model="draft.category">
             <option v-for="item in categories.filter((item) => item !== '전체' && item !== 'Hot')" :key="item">{{ item }}</option>
-          </select>
+          </AppSelect>
           <input v-model="draft.title" placeholder="제목">
           <textarea v-model="draft.content" rows="8" placeholder="내용을 입력하세요. 작성자는 익명으로 표시됩니다."></textarea>
           <p v-if="actionError" class="warning-text">{{ actionError }}</p>
@@ -452,9 +453,9 @@ export default defineComponent({
         </template>
 
         <form v-else class="community-edit-form" @submit.prevent="savePostEdit">
-          <select v-model="postDraft.category">
+          <AppSelect v-model="postDraft.category">
             <option v-for="item in categories.filter((item) => item !== '전체' && item !== 'Hot')" :key="item">{{ item }}</option>
-          </select>
+          </AppSelect>
           <input v-model="postDraft.title" placeholder="제목">
           <textarea v-model="postDraft.content" rows="8" placeholder="내용을 입력하세요. 작성자는 익명으로 표시됩니다."></textarea>
           <p v-if="actionError" class="warning-text">{{ actionError }}</p>

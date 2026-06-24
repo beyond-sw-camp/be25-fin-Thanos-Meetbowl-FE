@@ -5,17 +5,17 @@ import { getUserSummary } from '../lib/users'
 // 같은 사용자는 한 번만 조회하고, 실패해도 화면은 막지 않는다(폴백은 호출부에서 처리).
 export function useUserNames() {
   const nameMap = reactive({})
+  const failedIds = new Set()
 
   async function resolveNames(userIds = []) {
-    const targets = [...new Set(userIds)].filter((id) => id && !(id in nameMap))
+    const targets = [...new Set(userIds)].filter((id) => id && !(id in nameMap) && !failedIds.has(id))
     await Promise.all(
       targets.map(async (id) => {
         try {
           const summary = await getUserSummary(id)
           if (summary?.name) nameMap[id] = summary.name
         } catch (error) {
-          // 이름 조회 실패는 무시하고 폴백 라벨(내 예약/예약됨)로 표시한다.
-          console.warn(`[useUserNames] 유저 정보 조회 실패 (ID: ${id}):`, error)
+          failedIds.add(id)
         }
       }),
     )

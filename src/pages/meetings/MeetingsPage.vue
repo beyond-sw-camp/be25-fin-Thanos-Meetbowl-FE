@@ -10,8 +10,12 @@
         <button v-for="item in tabs" :key="item.key" class="chip" :class="{ active: tab === item.key }" @click="changeTab(item.key)">{{ item.label }}</button>
       </div>
       <div class="meeting-filter-controls">
-        <select v-model="range"><option value="all">전체 기간</option><option value="3m">최근 3개월</option><option value="6m">최근 6개월</option></select>
-        <select v-model="sort"><option value="latest">최신순</option><option value="oldest">오래된순</option></select>
+        <label class="meeting-filter-checkbox">
+          <input v-model="excludeEnded" type="checkbox">
+          종료·취소된 회의 제외
+        </label>
+        <AppSelect v-model="range"><option value="all">전체 기간</option><option value="3m">최근 3개월</option><option value="6m">최근 6개월</option></AppSelect>
+        <AppSelect v-model="sort"><option value="latest">최신순</option><option value="oldest">오래된순</option></AppSelect>
         <span>총 {{ filtered.length }}건</span>
       </div>
     </div>
@@ -33,9 +37,33 @@
           </div>
         </div>
         <div class="row-actions">
-          <button v-if="canCancel(meeting)" class="secondary-button small" @click.stop="openEdit(meeting)">수정</button>
-          <button v-if="meeting.status !== 'cancelled'" class="primary-button small" @click.stop="enterMeeting(meeting)">{{ meeting.status === 'ended' ? '내 회의록 보기' : '입장' }}</button>
-          <span v-else class="cancelled-note">취소된 회의</span>
+          <!-- 상세 모달과 동일한 시점×역할 매트릭스. 좁은 행이라 안내문 대신 비활성 입장 버튼+툴팁으로 처리. -->
+          <!-- 종료: 회의록 보기만 -->
+          <button v-if="meeting.status === 'ended'" class="primary-button small" @click.stop="enterMeeting(meeting)">회의록 보기</button>
+          <!-- 취소됨 -->
+          <span v-else-if="meeting.status === 'cancelled'" class="cancelled-note">취소된 회의</span>
+          <template v-else>
+            <!-- 수정: 주최자 & 예정 -->
+            <button v-if="canEdit(meeting)" class="secondary-button small" @click.stop="openEdit(meeting)">수정</button>
+            <!-- 취소: 주최자 & 예정 & 15분 이상 남음 -->
+            <button
+              v-if="canCancelMeeting(meeting)"
+              class="secondary-button small cancel-button"
+              type="button"
+              :disabled="cancelling"
+              @click.stop="requestCancelMeeting(meeting)"
+            >{{ cancelling ? '취소 중' : '취소' }}</button>
+            <!-- 입장(활성): 진행중 또는 예정 & 15분 이내 -->
+            <button v-if="meetingJoinAllowed(meeting)" class="primary-button small" @click.stop="enterMeeting(meeting)">입장</button>
+            <!-- 입장 대기(비활성): 참석자 & 예정 & 15분 이상 남음(툴팁으로 안내) -->
+            <button
+              v-else-if="meeting.role !== 'host' && meetingFarUpcoming(meeting)"
+              class="primary-button small"
+              type="button"
+              disabled
+              title="아직 입장 시간이 아닙니다"
+            >입장</button>
+          </template>
         </div>
       </article>
       <p v-if="!paged.length && !loading" class="empty-text">조건에 맞는 회의가 없습니다.</p>
@@ -82,33 +110,54 @@
         <p v-if="detailError" class="detail-note">{{ detailError }}</p>
       </div>
       <div class="modal-actions">
-        <button
-          v-if="canCancel(detailMeeting)"
-          class="secondary-button cancel-button"
-          type="button"
-          :disabled="cancelling"
-          @click="cancelFromDetail"
-        >{{ cancelling ? '취소 중...' : '회의 취소하기' }}</button>
-        <button v-if="canCancel(detailMeeting)" class="secondary-button" type="button" @click="editFromDetail">수정</button>
-        <button v-if="detailMeeting.status !== 'cancelled'" class="primary-button" type="button" @click="enterFromDetail">{{ detailMeeting.status === 'ended' ? '내 회의록 보기' : '입장' }}</button>
-        <span v-else class="cancelled-note">취소된 회의입니다</span>
+        <!-- 종료: 수정/입장/취소 숨김, '회의록 보기'만 -->
+        <template v-if="detailStatus === 'ended'">
+          <button class="primary-button" type="button" @click="enterFromDetail">회의록 보기</button>
+        </template>
+        <!-- 취소된 회의 -->
+        <template v-else-if="detailStatus === 'cancelled'">
+          <span class="cancelled-note">취소된 회의입니다</span>
+        </template>
+        <template v-else>
+          <!-- 수정: 주최자 & 예정(진행중·종료엔 없음) -->
+          <button v-if="detailIsHost && detailStatus === 'upcoming'" class="secondary-button" type="button" @click="editFromDetail">수정</button>
+          <!-- 취소: 주최자 & 예정 & 시작 15분 이상 남음(임박 취소 방지) -->
+          <button
+            v-if="detailIsHost && detailFarUpcoming"
+            class="secondary-button cancel-button"
+            type="button"
+            :disabled="cancelling"
+            @click="requestCancelMeeting(detailMeeting)"
+          >{{ cancelling ? '취소 중...' : '회의 취소하기' }}</button>
+          <!-- 입장(활성): 진행중 또는 예정 & 시작 15분 이내 -->
+          <button v-if="detailJoinAllowed" class="primary-button" type="button" @click="enterFromDetail">입장</button>
+          <!-- 입장 대기(비활성)+안내: 참석자 & 예정 & 15분 이상 남음 -->
+          <template v-else-if="!detailIsHost && detailFarUpcoming">
+            <button class="primary-button" type="button" disabled>입장</button>
+            <span class="join-wait-note">아직 입장 시간이 아닙니다</span>
+          </template>
+        </template>
       </div>
     </ModalShell>
+    <ConfirmDialog v-if="confirmDialog" v-bind="confirmDialog" @cancel="cancelConfirm" @confirm="acceptConfirm" />
   </section>
 </template>
 
 <script setup>
 
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import AppSelect from '../../components/common/AppSelect.vue'
 import { useRoute, useRouter } from 'vue-router'
 import Pagination from '../../components/common/Pagination.vue'
 import ModalShell from '../../components/common/ModalShell.vue'
+import ConfirmDialog from '../../components/common/ConfirmDialog.vue'
 import ReservationModal from '../../components/rooms/ReservationModal.vue'
   
 import { getMeetingJoinBlockedMessage, openMeetingWindow } from '../../lib/meeting-route'
 import { cancelMeeting, getMeeting, getMeetings, getRooms } from '../../lib/reservations'
 import { useAuthStore } from '../../stores/auth'
 import { useUserNames } from '../../composables/useUserNames'
+import { useConfirmDialog } from '../../composables/useConfirmDialog'
 import { utcToKstClock, utcToKstDate } from '../../utils/dateTime'
 
 const router = useRouter()
@@ -116,6 +165,7 @@ const route = useRoute()
 const auth = useAuthStore()
 const myUserId = computed(() => auth.user?.userId || '')
 const { nameMap, resolveNames } = useUserNames()
+const { confirmDialog, requestConfirm, cancelConfirm, acceptConfirm } = useConfirmDialog()
 
 const statusLabel = { live: '진행 중', upcoming: '예정', ended: '종료', cancelled: '취소됨' }
 
@@ -125,17 +175,34 @@ function statusTone(status) {
   if (status === 'upcoming') return 'primary'
   return 'muted' // ended, cancelled
 }
-// 취소 가능: 주최자 + 예정/진행중(종료·취소는 백엔드도 409로 거부).
-function canCancel(meeting) {
-  return meeting?.role === 'host' && (meeting.status === 'upcoming' || meeting.status === 'live')
+// 시점×역할 버튼 매트릭스 판정(목록 행·상세 모달 공용). 같은 함수를 양쪽에서 재사용한다(중복 구현 없음).
+// 입장 차단(시작 15분 전 규칙)은 getMeetingJoinBlockedMessage로 본다 — 비어있으면 입장 가능 시점이다.
+function meetingFarUpcoming(meeting) {
+  // 예정 + 시작 15분 이상 남음(아직 입장 불가). 주최자 취소 가능/참석자 입장 대기 시점.
+  return meeting?.status === 'upcoming' && Boolean(getMeetingJoinBlockedMessage(meeting.scheduledAt))
+}
+function meetingJoinAllowed(meeting) {
+  // 활성 입장 가능: 진행중, 또는 예정 & 시작 15분 이내.
+  if (meeting?.status === 'live') return true
+  return meeting?.status === 'upcoming' && !getMeetingJoinBlockedMessage(meeting.scheduledAt)
+}
+// 수정 가능: 주최자 + 예정(upcoming)만. 진행중·종료·취소는 수정 불가.
+function canEdit(meeting) {
+  return meeting?.role === 'host' && meeting.status === 'upcoming'
+}
+// 취소 가능: 주최자 + 예정 & 시작 15분 이상 남음(임박·진행중·종료는 불가).
+function canCancelMeeting(meeting) {
+  return meeting?.role === 'host' && meetingFarUpcoming(meeting)
 }
 const tabs = [{ key: 'all', label: '전체' }, { key: 'host', label: '내가 주최한 회의' }, { key: 'attendee', label: '초대된 회의' }, { key: 'active', label: '예정·진행중' }]
 
 // 다른 화면(대시보드 등)에서 ?tab= 으로 진입하면 해당 탭으로 시작한다(all/host/attendee/active).
 const tab = ref(['all', 'host', 'attendee', 'active'].includes(route.query.tab) ? route.query.tab : 'all')
 const range = ref('all')
-// 기본 정렬: 가까운 날짜순(scheduledAt 오름차순) — 다가오는 회의가 위로.
-const sort = ref('oldest')
+// 기본 정렬: 최신순(scheduledAt 내림차순) — 최근/다가오는 회의가 위로.
+const sort = ref('latest')
+// 종료/취소된 회의 숨기기 체크박스 상태(기본: 전체 표시).
+const excludeEnded = ref(false)
 const pageNo = ref(1)
 const pageSize = 10
 
@@ -158,6 +225,12 @@ const detailHostName = computed(() => nameMap[detailFull.value?.hostUserId] || '
 const detailAttendeeNames = computed(() =>
   (detailFull.value?.attendees || []).map((attendee) => nameMap[attendee.userId] || '이름 미확인'),
 )
+
+// 상세 모달 버튼 매트릭스용. 목록 행과 동일한 판정 함수(meetingJoinAllowed/meetingFarUpcoming)를 재사용한다.
+const detailIsHost = computed(() => detailMeeting.value?.role === 'host')
+const detailStatus = computed(() => detailMeeting.value?.status || '')
+const detailJoinAllowed = computed(() => meetingJoinAllowed(detailMeeting.value))
+const detailFarUpcoming = computed(() => meetingFarUpcoming(detailMeeting.value))
 
 // 프론트 탭키 → 백엔드 role 파라미터. attendee→invited.
 // 상태 탭(active)은 역할 무관이라 전체(all)에서 받아 클라이언트에서 예정·진행중만 필터한다.
@@ -217,6 +290,9 @@ const filtered = computed(() => {
   // '예정·진행중' 탭: 예정(upcoming)·진행중(live)만 보여주고 종료/취소는 제외한다.
   if (tab.value === 'active') {
     list = list.filter((meeting) => meeting.status === 'upcoming' || meeting.status === 'live')
+  }
+  if (excludeEnded.value) {
+    list = list.filter((meeting) => meeting.status !== 'ended' && meeting.status !== 'cancelled')
   }
   list.sort((a, b) => (sort.value === 'latest' ? b.scheduledAtMs - a.scheduledAtMs : a.scheduledAtMs - b.scheduledAtMs))
   return list
@@ -282,6 +358,10 @@ watch([tab, range], () => {
   loadMeetings()
 })
 
+watch(excludeEnded, () => {
+  pageNo.value = 1
+})
+
 // 워크스페이스에서 회의 수정으로 직접 진입하는 쿼리 변화를 감시한다.
 watch(() => route.query.editMeetingId, openMeetingFromQuery)
 
@@ -324,18 +404,74 @@ async function onSaved() {
 function enterMeeting(meeting) {
   // 취소된 회의는 입장/회의록 대상이 아니다(버튼도 숨기지만 방어적으로 막는다).
   if (meeting.status === 'cancelled') return
-  if (meeting.status === 'ended') router.push(`/app/minutes/${meeting.id}`)
-  else openMeetingWindow(meeting.id, { scheduledAt: meeting.scheduledAtMs })
+  if (meeting.status === 'ended') {
+    router.push(`/app/minutes/${meeting.id}`)
+    return
+  }
 
   const blockedMessage = getMeetingJoinBlockedMessage(meeting.scheduledAt)
   if (blockedMessage) {
     window.alert(blockedMessage)
     return
   }
+  // 진행중/예정: 회의방 팝업. 시작 15분 전 이전이면 openMeetingWindow가 안내 후 막는다(중복 판정 제거).
+  openMeetingWindow(meeting.id, { scheduledAt: meeting.scheduledAt })
+}
 
-  openMeetingWindow(meeting.id, {
-    scheduledAt: meeting.scheduledAt,
+// 목록 행 클릭 → 상세 모달. GET /meetings/{id}로 전체 정보(참석자 전원·내용)를 받아 채운다.
+// 버튼 매트릭스(수정/취소/입장/회의록)는 detailMeeting을 공유 판정 함수에 넣은 computed로 결정한다.
+async function openMeetingDetail(meeting) {
+  detailMeeting.value = meeting
+  detailFull.value = null
+  detailError.value = ''
+  try {
+    const full = await getMeeting(meeting.meetingId)
+    detailFull.value = full
+    resolveNames([full.hostUserId, ...(full.attendees || []).map((attendee) => attendee.userId)])
+  } catch (error) {
+    detailError.value = error?.message || '회의 상세를 불러오지 못했습니다.'
+  }
+}
+
+function closeMeetingDetail() {
+  detailMeeting.value = null
+  detailFull.value = null
+  detailError.value = ''
+}
+
+// 상세 모달의 '수정'/'입장(또는 회의록)' — 모달을 닫고 기존 흐름을 재사용한다.
+function editFromDetail() {
+  const meeting = detailMeeting.value
+  closeMeetingDetail()
+  openEdit(meeting)
+}
+
+function enterFromDetail() {
+  const meeting = detailMeeting.value
+  closeMeetingDetail()
+  enterMeeting(meeting)
+}
+
+// 회의 취소(목록 행·상세 모달 공용) — 확인 다이얼로그 후 cancelMeeting API 호출, 성공 시 목록 갱신.
+// 모달이 열려 있었으면 닫고, 실패는 alert로 알린다(행에서 호출돼도 동일하게 동작).
+async function requestCancelMeeting(meeting) {
+  if (!meeting || cancelling.value) return
+  const confirmed = await requestConfirm({
+    title: '회의를 취소할까요?',
+    message: `'${meeting.title}' 회의를 취소하면 참석자에게 취소 알림이 전송됩니다.`,
+    confirmLabel: '회의 취소',
   })
+  if (!confirmed) return
+  cancelling.value = true
+  try {
+    await cancelMeeting(meeting.meetingId)
+    if (detailMeeting.value) closeMeetingDetail()
+    await loadMeetings()
+  } catch (error) {
+    window.alert(error?.message || '회의 취소에 실패했습니다.')
+  } finally {
+    cancelling.value = false
+  }
 }
 
 function handleWindowFocus() {
@@ -375,5 +511,37 @@ function handleVisibilityChange() {
   color: var(--muted-foreground);
   font-size: 13px;
   align-self: center;
+}
+.meeting-filter-checkbox {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--muted-foreground);
+  font-size: 13px;
+  font-weight: 600;
+}
+.meeting-filter-checkbox input {
+  width: 16px;
+  height: 16px;
+  accent-color: var(--primary);
+}
+/* 입장 대기(참석자, 시작 15분 이상 남음): 비활성 입장 버튼 + 안내 문구. */
+.modal-actions .primary-button:disabled,
+.row-actions .primary-button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+.join-wait-note {
+  align-self: center;
+  color: var(--muted-foreground);
+  font-size: 13px;
+}
+/* 행 버튼 영역: 좁은 행에서 버튼이 줄바꿈/넘침 없이 한 줄로. */
+.row-actions {
+  display: flex;
+  flex-wrap: nowrap;
+  flex-shrink: 0;
+  gap: 6px;
+  align-items: center;
 }
 </style>

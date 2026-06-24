@@ -1,5 +1,7 @@
 <script setup>
 import { computed, onMounted, ref, watch } from 'vue'
+import ActionButton from '../../components/common/ActionButton.vue'
+import AppSelect from '../../components/common/AppSelect.vue'
 import {
   createAdminDepartment,
   deleteDepartment,
@@ -995,24 +997,12 @@ function getDepartmentTreeData(departmentId) {
           accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
           @change="handleExcelFileChange"
         />
-        <button
-          class="secondary-button"
-          type="button"
-          :disabled="excelDownloading || excelUploading"
-          @click="handleExcelDownload"
-        >
-          <Download :size="15" style="margin-right: 6px;" />
+        <ActionButton variant="secondary" :disabled="excelDownloading || excelUploading" @click="handleExcelDownload">
           {{ excelDownloading ? '다운로드 중...' : '엑셀 다운로드' }}
-        </button>
-        <button
-          class="primary-button"
-          type="button"
-          :disabled="excelUploading || excelDownloading"
-          @click="openExcelUploadPicker"
-        >
-          <Upload :size="15" style="margin-right: 6px;" />
+        </ActionButton>
+        <ActionButton variant="primary" :disabled="excelUploading || excelDownloading" @click="openExcelUploadPicker">
           {{ excelUploading ? '업로드 중...' : '엑셀 업로드' }}
-        </button>
+        </ActionButton>
       </div>
     </header>
 
@@ -1389,7 +1379,7 @@ function getDepartmentTreeData(departmentId) {
           <form class="form-grid" @submit.prevent="saveItem">
             <label v-if="activeTab !== 'position'">
               계열사
-              <select v-model="form.affiliateId" required>
+              <AppSelect v-model="form.affiliateId" required>
                 <option value="">선택해 주세요</option>
                 <option
                   v-for="affiliate in availableAffiliates"
@@ -1398,12 +1388,12 @@ function getDepartmentTreeData(departmentId) {
                 >
                   {{ affiliate.name }}
                 </option>
-              </select>
+              </AppSelect>
             </label>
 
             <label v-if="activeTab === 'team'">
               상위 부서
-              <select v-model="form.departmentId" :disabled="!form.affiliateId" required>
+              <AppSelect v-model="form.departmentId" :disabled="!form.affiliateId" required>
                 <option value="">선택해 주세요</option>
                 <option
                   v-for="department in availableDepartments"
@@ -1412,7 +1402,7 @@ function getDepartmentTreeData(departmentId) {
                 >
                   {{ department.name }}
                 </option>
-              </select>
+              </AppSelect>
             </label>
 
             <label>
@@ -1428,11 +1418,11 @@ function getDepartmentTreeData(departmentId) {
 
             <label>
               상태
-              <select v-model="form.status" required>
+              <AppSelect v-model="form.status" required>
                 <option v-for="option in STATUS_OPTIONS" :key="option.value" :value="option.value">
                   {{ option.label }}
                 </option>
-              </select>
+              </AppSelect>
             </label>
 
             <div class="modal-actions">

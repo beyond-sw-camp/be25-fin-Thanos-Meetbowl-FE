@@ -16,12 +16,12 @@
       </div>
       <label>
         회의실
-        <select v-model="form.roomId">
+        <AppSelect v-model="form.roomId">
           <option v-if="allowRemote" value="">회의실 없음 (원격)</option>
           <option v-for="room in rooms" :key="room.roomId" :value="room.roomId" :disabled="!room.isAvailable">
             {{ room.name }}{{ room.isAvailable ? '' : ' (사용 제한)' }}
           </option>
-        </select>
+        </AppSelect>
       </label>
     </template>
     <div class="form-row two">
@@ -36,11 +36,14 @@
     <UserSearchPicker
       v-model="form.attendees"
       :fixed-user-ids="hostUserId ? [hostUserId] : []"
+      :validate-add="attendeeValidate"
+      :warning="attendeeWarning"
+      @reject="$emit('attendee-reject', $event)"
     />
 
     <label>
       회의록 검토자
-      <select v-model="form.reviewerUserId">
+      <AppSelect v-model="form.reviewerUserId">
         <option value="">검토자 미지정</option>
         <option
           v-for="attendee in reviewerOptions"
@@ -49,7 +52,7 @@
         >
           {{ attendee.name }}
         </option>
-      </select>
+      </AppSelect>
       <small>참석자 중 회의록을 검토할 1명을 지정합니다.</small>
     </label>
 
@@ -60,6 +63,7 @@
 
 <script setup>
 import { computed } from 'vue'
+import AppSelect from '../common/AppSelect.vue'
 import UserSearchPicker from './UserSearchPicker.vue'
 
 const props = defineProps({
@@ -70,8 +74,12 @@ const props = defineProps({
   roomUsageEnabled: { type: Boolean, default: false },
   // 원격 회의 토글 노출 여부. 회의 페이지에서만 true, 회의실 예약에서는 false.
   allowRemote: { type: Boolean, default: false },
+  // 참석자 추가 직전 비동기 검증 훅(시간 겹침 검사). UserSearchPicker로 그대로 전달한다.
+  attendeeValidate: { type: Function, default: null },
+  // 참석자 겹침 경고 문구. '참석자 검색' 라벨 위 오버레이로 표시한다.
+  attendeeWarning: { type: String, default: '' },
 })
-defineEmits(['submit', 'enable-room-usage', 'disable-room-usage'])
+defineEmits(['submit', 'enable-room-usage', 'disable-room-usage', 'attendee-reject'])
 const reviewerOptions = computed(() => props.form.attendees.filter((attendee) => attendee.userId))
 </script>
 

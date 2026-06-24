@@ -1,14 +1,17 @@
 <script setup>
 import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
+import AppSelect from '../../components/common/AppSelect.vue'
 import Pagination from '../../components/common/Pagination.vue'
 import { getAdminAuditLogDetail, getAdminAuditLogs } from '../../lib/admin-audit-logs'
 import {
   AUDIT_ACTION_TYPE_OPTIONS,
   AUDIT_TARGET_TYPE_OPTIONS,
-  getAuditActorIp,
   extractAuditLogTargetDisplay,
+  formatActionTypeLabel,
   formatAuditResultLabel,
+  formatTargetTypeLabel,
   getAuditActionDisplay,
+  getAuditActorIp,
   getAuditDisplayChangeItems,
   getAuditDisplayTitle,
   getAuditTargetTypeDisplay,
@@ -484,6 +487,12 @@ function formatDateRangeSummary(value) {
 
   return time ? `${date} ${time}` : date
 }
+
+function formatChangeTitle(change) {
+  const before = change?.before ?? '-'
+  const after = change?.after ?? '-'
+  return `${change?.label || '변경 항목'}: ${before} → ${after}`
+}
 </script>
 
 <template>
@@ -512,35 +521,23 @@ function formatDateRangeSummary(value) {
     <template v-else>
       <article class="card admin-toolbar admin-log-toolbar">
         <form class="admin-log-filter-form" @submit.prevent="submitFilters">
-          <select v-model="filterForm.actionType" aria-label="작업 유형">
-            <option
-              v-for="option in AUDIT_ACTION_TYPE_OPTIONS"
-              :key="option.value || 'all-action'"
-              :value="option.value"
-            >
+          <AppSelect v-model="filterForm.actionType" aria-label="작업 유형">
+            <option v-for="option in AUDIT_ACTION_TYPE_OPTIONS" :key="option.value || 'all-action'" :value="option.value">
               {{ option.label }}
             </option>
-          </select>
+          </AppSelect>
 
-          <select v-model="filterForm.targetType" aria-label="대상 유형">
-            <option
-              v-for="option in AUDIT_TARGET_TYPE_OPTIONS"
-              :key="option.value || 'all-target'"
-              :value="option.value"
-            >
+          <AppSelect v-model="filterForm.targetType" aria-label="대상 유형">
+            <option v-for="option in AUDIT_TARGET_TYPE_OPTIONS" :key="option.value || 'all-target'" :value="option.value">
               {{ option.label }}
             </option>
-          </select>
+          </AppSelect>
 
-          <select v-model="filterForm.result" aria-label="결과">
-            <option
-              v-for="option in RESULT_OPTIONS"
-              :key="option.value || 'all-result'"
-              :value="option.value"
-            >
+          <AppSelect v-model="filterForm.result" aria-label="결과">
+            <option v-for="option in RESULT_OPTIONS" :key="option.value || 'all-result'" :value="option.value">
               {{ option.label }}
             </option>
-          </select>
+          </AppSelect>
 
           <div ref="datePopoverRef" class="date-filter-popover-wrap">
             <button
@@ -585,11 +582,11 @@ function formatDateRangeSummary(value) {
             </div>
           </div>
 
-          <select v-model.number="pageSize" aria-label="페이지 크기">
+          <AppSelect v-model.number="pageSize" aria-label="페이지 크기">
             <option v-for="size in PAGE_SIZE_OPTIONS" :key="size" :value="size">
               {{ size }}개씩 보기
             </option>
-          </select>
+          </AppSelect>
 
           <button class="secondary-button" type="button" @click="resetFilters">초기화</button>
           <button class="primary-button" type="submit">검색</button>
@@ -668,9 +665,9 @@ function formatDateRangeSummary(value) {
                 <h3>작업 내용</h3>
                 <div class="detail-section-body">
                   <ul v-if="changeSummary.length" class="change-summary-list prominent">
-                    <li v-for="change in changeSummary" :key="change.key" :title="change.title || ''">
+                    <li v-for="change in changeSummary" :key="change.key" :title="formatChangeTitle(change)">
                       <strong>{{ change.label }}</strong>
-                      <span>{{ change.text }}</span>
+                      <span>{{ change.before }} → {{ change.after }}</span>
                     </li>
                   </ul>
                   <p v-else class="empty-change-text">표시할 작업 내용이 없습니다.</p>
@@ -681,7 +678,7 @@ function formatDateRangeSummary(value) {
                 <section class="detail-section">
                   <h3>기본 정보</h3>
                   <dl class="detail-list detail-kv-list">
-                    <div><dt>작업 내용</dt><dd>{{ getAuditDisplayTitle(selectedLog) }}</dd></div>
+                    <div><dt>작업 유형</dt><dd>{{ formatActionTypeLabel(selectedLog.actionType) }}</dd></div>
                     <div><dt>결과</dt><dd>{{ formatAuditResultLabel(selectedLog.result) }}</dd></div>
                     <div><dt>발생 일시</dt><dd>{{ formatDateTime(selectedLog.createdAt) }}</dd></div>
                     <div><dt>작업자</dt><dd>{{ selectedLog.actorName || '-' }}</dd></div>
@@ -692,7 +689,7 @@ function formatDateRangeSummary(value) {
                 <section class="detail-section">
                   <h3>대상 정보</h3>
                   <dl class="detail-list detail-kv-list">
-                    <div><dt>대상 유형</dt><dd>{{ getAuditTargetTypeDisplay(selectedLog) }}</dd></div>
+                    <div><dt>대상 유형</dt><dd>{{ formatTargetTypeLabel(selectedLog.targetType) }}</dd></div>
                     <div><dt>대상 ID</dt><dd>{{ formatAuxiliaryId(selectedLog.targetId) }}</dd></div>
                     <div><dt>대상 로그인 ID</dt><dd>{{ selectedLog.targetLoginId || '-' }}</dd></div>
                     <div><dt>변경 대상 이름</dt><dd>{{ selectedLog.targetName || '-' }}</dd></div>

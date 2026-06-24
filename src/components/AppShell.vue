@@ -14,7 +14,8 @@
               :to="item.to"
               class="nav-link"
               :class="{ active: isActive(item.to) }"
-              @click="mobileOpen = false"
+              :data-tour="item.tourId"
+              @click="handleNavClick(item.to)"
             >
               <span class="nav-icon">{{ item.icon }}</span>
               <span>{{ item.label }}</span>
@@ -25,7 +26,7 @@
               :to="child.to"
               class="nav-link nav-sublink"
               :class="{ active: isActive(child.to) }"
-              @click="mobileOpen = false"
+              @click="handleNavClick(child.to)"
             >
               <span class="nav-icon">{{ child.icon }}</span>
               <span>{{ child.label }}</span>
@@ -40,10 +41,14 @@
     <main class="main">
       <header class="topbar">
         <button class="icon-button mobile-menu" type="button" @click="mobileOpen = true">☰</button>
-        <div class="search-box">검색</div>
         <div class="top-actions">
           <div ref="notificationDropdownRef" class="dropdown-wrap">
-            <button class="icon-button notification-button" type="button" @click="toggleNotifications">
+            <button
+              class="icon-button notification-button"
+              type="button"
+              data-tour="notifications"
+              @click="toggleNotifications"
+            >
               <Bell :size="20" />
               <span v-if="notificationBadgeCount > 0" class="notification-badge">
                 {{ notificationBadgeCount > 99 ? '99+' : notificationBadgeCount }}
@@ -145,15 +150,24 @@
               >
                 설정
               </RouterLink>
+              <button
+                v-if="user?.role === 'USER'"
+                type="button"
+                class="profile-menu-link"
+                @click="startTutorial"
+              >
+                튜토리얼 다시 보기
+              </button>
               <button type="button" class="ghost-button" @click="handleLogout">로그아웃</button>
             </div>
           </div>
         </div>
       </header>
-      <RouterView />
+      <RouterView :key="`${route.path}::${navResetKey}`" />
     </main>
 
     <FloatingChatbot v-if="showFloatingChatbot" />
+    <OnboardingTour v-if="tutorialOpen" @finish="closeTutorial" />
   </div>
 </template>
 
@@ -162,6 +176,8 @@ import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { Bell } from '@lucide/vue'
 import FloatingChatbot from './FloatingChatbot.vue'
+import OnboardingTour from './tutorial/OnboardingTour.vue'
+import { isTutorialCompleted, markTutorialCompleted } from '../lib/tutorial'
 import {
   approveAdminPasswordResetRequest,
   getAdminPasswordResetRequests,
@@ -182,8 +198,11 @@ const route = useRoute()
 const router = useRouter()
 const auth = useAuthStore()
 const mobileOpen = ref(false)
+// 같은 메뉴를 다시 눌렀을 때 그 기능의 초기 화면으로 되돌리기 위해, RouterView를 강제 remount한다.
+const navResetKey = ref(0)
 const notificationsOpen = ref(false)
 const profileOpen = ref(false)
+const tutorialOpen = ref(false)
 const notificationDropdownRef = ref(null)
 const profileDropdownRef = ref(null)
 
@@ -231,18 +250,19 @@ const navSections = [
     title: '개인 워크스페이스',
     roles: ['USER'],
     items: [
-      { to: '/app/dashboard', label: '대시보드', icon: 'D' },
+      { to: '/app/dashboard', label: '대시보드', icon: 'D', tourId: 'dashboard' },
       {
         to: '/app/rooms',
         label: '회의실 예약',
         icon: 'R',
+        tourId: 'rooms',
         children: [
           { to: '/app/my-reservations', label: '내 예약', icon: 'M' },
           { to: '/app/my-attending', label: '참석 회의', icon: 'A' },
         ],
       },
-      { to: '/app/meetings', label: '회의', icon: 'M' },
-      { to: '/app/minutes', label: '내 회의록', icon: 'N' },
+      { to: '/app/meetings', label: '회의', icon: 'M', tourId: 'meetings' },
+      { to: '/app/minutes', label: '내 회의록', icon: 'N', tourId: 'minutes' },
       { to: '/app/mail', label: '메일', icon: 'L' },
       { to: '/app/workspace', label: '개인 워크스페이스', icon: 'W' },
       { to: '/app/shared-docs', label: '공유 워크스페이스', icon: 'S' },
@@ -380,6 +400,11 @@ async function loadMoreNotifications() {
   }
 }
 
+function closeHeaderDropdowns() {
+  notificationsOpen.value = false
+  profileOpen.value = false
+}
+
 function toggleNotifications() {
   profileOpen.value = false
   notificationsOpen.value = !notificationsOpen.value
@@ -398,14 +423,8 @@ function toggleProfile() {
   profileOpen.value = !profileOpen.value
 }
 
-function closeHeaderDropdowns() {
-  notificationsOpen.value = false
-  profileOpen.value = false
-}
-
 function handleDocumentPointerDown(event) {
   const target = event.target
-
   const clickedNotificationDropdown = notificationDropdownRef.value?.contains(target)
   const clickedProfileDropdown = profileDropdownRef.value?.contains(target)
 
@@ -439,7 +458,7 @@ async function handleMarkAllRead() {
 }
 
 onMounted(() => {
-  document.addEventListener('pointerdown', handleDocumentPointerDown)
+  document.addEventListener('pointerdown', handleDocumentPointerDown, true)
 
   if (isAdmin.value) {
     refreshAdminNotificationCount().catch(() => {})
@@ -447,6 +466,12 @@ onMounted(() => {
   }
 
   loadNotifications()
+
+  // 첫 로그인(아직 완료 기록 없음)인 USER에게 온보딩을 자동 노출한다.
+  if (!isTutorialCompleted(user.value?.userId)) {
+    tutorialOpen.value = true
+  }
+
   notificationSource = subscribeNotifications({
     onNotification: (notification) => {
       const index = notifications.value.findIndex((item) => item.id === notification.id)
@@ -461,8 +486,8 @@ onMounted(() => {
 })
 
 onBeforeUnmount(() => {
-  document.removeEventListener('pointerdown', handleDocumentPointerDown)
   notificationSource?.close()
+  document.removeEventListener('pointerdown', handleDocumentPointerDown, true)
 })
 
 const visibleSections = computed(() =>
@@ -473,9 +498,29 @@ function isActive(to) {
   return route.path === to || route.path.startsWith(`${to}/`)
 }
 
+function handleNavClick(to) {
+  mobileOpen.value = false
+  // 이미 그 메뉴의 화면(또는 하위 상세)에 있으면 라우터 이동이 없으므로, 직접 그 기능 홈으로 보내고 화면을 초기화한다.
+  if (isActive(to)) {
+    if (route.path !== to) router.push(to)
+    navResetKey.value += 1
+  }
+}
+
 function isExpanded(item) {
   if (!item.children) return false
   return isActive(item.to) || item.children.some((child) => isActive(child.to))
+}
+
+function startTutorial() {
+  profileOpen.value = false
+  tutorialOpen.value = true
+}
+
+function closeTutorial() {
+  tutorialOpen.value = false
+  // 완료/건너뛰기 모두 같은 브라우저에선 다시 자동으로 뜨지 않게 기록한다.
+  markTutorialCompleted(user.value?.userId)
 }
 
 async function handleLogout() {

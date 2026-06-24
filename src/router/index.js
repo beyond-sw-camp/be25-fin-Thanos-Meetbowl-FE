@@ -12,7 +12,7 @@ import JoinPage from '../pages/auth/JoinPage.vue'
 import LoginPage from '../pages/auth/LoginPage.vue'
 import CommunityPage from '../pages/community/CommunityPage.vue'
 import DashboardPage from '../pages/dashboard/DashboardPage.vue'
-import SimpleDocsPage from '../pages/docs/SimpleDocsPage.vue'
+import LandingPage from '../pages/landing/LandingPage.vue'
 import { meetingRoute } from '../lib/meeting-route'
 import MailPage from '../pages/mail/MailPage.vue'
 import MeetingPage from '../pages/meeting/MeetingPage.vue'
@@ -28,7 +28,7 @@ import SharedDocsPage from '../pages/shared-docs/SharedDocsPage.vue'
 import WorkspacePage from '../pages/workspace/WorkspacePage.vue'
 
 const routes = [
-  { path: '/', redirect: '/login' },
+  { path: '/', component: LandingPage, meta: { public: true } },
   { path: '/login', component: LoginPage, meta: { public: true } },
   { path: '/join/:code', component: JoinPage, meta: { public: true } },
   { path: '/guest/meeting/:meetingId', component: MeetingPage, meta: { public: true } },
@@ -50,6 +50,7 @@ const routes = [
       { path: 'app/rooms', component: RoomsPage, meta: { role: 'USER' } },
       { path: 'app/my-reservations', component: MyReservationsPage, meta: { role: 'USER' } },
       { path: 'app/my-attending', component: MyAttendingPage, meta: { role: 'USER' } },
+      { path: 'app/my-attendingsms', redirect: '/app/my-attending', meta: { role: 'USER' } },
       { path: 'app/meetings', component: MeetingsPage, meta: { role: 'USER' } },
       { path: 'app/livekit-test', component: LiveKitTestPage, meta: { role: 'USER' } },
       { path: 'app/mail', component: MailPage, meta: { role: 'USER' } },
@@ -130,8 +131,19 @@ const router = createRouter({
 router.beforeEach((to) => {
   const auth = useAuthStore()
   if (to.meta.public) {
-    if (to.path === '/login' && auth.isAuthenticated) return auth.postLoginPath
+    // 이미 로그인한 사용자는 랜딩/로그인 대신 자기 홈(대시보드)으로 보낸다.
+    if ((to.path === '/login' || to.path === '/') && auth.isAuthenticated) return auth.postLoginPath
     return true
+  }
+  if (!auth.isAuthenticated && to.path.startsWith('/app/meeting/')) {
+    const meetingId = String(to.params.meetingId || '').trim()
+    if (meetingId) {
+      return {
+        path: `/guest/meeting/${meetingId}`,
+        query: to.query,
+        hash: to.hash,
+      }
+    }
   }
   if (!auth.isAuthenticated) return '/login'
   if (auth.requiresInitialPasswordChange) {

@@ -1,4 +1,4 @@
-import { deleteJson, getBlob, getJson, patchJson, postForm, postJson } from './api-client'
+import { deleteJson, getBlob, getJson, patchJson, postForm, postJson } from './api-client.js'
 
 export function getWorkspaceCalendar(from, to) {
   const params = new URLSearchParams({ from, to })
@@ -31,6 +31,10 @@ export function unsubscribeCalendar(subscriptionId) {
 
 export function getBackups() {
   return getJson('/workspace/backups')
+}
+
+export function getBackupDetail(backupId) {
+  return getJson(`/workspace/backups/${backupId}`)
 }
 
 export function searchBackups(keyword) {

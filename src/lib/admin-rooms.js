@@ -45,6 +45,16 @@ export function getMeetingSites() {
   return getJson('/admin/meeting-sites', adminRequestOptions)
 }
 
+// 사이트 정보(이름·주소) 수정. siteId는 유지되어 딸린 건물·회의실 관계는 그대로다.
+export function updateMeetingSite(siteId, payload) {
+  return patchJson(`/admin/meeting-sites/${siteId}`, payload, adminRequestOptions)
+}
+
+// 사이트 삭제. 백엔드는 하위 건물이 있으면 COMMON_CONFLICT로 차단한다.
+export function deleteMeetingSite(siteId) {
+  return deleteJson(`/admin/meeting-sites/${siteId}`, adminRequestOptions)
+}
+
 export function getMeetingBuildings(siteId) {
   return getJson(`/admin/meeting-buildings${buildQuery({ siteId })}`, adminRequestOptions)
 }
@@ -55,6 +65,11 @@ export function createMeetingBuilding(payload) {
 
 export function updateMeetingBuilding(buildingId, payload) {
   return patchJson(`/admin/meeting-buildings/${buildingId}`, payload, adminRequestOptions)
+}
+
+// 건물 삭제. 백엔드는 하위 회의실이 있으면 COMMON_CONFLICT로 차단한다.
+export function deleteMeetingBuilding(buildingId) {
+  return deleteJson(`/admin/meeting-buildings/${buildingId}`, adminRequestOptions)
 }
 
 // 사이트와 첫 건물을 한 번에 등록한다(백엔드 트랜잭션 보장).

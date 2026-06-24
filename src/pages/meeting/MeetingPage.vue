@@ -121,7 +121,7 @@
 
             <label>
               마이크
-              <select
+              <AppSelect
                 v-model="selectedAudioInput"
                 :disabled="!audioInputs.length || loadingDevices"
                 @change="restartPreview"
@@ -130,7 +130,7 @@
                 <option v-for="device in audioInputs" :key="device.deviceId" :value="device.deviceId">
                   {{ device.label }}
                 </option>
-              </select>
+              </AppSelect>
             </label>
 
             <div class="microphone-test">
@@ -163,7 +163,7 @@
 
             <label>
               스피커
-              <select
+              <AppSelect
                 v-model="selectedAudioOutput"
                 :disabled="!audioOutputs.length || !supportsSpeakerSelection"
                 @change="applySpeaker"
@@ -172,7 +172,7 @@
                 <option v-for="device in audioOutputs" :key="device.deviceId" :value="device.deviceId">
                   {{ device.label }}
                 </option>
-              </select>
+              </AppSelect>
               <small v-if="!supportsSpeakerSelection">
                 이 브라우저에서는 스피커 선택을 지원하지 않습니다.
               </small>
@@ -180,7 +180,7 @@
 
             <label>
               카메라
-              <select
+              <AppSelect
                 v-model="selectedVideoInput"
                 :disabled="!videoInputs.length || loadingDevices"
                 @change="restartPreview"
@@ -189,7 +189,7 @@
                 <option v-for="device in videoInputs" :key="device.deviceId" :value="device.deviceId">
                   {{ device.label }}
                 </option>
-              </select>
+              </AppSelect>
             </label>
           </div>
 
@@ -211,447 +211,604 @@
     </main>
   </section>
 
-  <section v-else class="meeting-room">
+  <section
+    v-else
+    ref="meetingRoomShell"
+    class="meeting-room"
+    :class="{
+      'meeting-room-side-collapsed': isMeetingSideCollapsed,
+      'meeting-room-focus-view': isFocusMode,
+    }"
+  >
     <div class="meeting-main">
       <header class="meeting-room-header">
         <div class="meeting-room-title">
           <strong>{{ meetingTitle }}</strong>
-          <small>{{ meetingConnectionStatus }}</small>
+          <div class="meeting-room-status-line">
+            <span class="meeting-connection-pill" :class="meetingConnectionTone">
+              {{ meetingConnectionStatus }}
+            </span>
+            <small>{{ participantCount }}명 참여</small>
+            <small>{{ elapsedTimeLabel }}</small>
+          </div>
         </div>
         <div class="meeting-room-actions">
-          <div class="meeting-room-meta">
-            <span>{{ participantCount }}명 참여</span>
-            <span>{{ elapsedTimeLabel }}</span>
-          </div>
-          <button class="secondary-button small" type="button" @click="openMeetingSettings">
-            장치 설정
-          </button>
-          <button class="secondary-button small" type="button" @click="openGuestLinkDialog">
-            공유
-          </button>
-          <button
-            v-if="isCurrentUserHost"
-            class="secondary-button small"
-            type="button"
-            @click="openHostTransferDialog"
-          >
-            관리자 이전
-          </button>
-          <button
-            v-if="isFocusMode"
-            class="secondary-button small"
-            type="button"
-            @click="clearTileFocus"
-          >
-            크게 보기 종료
-          </button>
-          <button
-            class="danger-button small"
-            type="button"
-            :disabled="meetingEndPending"
-            @click="openMeetingEndConfirm"
-          >
-            {{ meetingEndPending ? '처리 중' : meetingEndButtonLabel }}
-          </button>
+          <span v-if="isCurrentUserHost" class="meeting-host-badge">관리자</span>
+          <span v-if="screenShareEnabled" class="meeting-top-indicator active">내 화면 공유 중</span>
+          <span v-else-if="activeScreenShareParticipant" class="meeting-top-indicator">
+            {{ activeScreenShareParticipant.name }} 화면 공유 중
+          </span>
         </div>
       </header>
 
-      <div
-        v-if="meetingLayoutMode === 'grid'"
-        class="video-grid"
-      >
-        <article
-          v-for="tile in gridTiles"
-          :key="tile.key"
-          class="video-tile"
-          :class="{
-            'video-tile-screen': tile.type === 'screen',
-            'video-tile-local': tile.isLocal,
-            'video-tile-placeholder': !tile.track,
-          }"
-          @click="toggleTileFocus(tile.key)"
+      <div class="meeting-stage-shell">
+        <p v-if="meetingConnectionError || screenShareControlHint" class="meeting-control-hint meeting-control-hint-floating">
+          {{ meetingConnectionError || screenShareControlHint }}
+        </p>
+
+        <div
+          v-if="meetingLayoutMode === 'grid'"
+          class="video-grid-shell"
+          :style="meetingGridStyle"
         >
-          <video
-            v-if="tile.track"
-            :ref="setTileMediaRef(tile.key)"
-            autoplay
-            playsinline
-            :muted="tile.isLocal"
-          />
-          <div v-else class="video-placeholder">
-            <span>{{ tile.initials }}</span>
-            <p>{{ tile.placeholder }}</p>
+          <div class="video-grid" :style="meetingGridStyle">
+            <article
+              v-for="tile in gridTiles"
+              :key="tile.key"
+              :ref="setTileRef(tile.key)"
+              class="video-tile"
+              :class="{
+                'video-tile-screen': tile.type === 'screen',
+                'video-tile-local': tile.isLocal,
+                'video-tile-placeholder': !tile.track,
+                'video-tile-fullscreen': isTileFullscreen(tile.key),
+              }"
+              @click="toggleTileFocus(tile.key)"
+            >
+              <video
+                v-if="tile.track"
+                :ref="setTileMediaRef(tile.key)"
+                autoplay
+                playsinline
+                :muted="tile.isLocal"
+              />
+              <div v-else class="video-placeholder">
+                <span>{{ tile.initials }}</span>
+                <p>{{ tile.placeholder }}</p>
+              </div>
+
+              <div class="video-tile-badge-row">
+                <span v-if="tile.type === 'screen'" class="video-badge accent">화면 공유</span>
+                <span v-if="tile.isLocal" class="video-badge">나</span>
+                <span v-if="tile.muted" class="video-badge muted">음소거</span>
+              </div>
+              <div v-if="tile.type === 'screen'" class="video-stage-actions">
+                <button
+                  class="video-stage-action-button"
+                  type="button"
+                  :title="isTileFullscreen(tile.key) ? '전체화면 종료' : '공유 화면 전체화면'"
+                  :aria-label="isTileFullscreen(tile.key) ? '전체화면 종료' : '공유 화면 전체화면'"
+                  @click.stop="toggleSharedScreenFullscreen(tile.key)"
+                >
+                  <Fullscreen :size="16" />
+                </button>
+              </div>
+              <em>{{ tile.label }}</em>
+            </article>
           </div>
 
-          <div class="video-tile-badge-row">
-            <span v-if="tile.type === 'screen'" class="video-badge accent">화면 공유</span>
-            <span v-if="tile.isLocal" class="video-badge">나</span>
-            <span v-if="tile.muted" class="video-badge muted">음소거</span>
+          <div v-if="totalGridPages > 1" class="meeting-grid-pagination" aria-label="참여자 화면 페이지 이동">
+            <button
+              type="button"
+              :disabled="currentGridPage === 0"
+              @click="goToPreviousGridPage"
+            >
+              <ChevronLeft :size="16" />
+              <span>이전</span>
+            </button>
+            <strong>{{ currentGridPage + 1 }} / {{ totalGridPages }}</strong>
+            <button
+              type="button"
+              :disabled="currentGridPage >= totalGridPages - 1"
+              @click="goToNextGridPage"
+            >
+              <span>다음</span>
+              <ChevronRight :size="16" />
+            </button>
           </div>
-          <em>{{ tile.label }}</em>
-        </article>
-      </div>
+        </div>
 
-      <div
-        v-else
-        class="meeting-stage-layout"
-        :class="{
-          'meeting-stage-layout-screen-share': meetingLayoutMode === 'screen-share',
-          'meeting-stage-layout-focus': meetingLayoutMode === 'focus',
-          'meeting-stage-layout-filmstrip-hidden': !shouldRenderFilmstrip,
-        }"
-      >
-        <section class="meeting-stage-column">
-          <button
-            v-if="isFocusMode && !shouldRenderFilmstrip"
-            class="filmstrip-handle filmstrip-handle-open"
-            type="button"
-            @click.stop="showFilmstripInFocus = true"
-            aria-label="다른 참석자 보기"
-          >
-            <span aria-hidden="true">&gt;</span>
+        <div
+          v-else
+          class="meeting-stage-layout"
+          :class="{
+            'meeting-stage-layout-screen-share': meetingLayoutMode === 'screen-share',
+            'meeting-stage-layout-focus': meetingLayoutMode === 'focus',
+            'meeting-stage-layout-filmstrip-hidden': !shouldRenderFilmstrip,
+          }"
+        >
+          <section class="meeting-stage-column">
+            <button
+              v-if="isFocusMode && !shouldRenderFilmstrip"
+              class="filmstrip-handle filmstrip-handle-open"
+              type="button"
+              @click.stop="openFocusFilmstrip"
+              aria-label="다른 참석자 화면 열기"
+            >
+              <ChevronRight :size="18" />
+            </button>
+
+            <article
+              v-if="stageTile"
+              :key="stageTile.key"
+              :ref="setTileRef(stageTile.key)"
+              class="video-tile video-tile-stage"
+              :class="{
+                'video-tile-screen': stageTile.type === 'screen',
+                'video-tile-local': stageTile.isLocal,
+                'video-tile-placeholder': !stageTile.track,
+                'video-tile-selected': isFocusMode,
+                'video-tile-fullscreen': isTileFullscreen(stageTile.key),
+              }"
+              @click="toggleTileFocus(stageTile.key)"
+            >
+              <video
+                v-if="stageTile.track"
+                :ref="setTileMediaRef(stageTile.key)"
+                autoplay
+                playsinline
+                :muted="stageTile.isLocal"
+              />
+              <div v-else class="video-placeholder">
+                <span>{{ stageTile.initials }}</span>
+                <p>{{ stageTile.placeholder }}</p>
+              </div>
+
+              <div class="video-tile-badge-row">
+                <span v-if="stageTile.type === 'screen'" class="video-badge accent">화면 공유</span>
+                <span v-if="stageTile.isLocal" class="video-badge">나</span>
+                <span v-if="stageTile.muted" class="video-badge muted">음소거</span>
+              </div>
+              <div v-if="stageTile.type === 'screen'" class="video-stage-actions">
+                <button
+                  class="video-stage-action-button"
+                  type="button"
+                  :title="isTileFullscreen(stageTile.key) ? '전체화면 종료' : '공유 화면 전체화면'"
+                  :aria-label="isTileFullscreen(stageTile.key) ? '전체화면 종료' : '공유 화면 전체화면'"
+                  @click.stop="toggleSharedScreenFullscreen(stageTile.key)"
+                >
+                  <Fullscreen :size="16" />
+                </button>
+              </div>
+              <em>{{ stageTile.label }}</em>
+            </article>
+          </section>
+
+          <aside v-if="shouldRenderFilmstrip" class="meeting-filmstrip">
+            <button
+              v-if="isFocusMode && canPageFilmstripBackward"
+              class="filmstrip-page-button filmstrip-page-button-top"
+              type="button"
+              aria-label="이전 참석자 보기"
+              @click.stop="showPreviousFilmstripPage"
+            >
+              <ChevronUp :size="18" />
+            </button>
+            <button
+              v-if="isFocusMode"
+              class="filmstrip-handle filmstrip-handle-close"
+              type="button"
+              @click.stop="showFilmstripInFocus = false"
+              aria-label="다른 참석자 숨기기"
+            >
+              <ChevronLeft :size="18" />
+            </button>
+
+            <article
+              v-for="tile in visibleFilmstripTiles"
+              :key="tile.key"
+              :ref="setTileRef(tile.key)"
+              class="video-tile video-tile-filmstrip"
+              :class="{
+                'video-tile-screen': tile.type === 'screen',
+                'video-tile-local': tile.isLocal,
+                'video-tile-placeholder': !tile.track,
+                'video-tile-selected': selectedTileKey === tile.key,
+                'video-tile-fullscreen': isTileFullscreen(tile.key),
+              }"
+              @click="toggleTileFocus(tile.key)"
+            >
+              <video
+                v-if="tile.track"
+                :ref="setTileMediaRef(tile.key)"
+                autoplay
+                playsinline
+                :muted="tile.isLocal"
+              />
+              <div v-else class="video-placeholder">
+                <span>{{ tile.initials }}</span>
+                <p>{{ tile.placeholder }}</p>
+              </div>
+
+              <div class="video-tile-badge-row">
+                <span v-if="tile.type === 'screen'" class="video-badge accent">화면 공유</span>
+                <span v-if="tile.isLocal" class="video-badge">나</span>
+                <span v-if="tile.muted" class="video-badge muted">음소거</span>
+              </div>
+              <div v-if="tile.type === 'screen'" class="video-stage-actions">
+                <button
+                  class="video-stage-action-button"
+                  type="button"
+                  :title="isTileFullscreen(tile.key) ? '전체화면 종료' : '공유 화면 전체화면'"
+                  :aria-label="isTileFullscreen(tile.key) ? '전체화면 종료' : '공유 화면 전체화면'"
+                  @click.stop="toggleSharedScreenFullscreen(tile.key)"
+                >
+                  <Fullscreen :size="16" />
+                </button>
+              </div>
+              <em>{{ tile.label }}</em>
+            </article>
+            <button
+              v-if="isFocusMode && canPageFilmstripForward"
+              class="filmstrip-page-button filmstrip-page-button-bottom"
+              type="button"
+              aria-label="다음 참석자 보기"
+              @click.stop="showNextFilmstripPage"
+            >
+              <ChevronDown :size="18" />
+            </button>
+          </aside>
+        </div>
+
+        <div v-if="moreMenuOpen" class="meeting-more-menu">
+          <button type="button" @click="openMeetingSettings">
+            <Settings2 :size="16" />
+            <span>장치 설정</span>
           </button>
-
-          <article
-            v-if="stageTile"
-            :key="stageTile.key"
-            class="video-tile video-tile-stage"
-            :class="{
-              'video-tile-screen': stageTile.type === 'screen',
-              'video-tile-local': stageTile.isLocal,
-              'video-tile-placeholder': !stageTile.track,
-              'video-tile-selected': isFocusMode,
-            }"
-            @click="toggleTileFocus(stageTile.key)"
-          >
-            <video
-              v-if="stageTile.track"
-              :ref="setTileMediaRef(stageTile.key)"
-              autoplay
-              playsinline
-              :muted="stageTile.isLocal"
-            />
-            <div v-else class="video-placeholder">
-              <span>{{ stageTile.initials }}</span>
-              <p>{{ stageTile.placeholder }}</p>
-            </div>
-
-            <div class="video-tile-badge-row">
-              <span v-if="stageTile.type === 'screen'" class="video-badge accent">화면 공유</span>
-              <span v-if="stageTile.isLocal" class="video-badge">나</span>
-              <span v-if="stageTile.muted" class="video-badge muted">음소거</span>
-            </div>
-            <em>{{ stageTile.label }}</em>
-          </article>
-        </section>
-
-        <aside v-if="shouldRenderFilmstrip" class="meeting-filmstrip">
-          <button
-            v-if="isFocusMode"
-            class="filmstrip-handle filmstrip-handle-close"
-            type="button"
-            @click.stop="showFilmstripInFocus = false"
-            aria-label="다른 참석자 숨기기"
-          >
-            <span aria-hidden="true">&lt;</span>
+          <button type="button" @click="openGuestLinkDialog">
+            <MessageSquareShare :size="16" />
+            <span>공유 링크</span>
           </button>
-
-          <article
-            v-for="tile in filmstripTiles"
-            :key="tile.key"
-            class="video-tile video-tile-filmstrip"
-            :class="{
-              'video-tile-screen': tile.type === 'screen',
-              'video-tile-local': tile.isLocal,
-              'video-tile-placeholder': !tile.track,
-              'video-tile-selected': selectedTileKey === tile.key,
-            }"
-            @click="toggleTileFocus(tile.key)"
+          <button
+            v-if="isCurrentUserHost"
+            type="button"
+            @click="openHostTransferDialog"
           >
-            <video
-              v-if="tile.track"
-              :ref="setTileMediaRef(tile.key)"
-              autoplay
-              playsinline
-              :muted="tile.isLocal"
-            />
-            <div v-else class="video-placeholder">
-              <span>{{ tile.initials }}</span>
-              <p>{{ tile.placeholder }}</p>
-            </div>
-
-            <div class="video-tile-badge-row">
-              <span v-if="tile.type === 'screen'" class="video-badge accent">화면 공유</span>
-              <span v-if="tile.isLocal" class="video-badge">나</span>
-              <span v-if="tile.muted" class="video-badge muted">음소거</span>
-            </div>
-            <em>{{ tile.label }}</em>
-          </article>
-        </aside>
+            <Users :size="16" />
+            <span>회의 호스트 변경</span>
+          </button>
+          <button
+            v-if="fullscreenTileKey"
+            type="button"
+            @click="exitMeetingFullscreen"
+          >
+            <Fullscreen :size="16" />
+            <span>전체화면 종료</span>
+          </button>
+        </div>
       </div>
 
       <footer class="meeting-controls">
-        <button class="control" :class="{ off: !mic }" @click="toggleMicrophone">
-          {{ mic ? '마이크 켜짐' : '음소거' }}
-        </button>
-        <button class="control" :class="{ off: !cam }" @click="toggleCamera">
-          {{ cam ? '카메라 켜짐' : '카메라 꺼짐' }}
-        </button>
-        <button class="control" type="button" @click="openMeetingSettings">
-          장치 설정
+        <button
+          class="control control-bar-button"
+          :class="{ off: !mic }"
+          :aria-label="mic ? '마이크 끄기' : '마이크 켜기'"
+          :title="mic ? '마이크 끄기' : '마이크 켜기'"
+          @click="toggleMicrophone"
+        >
+          <component :is="mic ? Mic : MicOff" :size="18" class="control-icon" />
+          <span>음소거</span>
         </button>
         <button
-          class="control"
+          class="control control-bar-button"
+          :class="{ off: !cam }"
+          :aria-label="cam ? '카메라 끄기' : '카메라 켜기'"
+          :title="cam ? '카메라 끄기' : '카메라 켜기'"
+          @click="toggleCamera"
+        >
+          <component :is="cam ? Video : VideoOff" :size="18" class="control-icon" />
+          <span>비디오</span>
+        </button>
+<!--        <button class="control control-bar-button" type="button" @click="openMeetingSettings">-->
+<!--          <Settings2 :size="18" class="control-icon" />-->
+<!--          <span>장치</span>-->
+<!--        </button>-->
+        <button
+          class="control control-bar-button"
           :class="{ active: screenShareEnabled, off: screenShareToggleDisabled }"
           :disabled="screenShareToggleDisabled"
           @click="toggleScreenShare"
         >
-          {{ screenShareButtonLabel }}
+          <component :is="screenShareEnabled ? ScreenShareOff : ScreenShare" :size="18" class="control-icon" />
+          <span>화면 공유</span>
         </button>
-        <button class="danger-button" :disabled="meetingEndPending" @click="openMeetingEndConfirm">
-          {{ meetingEndPending ? '처리 중' : meetingEndButtonLabel }}
+<!--        <button-->
+<!--          class="control control-bar-button"-->
+<!--          :class="{ active: !isMeetingSideCollapsed && activeSidePanel === 'stt' }"-->
+<!--          type="button"-->
+<!--          @click="toggleSidePanel('stt')"-->
+<!--        >-->
+<!--          <Captions :size="18" class="control-icon" />-->
+<!--          <span>자막</span>-->
+<!--        </button>-->
+<!--        <button-->
+<!--          class="control control-bar-button"-->
+<!--          :class="{ active: !isMeetingSideCollapsed && activeSidePanel === 'people' }"-->
+<!--          type="button"-->
+<!--          @click="toggleSidePanel('people')"-->
+<!--        >-->
+<!--          <Users :size="18" class="control-icon" />-->
+<!--          <span>참석자</span>-->
+<!--        </button>-->
+<!--        <button-->
+<!--          class="control control-bar-button"-->
+<!--          :class="{ active: !isMeetingSideCollapsed && activeSidePanel === 'chat' }"-->
+<!--          type="button"-->
+<!--          @click="toggleSidePanel('chat')"-->
+<!--        >-->
+<!--          <MessageSquare :size="18" class="control-icon" />-->
+<!--          <span>채팅</span>-->
+<!--        </button>-->
+<!--        <button-->
+<!--          class="control control-bar-button"-->
+<!--          :class="{ active: !isMeetingSideCollapsed && activeSidePanel === 'ai' }"-->
+<!--          type="button"-->
+<!--          @click="toggleSidePanel('ai')"-->
+<!--        >-->
+<!--          <Sparkles :size="18" class="control-icon" />-->
+<!--          <span>AI</span>-->
+<!--        </button>-->
+        <button
+          class="control control-bar-button"
+          :class="{ active: moreMenuOpen }"
+          type="button"
+          @click="toggleMoreMenu"
+        >
+          <Ellipsis :size="18" class="control-icon" />
+          <span>더보기</span>
+        </button>
+        <button class="danger-button control-bar-button danger-control" :disabled="meetingEndPending" @click="openMeetingEndConfirm">
+          <PhoneOff :size="18" class="control-icon" />
+          <span>{{ meetingEndPending ? '처리 중' : '나가기' }}</span>
         </button>
       </footer>
-      <p v-if="screenShareControlHint" class="meeting-control-hint">
-        {{ screenShareControlHint }}
-      </p>
     </div>
 
-    <aside class="meeting-side">
-      <nav>
-        <button :class="{ active: tab === 'stt' }" @click="tab = 'stt'">실시간 자막</button>
-        <button :class="{ active: tab === 'people' }" @click="tab = 'people'">참석자</button>
-        <button :class="{ active: tab === 'chat' }" @click="tab = 'chat'">채팅</button>
-      </nav>
+    <aside class="meeting-side" :class="{ collapsed: isMeetingSideCollapsed }">
+      <div class="meeting-side-rail">
+        <button
+          class="meeting-side-rail-button"
+          :class="{ active: !isMeetingSideCollapsed && activeSidePanel === 'stt' }"
+          type="button"
+          title="실시간 자막"
+          aria-label="실시간 자막"
+          @click="toggleSidePanel('stt')"
+        >
+          <Captions :size="18" />
+        </button>
+        <button
+          class="meeting-side-rail-button"
+          :class="{ active: !isMeetingSideCollapsed && activeSidePanel === 'people' }"
+          type="button"
+          title="참석자"
+          aria-label="참석자"
+          @click="toggleSidePanel('people')"
+        >
+          <Users :size="18" />
+        </button>
+        <button
+          class="meeting-side-rail-button"
+          :class="{ active: !isMeetingSideCollapsed && activeSidePanel === 'chat' }"
+          type="button"
+          title="채팅"
+          aria-label="채팅"
+          @click="toggleSidePanel('chat')"
+        >
+          <MessageSquare :size="18" />
+        </button>
+        <button
+          class="meeting-side-rail-button"
+          :class="{ active: !isMeetingSideCollapsed && activeSidePanel === 'ai' }"
+          type="button"
+          title="AI 피드백"
+          aria-label="AI 피드백"
+          @click="toggleSidePanel('ai')"
+        >
+          <Sparkles :size="18" />
+        </button>
+        <button
+          class="meeting-side-rail-button meeting-side-rail-toggle"
+          type="button"
+          :title="isMeetingSideCollapsed ? '패널 열기' : '패널 닫기'"
+          :aria-label="isMeetingSideCollapsed ? '패널 열기' : '패널 닫기'"
+          @click="toggleMeetingSidePanel"
+        >
+          <component :is="isMeetingSideCollapsed ? PanelRightOpen : PanelRightClose" :size="18" />
+        </button>
+      </div>
 
-      <!-- 
-        [실시간 자막(STT) 패널 영역]
-        회의 중 오디오 스트림이 분석된 결과를 DataChannel을 통해 수신하여 화면에 표시합니다.
-      -->
-      <div v-if="tab === 'stt'" class="side-body meeting-caption-panel">
-<!--        <div class="toolbar meeting-caption-toolbar">-->
-<!--          <span class="chip active">실시간 자막</span>-->
-<!--          <span class="meeting-caption-status">{{ captionPanelStatus }}</span>-->
-<!--        </div>-->
-
-        <!-- 
-          [네트워크 및 연결 진단 모니터링]
-          LiveKit WebRTC 연결 상태, 마이크 송출(Publish) 상태, 자막 데이터 수신(DataChannel) 지연 시간 등
-          실시간 음성 처리 인프라의 건강 상태(Health)를 디버깅할 수 있는 정보를 제공합니다.
-        -->
-<!--        <div class="meeting-diagnostics">-->
-<!--          <strong>실시간 연결 진단</strong>-->
-<!--          <dl class="meeting-diagnostics-list">-->
-<!--            <div>-->
-<!--              <dt>회의 room</dt>-->
-<!--              <dd>{{ livekitRoomName }}</dd>-->
-<!--            </div>-->
-<!--            <div>-->
-<!--              <dt>내 participant</dt>-->
-<!--              <dd>{{ livekitParticipantIdentity }}</dd>-->
-<!--            </div>-->
-<!--            <div>-->
-<!--              <dt>마이크 publish</dt>-->
-<!--              <dd>{{ localMicPublicationStatus }}</dd>-->
-<!--            </div>-->
-<!--            <div>-->
-<!--              <dt>자막 수신</dt>-->
-<!--              <dd>{{ captionReceptionStatus }}</dd>-->
-<!--            </div>-->
-<!--            <div>-->
-<!--              <dt>최근 DataChannel</dt>-->
-<!--              <dd>{{ lastDataChannelReceivedLabel }}</dd>-->
-<!--            </div>-->
-<!--            <div>-->
-<!--              <dt>전송 지연</dt>-->
-<!--              <dd>{{ lastCaptionTransportLatencyLabel }}</dd>-->
-<!--            </div>-->
-<!--            <div>-->
-<!--              <dt>내 음성 감지</dt>-->
-<!--              <dd>{{ lastLocalSpeechDetectedLabel }}</dd>-->
-
-<!--            </div>-->
-<!--            <div>-->
-<!--              <dt>자막 렌더</dt>-->
-<!--              <dd>{{ lastCaptionRenderedLabel }}</dd>-->
-<!--            </div>-->
-<!--            <div>-->
-<!--              <dt>내 음성→자막</dt>-->
-<!--              <dd>{{ lastSpeechToCaptionLatencyLabel }}</dd>-->
-<!--            </div>-->
-<!--            <div>-->
-<!--              <dt>STT 기준 지연</dt>-->
-<!--              <dd>{{ lastCaptionEndToEndLatencyLabel }}</dd>-->
-<!--            </div>-->
-<!--            <div>-->
-<!--              <dt>마이크 오류</dt>-->
-<!--              <dd>{{ microphonePublishErrorLabel }}</dd>-->
-<!--            </div>-->
-<!--            <div>-->
-<!--              <dt>로컬 track 이벤트</dt>-->
-<!--              <dd>{{ localTrackEventStatus }}</dd>-->
-<!--            </div>-->
-<!--            <div>-->
-<!--              <dt>로컬 audio publication</dt>-->
-<!--              <dd>{{ localAudioPublicationCountLabel }}</dd>-->
-<!--            </div>-->
-<!--          </dl>-->
-<!--        </div>-->
-
-<!--        <p v-if="sttStatusHint" class="meeting-caption-hint">-->
-<!--          {{ sttStatusHint }}-->
-<!--        </p>-->
-        <section class="meeting-caption-language-panel" aria-label="원문 언어 탭">
-          <header class="meeting-caption-language-panel-head">
+      <template v-if="!isMeetingSideCollapsed">
+        <div class="meeting-side-panel">
+          <header class="meeting-side-panel-header">
             <div>
-              <strong>{{ activeCaptionTabLabel }}</strong>
-              <p>회의 원문 영역 안에서 언어별 자막을 전환해 확인합니다.</p>
+              <strong>{{ activeSidePanelTitle }}</strong>
+              <p>{{ activeSidePanelDescription }}</p>
             </div>
-            <span class="meeting-caption-language-status">{{ captionPanelStatus }}</span>
+            <span class="meeting-side-panel-status">{{ activeSidePanelStatus }}</span>
           </header>
 
-          <div class="meeting-caption-tabs" role="tablist" aria-label="자막 언어">
-            <button
-              id="meeting-caption-tab-source"
-              type="button"
-              class="meeting-caption-tab"
-              :class="{ active: captionDisplayMode === 'source' }"
-              :aria-selected="captionDisplayMode === 'source'"
-              aria-controls="meeting-caption-panel-source"
-              @click="captionDisplayMode = 'source'"
-            >
-              <span class="meeting-caption-tab-label">원문</span>
-              <small>Source</small>
-            </button>
-            <button
-              id="meeting-caption-tab-ko"
-              type="button"
-              class="meeting-caption-tab"
-              :class="{ active: captionDisplayMode === 'ko' }"
-              :aria-selected="captionDisplayMode === 'ko'"
-              aria-controls="meeting-caption-panel-ko"
-              @click="captionDisplayMode = 'ko'"
-            >
-              <span class="meeting-caption-tab-label">KOR</span>
-              <small>한국어</small>
-            </button>
-            <button
-              id="meeting-caption-tab-en"
-              type="button"
-              class="meeting-caption-tab"
-              :class="{ active: captionDisplayMode === 'en' }"
-              :aria-selected="captionDisplayMode === 'en'"
-              aria-controls="meeting-caption-panel-en"
-              @click="captionDisplayMode = 'en'"
-            >
-              <span class="meeting-caption-tab-label">ENG</span>
-              <small>English</small>
-            </button>
+          <div v-if="activeSidePanel === 'stt'" class="side-body meeting-caption-panel">
+            <section class="meeting-caption-language-panel" aria-label="원문 언어 탭">
+              <header class="meeting-caption-language-panel-head">
+                <div>
+                  <strong>{{ activeCaptionTabLabel }}</strong>
+                  <p>회의 원문 영역 안에서 언어별 자막을 전환해 확인합니다.</p>
+                </div>
+                <span class="meeting-caption-language-status">{{ captionPanelStatus }}</span>
+              </header>
+
+              <div class="meeting-caption-tabs" role="tablist" aria-label="자막 언어">
+                <button
+                  id="meeting-caption-tab-source"
+                  type="button"
+                  class="meeting-caption-tab"
+                  :class="{ active: captionDisplayMode === 'source' }"
+                  :aria-selected="captionDisplayMode === 'source'"
+                  aria-controls="meeting-caption-panel-source"
+                  @click="captionDisplayMode = 'source'"
+                >
+                  <span class="meeting-caption-tab-label">원문</span>
+                  <small>Source</small>
+                </button>
+                <button
+                  id="meeting-caption-tab-ko"
+                  type="button"
+                  class="meeting-caption-tab"
+                  :class="{ active: captionDisplayMode === 'ko' }"
+                  :aria-selected="captionDisplayMode === 'ko'"
+                  aria-controls="meeting-caption-panel-ko"
+                  @click="captionDisplayMode = 'ko'"
+                >
+                  <span class="meeting-caption-tab-label">KOR</span>
+                  <small>한국어</small>
+                </button>
+                <button
+                  id="meeting-caption-tab-en"
+                  type="button"
+                  class="meeting-caption-tab"
+                  :class="{ active: captionDisplayMode === 'en' }"
+                  :aria-selected="captionDisplayMode === 'en'"
+                  aria-controls="meeting-caption-panel-en"
+                  @click="captionDisplayMode = 'en'"
+                >
+                  <span class="meeting-caption-tab-label">ENG</span>
+                  <small>English</small>
+                </button>
+              </div>
+
+              <p v-if="sttStatusHint" class="meeting-caption-hint meeting-caption-hint-inline">
+                {{ sttStatusHint }}
+              </p>
+
+              <div
+                :id="activeCaptionPanelId"
+                ref="captionLog"
+                class="meeting-caption-scroll meeting-caption-scroll-panel"
+                :aria-labelledby="activeCaptionTabId"
+                @scroll="handleCaptionScroll"
+              >
+                <p
+                  v-for="caption in visibleFinalizedCaptions"
+                  :key="caption.segmentId"
+                  class="transcript"
+                  :class="{ finalized: caption.status === 'FINALIZED' }"
+                >
+                  <small>
+                    {{ formatCaptionTime(caption.startedAtMs) }}
+                    · 확정
+                  </small>
+                  <small class="transcript-debug">
+                    seq {{ caption.sequence ?? '-' }}
+                    · {{ caption.segmentId.slice(0, 8) }}
+                    <template v-if="captionDebugLanguageLabel(caption)">
+                      · {{ captionDebugLanguageLabel(caption) }}
+                    </template>
+                  </small>
+                  {{ caption.displayText }}
+                </p>
+                <p
+                  v-if="visibleStreamingCaptionPreview"
+                  class="transcript transcript-preview"
+                >
+                  <small>
+                    {{ formatCaptionTime(visibleStreamingCaptionPreview.startedAtMs) }}
+                    · 말하는 중
+                  </small>
+                  <small class="transcript-debug">
+                    seq {{ visibleStreamingCaptionPreview.sequence ?? '-' }}
+                    · {{ visibleStreamingCaptionPreview.segmentId.slice(0, 8) }}
+                    <template v-if="captionDebugLanguageLabel(visibleStreamingCaptionPreview)">
+                      · {{ captionDebugLanguageLabel(visibleStreamingCaptionPreview) }}
+                    </template>
+                  </small>
+                  {{ visibleStreamingCaptionPreview.displayText }}
+                </p>
+                <p v-if="!visibleFinalizedCaptions.length && !visibleStreamingCaptionPreview" class="meeting-caption-empty">
+                  {{ currentCaptionEmptyStateMessage }}
+                </p>
+              </div>
+            </section>
           </div>
 
-          <p v-if="sttStatusHint" class="meeting-caption-hint meeting-caption-hint-inline">
-            {{ sttStatusHint }}
-          </p>
-
-          <div
-            :id="activeCaptionPanelId"
-            ref="captionLog"
-            class="meeting-caption-scroll meeting-caption-scroll-panel"
-            :aria-labelledby="activeCaptionTabId"
-            @scroll="handleCaptionScroll"
-          >
-            <p
-              v-for="caption in visibleFinalizedCaptions"
-              :key="caption.segmentId"
-              class="transcript"
-              :class="{ finalized: caption.status === 'FINALIZED' }"
-            >
-              <small>
-                {{ formatCaptionTime(caption.startedAtMs) }}
-                · 확정
-              </small>
-              <small class="transcript-debug">
-                seq {{ caption.sequence ?? '-' }}
-                · {{ caption.segmentId.slice(0, 8) }}
-                <template v-if="captionDebugLanguageLabel(caption)">
-                  · {{ captionDebugLanguageLabel(caption) }}
-                </template>
-              </small>
-              {{ caption.displayText }}
-            </p>
-            <p
-              v-if="visibleStreamingCaptionPreview"
-              class="transcript transcript-preview"
-            >
-              <small>
-                {{ formatCaptionTime(visibleStreamingCaptionPreview.startedAtMs) }}
-                · 말하는 중
-              </small>
-              <small class="transcript-debug">
-                seq {{ visibleStreamingCaptionPreview.sequence ?? '-' }}
-                · {{ visibleStreamingCaptionPreview.segmentId.slice(0, 8) }}
-                <template v-if="captionDebugLanguageLabel(visibleStreamingCaptionPreview)">
-                  · {{ captionDebugLanguageLabel(visibleStreamingCaptionPreview) }}
-                </template>
-              </small>
-              {{ visibleStreamingCaptionPreview.displayText }}
-            </p>
-            <p v-if="!visibleFinalizedCaptions.length && !visibleStreamingCaptionPreview" class="meeting-caption-empty">
-              {{ currentCaptionEmptyStateMessage }}
+          <div v-else-if="activeSidePanel === 'people'" class="side-body meeting-people-body">
+            <section v-if="hostParticipantName" class="meeting-host-summary">
+              <span class="meeting-host-summary-label">회의 호스트</span>
+              <strong>{{ hostParticipantName }}</strong>
+              <small>{{ hostParticipantStatus }}</small>
+            </section>
+            <p v-for="participant in participantList" :key="participant.key" class="people-row">
+              <span class="people-row-name">
+                {{ participant.name }}
+                <small v-if="participant.isLocal">나</small>
+                <small v-else-if="extractParticipantUserId(participant.identity) === hostUserId">호스트</small>
+              </span>
+              <span class="people-row-status">
+                {{ participantStatusLabel(participant) }}
+              </span>
             </p>
           </div>
-        </section>
-        <RealtimeFeedbackPanel
-          class="meeting-realtime-feedback"
-          :feedbacks="realtimeFeedbacks"
-          :connected="Boolean(meetingRoom)"
-        />
-        </div>
-      <div v-else-if="tab === 'people'" class="side-body meeting-people-body">
-        <p v-for="participant in participantList" :key="participant.key" class="people-row">
-          <span class="people-row-name">
-            {{ participant.name }}
-            <small v-if="participant.isLocal">나</small>
-          </span>
-          <span class="people-row-status">
-            {{ participantStatusLabel(participant) }}
-          </span>
-        </p>
-      </div>
+          <div v-else-if="activeSidePanel === 'chat'" class="side-body chat-body">
+            <div ref="chatLog" class="chat-log">
+              <article
+                v-for="item in chatMessages"
+                :key="item.id"
+                class="chat-message"
+                :class="{ self: item.isSelf, system: item.isSystem }"
+              >
+                <header>
+                  <strong>{{ item.senderName }}</strong>
+                  <small>{{ formatChatTime(item.sentAt) }}</small>
+                </header>
+                <p>{{ item.content }}</p>
+              </article>
+              <p v-if="!chatMessages.length" class="meeting-caption-empty">
+                아직 채팅이 없습니다. 회의 참여자에게 첫 메시지를 보내보세요.
+              </p>
+            </div>
+            <div class="chat-input">
+              <input
+                v-model="chatInput"
+                placeholder="메시지를 입력하고 Enter로 전송하세요"
+                maxlength="300"
+                :disabled="!meetingRoom || sendingChat"
+                @compositionstart="chatInputComposing = true"
+                @compositionend="chatInputComposing = false"
+                @keydown.enter="handleChatEnter"
+              >
+              <button :disabled="!meetingRoom || !chatInput.trim() || sendingChat" @click="sendChat">
+                {{ sendingChat ? '전송 중' : '전송' }}
+              </button>
+            </div>
+          </div>
 
-      <div v-else class="side-body chat-body">
-        <div ref="chatLog" class="chat-log">
-          <article
-            v-for="item in chatMessages"
-            :key="item.id"
-            class="chat-message"
-            :class="{ self: item.isSelf, system: item.isSystem }"
-          >
-            <header>
-              <strong>{{ item.senderName }}</strong>
-              <small>{{ formatChatTime(item.sentAt) }}</small>
-            </header>
-            <p>{{ item.content }}</p>
-          </article>
-          <p v-if="!chatMessages.length" class="meeting-caption-empty">
-            아직 채팅이 없습니다. 회의 참여자에게 첫 메시지를 보내보세요.
-          </p>
+          <div v-else class="side-body meeting-ai-body">
+            <RealtimeFeedbackPanel
+              class="meeting-realtime-feedback"
+              :feedbacks="realtimeFeedbacks"
+              :connected="Boolean(meetingRoom)"
+              :fill="true"
+            />
+          </div>
+
+          <div v-if="activeSidePanel !== 'ai'" class="meeting-side-feedback-dock">
+            <RealtimeFeedbackPanel
+              class="meeting-realtime-feedback meeting-realtime-feedback-dock"
+              :feedbacks="realtimeFeedbacks"
+              :connected="Boolean(meetingRoom)"
+            />
+          </div>
         </div>
-        <div class="chat-input">
-          <input
-            v-model="chatInput"
-            placeholder="메시지를 입력하고 Enter로 전송하세요"
-            maxlength="300"
-            :disabled="!meetingRoom || sendingChat"
-            @compositionstart="chatInputComposing = true"
-            @compositionend="chatInputComposing = false"
-            @keydown.enter="handleChatEnter"
-          >
-          <button :disabled="!meetingRoom || !chatInput.trim() || sendingChat" @click="sendChat">
-            {{ sendingChat ? '전송 중' : '전송' }}
-          </button>
-        </div>
-      </div>
+      </template>
     </aside>
   </section>
 
@@ -703,7 +860,7 @@
       <div class="device-fields">
         <label>
           마이크
-          <select
+          <AppSelect
             v-model="selectedAudioInput"
             :disabled="!audioInputs.length || loadingDevices"
             @change="handleAudioInputSelection"
@@ -712,12 +869,12 @@
             <option v-for="device in audioInputs" :key="device.deviceId" :value="device.deviceId">
               {{ device.label }}
             </option>
-          </select>
+          </AppSelect>
         </label>
 
         <label>
           스피커
-          <select
+          <AppSelect
             v-model="selectedAudioOutput"
             :disabled="!audioOutputs.length || !supportsSpeakerSelection"
             @change="applySpeaker"
@@ -726,7 +883,7 @@
             <option v-for="device in audioOutputs" :key="device.deviceId" :value="device.deviceId">
               {{ device.label }}
             </option>
-          </select>
+          </AppSelect>
           <small v-if="!supportsSpeakerSelection">
             이 브라우저에서는 스피커 선택을 지원하지 않습니다.
           </small>
@@ -734,7 +891,7 @@
 
         <label>
           카메라
-          <select
+          <AppSelect
             v-model="selectedVideoInput"
             :disabled="!videoInputs.length || loadingDevices"
             @change="handleVideoInputSelection"
@@ -743,7 +900,7 @@
             <option v-for="device in videoInputs" :key="device.deviceId" :value="device.deviceId">
               {{ device.label }}
             </option>
-          </select>
+          </AppSelect>
         </label>
       </div>
 
@@ -777,7 +934,7 @@
 
       <label class="guest-link-field">
         새 관리자
-        <select v-model="hostTransferTargetUserId">
+        <AppSelect v-model="hostTransferTargetUserId">
           <option v-if="!hostTransferCandidates.length" value="">
             이전할 수 있는 사용자가 없습니다.
           </option>
@@ -788,7 +945,7 @@
           >
             {{ participant.name }}
           </option>
-        </select>
+        </AppSelect>
       </label>
 
       <p class="guest-link-note">
@@ -843,6 +1000,30 @@
 
 <script setup>
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import AppSelect from '../../components/common/AppSelect.vue'
+import {
+  Captions,
+  ChevronDown,
+  ChevronLeft,
+  ChevronRight,
+  ChevronUp,
+  Ellipsis,
+  Fullscreen,
+  MessageSquare,
+  MessageSquareShare,
+  Mic,
+  MicOff,
+  PanelRightClose,
+  PanelRightOpen,
+  PhoneOff,
+  ScreenShare,
+  ScreenShareOff,
+  Settings2,
+  Sparkles,
+  Users,
+  Video,
+  VideoOff,
+} from '@lucide/vue'
 import { Room, RoomEvent, Track, createLocalAudioTrack, createLocalVideoTrack } from 'livekit-client'
 import { useRoute, useRouter } from 'vue-router'
 import { API_BASE_URL, postJson } from '../../lib/api-client'
@@ -862,21 +1043,26 @@ import { useAuthStore } from '../../stores/auth'
 const route = useRoute()
 const router = useRouter()
 const auth = useAuthStore()
+const DEFAULT_SIDE_PANEL = 'stt'
 
 const inLobby = ref(true)
 const mic = ref(true)
 const cam = ref(true)
-const tab = ref('stt')
+const activeSidePanel = ref(DEFAULT_SIDE_PANEL)
 const captionDisplayMode = ref('source')
 const chatInput = ref('')
 const displayName = ref(auth.user?.name || '')
 const previewVideo = ref(null)
+const meetingRoomShell = ref(null)
 const speakerTestAudio = ref(null)
 const chatLog = ref(null)
 const captionLog = ref(null)
 const chatInputComposing = ref(false)
 const guestLinkDialogOpen = ref(false)
 const meetingSettingsOpen = ref(false)
+const isMeetingSideCollapsed = ref(false)
+const sideCollapsedBeforeFocus = ref(false)
+const moreMenuOpen = ref(false)
 const guestLinkCopyStatus = ref('게스트 링크를 공유할 수 있습니다.')
 const guestLinkInput = ref(null)
 const previewStream = ref(null)
@@ -914,7 +1100,11 @@ const connectedAt = ref(null)
 const screenShareEnabled = ref(false)
 const meetingConnection = ref(null)
 const selectedTileKey = ref('')
+const fullscreenTileKey = ref('')
 const showFilmstripInFocus = ref(false)
+const focusFilmstripPage = ref(0)
+const currentGridPage = ref(0)
+const viewportWidth = ref(typeof window === 'undefined' ? 1440 : window.innerWidth)
 const screenSharePending = ref(false)
 const sttRuntimeStatus = ref('')
 const lastDataChannelReceivedAt = ref(null)
@@ -941,6 +1131,7 @@ const screenShareInactiveParticipantIds = ref(new Set())
 
 const textEncoder = new TextEncoder()
 const textDecoder = new TextDecoder()
+const tileElements = new Map()
 const tileMediaElements = new Map()
 const tileTrackBindings = new Map()
 const remoteAudioBindings = new Map()
@@ -985,6 +1176,7 @@ const popupReturnPath = computed(() => {
   if (!raw.startsWith('/')) return '/app/meetings'
   return raw
 })
+const isGuestMeetingRoute = computed(() => route.path.startsWith('/guest/meeting/'))
 const hasVideoTrack = computed(() => Boolean(previewStream.value?.getVideoTracks().length))
 const hasAudioTrack = computed(() => Boolean(previewStream.value?.getAudioTracks().length))
 const pendingParticipantName = computed(() => displayName.value.trim() || auth.user?.name || '')
@@ -1051,10 +1243,24 @@ const participantList = computed(() =>
   }),
 )
 const participantCount = computed(() => participantList.value.length)
+const hostUserId = computed(() => String(meetingConnection.value?.hostUserId || '').trim())
+const hostParticipant = computed(() =>
+  participantList.value.find((participant) => extractParticipantUserId(participant.identity) === hostUserId.value) || null,
+)
+const hostParticipantName = computed(() => hostParticipant.value?.name || '')
+const hostParticipantStatus = computed(() => {
+  if (!hostParticipant.value) return '현재 참여자 목록에서 호스트를 확인하지 못했습니다.'
+  return participantStatusLabel(hostParticipant.value)
+})
+const meetingConnectionTone = computed(() => {
+  if (meetingConnectionError.value || meetingConnectionStatus.value.includes('실패')) return 'error'
+  if (meetingConnectionStatus.value.includes('재연결')) return 'warning'
+  if (meetingRoom.value) return 'success'
+  return 'muted'
+})
 const isCurrentUserHost = computed(() => {
-  const hostUserId = String(meetingConnection.value?.hostUserId || '').trim()
-  if (!hostUserId || !currentUserId.value) return false
-  if (hostUserId === currentUserId.value) return true
+  if (!hostUserId.value || !currentUserId.value) return false
+  if (hostUserId.value === currentUserId.value) return true
   // 로컬 데모 계정은 백엔드 UUID와 다르므로 creator 역할을 맡는 기본 계정만 폴백으로 호스트로 본다.
   return currentUserId.value === 'u-user'
 })
@@ -1075,6 +1281,24 @@ const screenShareControlHint = computed(() => {
   const activeSharer = activeScreenShareParticipant.value
   if (!activeSharer || activeSharer.isLocal) return ''
   return `${activeSharer.name} 님이 화면을 공유 중이라 다른 참여자는 새 화면 공유를 시작할 수 없습니다.`
+})
+const activeSidePanelTitle = computed(() => {
+  if (activeSidePanel.value === 'people') return '참석자'
+  if (activeSidePanel.value === 'chat') return '채팅'
+  if (activeSidePanel.value === 'ai') return 'AI 피드백'
+  return '실시간 자막'
+})
+const activeSidePanelDescription = computed(() => {
+  if (activeSidePanel.value === 'people') return '현재 회의에 참여한 인원과 장치 상태를 확인합니다.'
+  if (activeSidePanel.value === 'chat') return '회의 중 메시지를 주고받습니다.'
+  if (activeSidePanel.value === 'ai') return '이전 회의 맥락 기반 실시간 추천을 확인합니다.'
+  return '회의 음성을 원문과 번역 자막으로 전환해 확인합니다.'
+})
+const activeSidePanelStatus = computed(() => {
+  if (activeSidePanel.value === 'people') return `${participantCount.value}명`
+  if (activeSidePanel.value === 'chat') return `${chatMessages.value.length}개`
+  if (activeSidePanel.value === 'ai') return `${realtimeFeedbacks.value.length}건`
+  return captionPanelStatus.value
 })
 const participantMediaTiles = computed(() => {
   const tiles = []
@@ -1122,6 +1346,37 @@ const participantMediaTiles = computed(() => {
 
   return tiles
 })
+const participantGridPageSize = computed(() => {
+  const tileCount = participantMediaTiles.value.length
+  if (tileCount <= 1) return 1
+  if (viewportWidth.value < 900) {
+    return tileCount <= 4 ? 4 : 4
+  }
+  return tileCount <= 4 ? 4 : 6
+})
+const totalGridPages = computed(() =>
+  Math.max(1, Math.ceil(participantMediaTiles.value.length / participantGridPageSize.value)),
+)
+const meetingGridStyle = computed(() => {
+  const count = Math.max(gridTiles.value.length, 1)
+  const isNarrowViewport = viewportWidth.value < 900
+  let columns = 1
+
+  if (isNarrowViewport) {
+    columns = count === 1 ? 1 : 2
+  } else if (count <= 1) {
+    columns = 1
+  } else if (count <= 4) {
+    columns = 2
+  } else {
+    columns = 3
+  }
+
+  return {
+    '--meeting-grid-columns': columns,
+    '--meeting-grid-rows': Math.max(1, Math.ceil(count / columns)),
+  }
+})
 const selectedTile = computed(() =>
   participantMediaTiles.value.find((tile) => tile.key === selectedTileKey.value) || null,
 )
@@ -1137,7 +1392,6 @@ const stageTile = computed(() => {
 })
 const meetingLayoutMode = computed(() => {
   if (isFocusMode.value) return 'focus'
-  if (stageTile.value?.type === 'screen') return 'screen-share'
   return 'grid'
 })
 const filmstripTiles = computed(() => {
@@ -1162,7 +1416,24 @@ const shouldRenderFilmstrip = computed(() => {
   if (!isFocusMode.value) return true
   return showFilmstripInFocus.value
 })
-const gridTiles = computed(() => participantMediaTiles.value)
+const focusFilmstripPageSize = computed(() => {
+  if (viewportWidth.value < 900) return 3
+  return 4
+})
+const focusFilmstripPageCount = computed(() =>
+  Math.max(1, Math.ceil(filmstripTiles.value.length / focusFilmstripPageSize.value)),
+)
+const canPageFilmstripBackward = computed(() => focusFilmstripPage.value > 0)
+const canPageFilmstripForward = computed(() => focusFilmstripPage.value < focusFilmstripPageCount.value - 1)
+const visibleFilmstripTiles = computed(() => {
+  if (!isFocusMode.value) return filmstripTiles.value
+  const startIndex = focusFilmstripPage.value * focusFilmstripPageSize.value
+  return filmstripTiles.value.slice(startIndex, startIndex + focusFilmstripPageSize.value)
+})
+const gridTiles = computed(() => {
+  const startIndex = currentGridPage.value * participantGridPageSize.value
+  return participantMediaTiles.value.slice(startIndex, startIndex + participantGridPageSize.value)
+})
 const elapsedTimeLabel = computed(() => {
   const hours = String(Math.floor(elapsedSeconds.value / 3600)).padStart(2, '0')
   const minutes = String(Math.floor((elapsedSeconds.value % 3600) / 60)).padStart(2, '0')
@@ -1302,8 +1573,12 @@ function extractParticipantUserId(identity) {
 }
 
 function clearTileFocus() {
+  const shouldRestoreSidePanel = selectedTileKey.value && !sideCollapsedBeforeFocus.value
   selectedTileKey.value = ''
   showFilmstripInFocus.value = false
+  if (shouldRestoreSidePanel) {
+    isMeetingSideCollapsed.value = false
+  }
 }
 
 function currentParticipantIdentity() {
@@ -1311,6 +1586,7 @@ function currentParticipantIdentity() {
 }
 
 function openGuestLinkDialog() {
+  moreMenuOpen.value = false
   guestLinkCopyStatus.value = '게스트 링크를 확인하고 복사할 수 있습니다.'
   guestLinkDialogOpen.value = true
 }
@@ -1320,7 +1596,31 @@ function closeGuestLinkDialog() {
 }
 
 function openMeetingSettings() {
+  moreMenuOpen.value = false
   meetingSettingsOpen.value = true
+}
+
+function toggleSidePanel(panel) {
+  moreMenuOpen.value = false
+  if (activeSidePanel.value === panel && !isMeetingSideCollapsed.value) {
+    isMeetingSideCollapsed.value = true
+    return
+  }
+
+  activeSidePanel.value = panel
+  isMeetingSideCollapsed.value = false
+}
+
+function toggleMeetingSidePanel() {
+  moreMenuOpen.value = false
+  isMeetingSideCollapsed.value = !isMeetingSideCollapsed.value
+  if (!isMeetingSideCollapsed.value && !activeSidePanel.value) {
+    activeSidePanel.value = DEFAULT_SIDE_PANEL
+  }
+}
+
+function toggleMoreMenu() {
+  moreMenuOpen.value = !moreMenuOpen.value
 }
 
 function closeMeetingSettings() {
@@ -1328,6 +1628,7 @@ function closeMeetingSettings() {
 }
 
 function openHostTransferDialog() {
+  moreMenuOpen.value = false
   hostTransferStatus.value = ''
   const fallbackCandidate = hostTransferCandidates.value[0]
   hostTransferTargetUserId.value = extractParticipantUserId(fallbackCandidate?.identity) || ''
@@ -1341,6 +1642,7 @@ function closeHostTransferDialog() {
 
 function openMeetingEndConfirm() {
   if (meetingEndPending.value) return
+  moreMenuOpen.value = false
   meetingEndConfirmOpen.value = true
 }
 
@@ -1880,6 +2182,9 @@ function syncParticipantsFromRoom(room = meetingRoom.value) {
   if (selectedTileKey.value && !participantMediaTiles.value.some((tile) => tile.key === selectedTileKey.value)) {
     clearTileFocus()
   }
+  if (fullscreenTileKey.value && !participantMediaTiles.value.some((tile) => tile.key === fullscreenTileKey.value)) {
+    void exitMeetingFullscreen()
+  }
   if (!hasScreenShareTile.value) {
     showFilmstripInFocus.value = false
   } else {
@@ -1893,13 +2198,107 @@ function syncParticipantsFromRoom(room = meetingRoom.value) {
 }
 
 function toggleTileFocus(tileKey) {
+  if (participantMediaTiles.value.length <= 1) {
+    return
+  }
+
   if (selectedTileKey.value === tileKey) {
     clearTileFocus()
     return
   }
 
+  if (!selectedTileKey.value) {
+    sideCollapsedBeforeFocus.value = isMeetingSideCollapsed.value
+  }
   selectedTileKey.value = tileKey
   showFilmstripInFocus.value = false
+  isMeetingSideCollapsed.value = sideCollapsedBeforeFocus.value
+}
+
+function openFocusSidePanel(panel = 'people') {
+  activeSidePanel.value = panel
+  isMeetingSideCollapsed.value = false
+  showFilmstripInFocus.value = false
+}
+
+function openFocusFilmstrip() {
+  showFilmstripInFocus.value = true
+}
+
+function showPreviousFilmstripPage() {
+  focusFilmstripPage.value = Math.max(0, focusFilmstripPage.value - 1)
+}
+
+function showNextFilmstripPage() {
+  focusFilmstripPage.value = Math.min(focusFilmstripPageCount.value - 1, focusFilmstripPage.value + 1)
+}
+
+function goToPreviousGridPage() {
+  currentGridPage.value = Math.max(0, currentGridPage.value - 1)
+}
+
+function goToNextGridPage() {
+  currentGridPage.value = Math.min(totalGridPages.value - 1, currentGridPage.value + 1)
+}
+
+function setTileRef(tileKey) {
+  return (element) => {
+    if (!element) {
+      tileElements.delete(tileKey)
+      return
+    }
+
+    tileElements.set(tileKey, element)
+  }
+}
+
+function isTileFullscreen(tileKey) {
+  return fullscreenTileKey.value === tileKey
+}
+
+async function toggleSharedScreenFullscreen(tileKey) {
+  const tile = participantMediaTiles.value.find((candidate) => candidate.key === tileKey)
+  if (!tile || tile.type !== 'screen') return
+
+  const element = tileElements.get(tileKey)
+  if (!element?.requestFullscreen) return
+
+  if (document.fullscreenElement === element) {
+    await exitMeetingFullscreen()
+    return
+  }
+
+  try {
+    if (document.fullscreenElement && document.exitFullscreen) {
+      await document.exitFullscreen().catch(() => {})
+    }
+    await element.requestFullscreen()
+    fullscreenTileKey.value = tileKey
+  } catch {
+    // 공유 화면 타일만 브라우저 전체화면으로 확장한다.
+  }
+}
+
+async function exitMeetingFullscreen() {
+  if (!document.fullscreenElement || !document.exitFullscreen) return
+
+  try {
+    await document.exitFullscreen()
+  } catch {
+    // 전체화면 해제 실패는 현재 화면 복구를 막지 않는다.
+  } finally {
+    fullscreenTileKey.value = ''
+  }
+}
+
+function handleFullscreenChange() {
+  if (!document.fullscreenElement) {
+    fullscreenTileKey.value = ''
+    return
+  }
+
+  const activeEntry = Array.from(tileElements.entries()).find(([, element]) => element === document.fullscreenElement)
+  fullscreenTileKey.value = activeEntry?.[0] || ''
 }
 
 function cleanupTileBinding(tileKey) {
@@ -2202,6 +2601,10 @@ function resetMeetingSessionState(options = {}) {
   screenShareEnabled.value = false
   meetingConnection.value = null
   meetingSettingsOpen.value = false
+  moreMenuOpen.value = false
+  isMeetingSideCollapsed.value = false
+  activeSidePanel.value = DEFAULT_SIDE_PANEL
+  fullscreenTileKey.value = ''
   clearTileFocus()
   screenSharePending.value = false
   sttRuntimeStatus.value = ''
@@ -2235,6 +2638,7 @@ function resetMeetingSessionState(options = {}) {
     cancelAnimationFrame(captionScrollRaf)
     captionScrollRaf = null
   }
+  tileElements.clear()
   Array.from(tileTrackBindings.keys()).forEach((tileKey) => cleanupTileBinding(tileKey))
   tileMediaElements.clear()
   clearRemoteAudioBindings()
@@ -2422,6 +2826,7 @@ async function connectMeetingRoom() {
     meetingId: meetingId.value,
     participantIdentity: auth.user?.id || '',
     displayName: pendingParticipantName.value,
+    skipAuth: isGuestMeetingRoute.value || !auth.isAuthenticated,
   })
 
   meetingConnection.value = connection
@@ -2458,6 +2863,7 @@ async function connectMeetingRoom() {
 
 async function reportMeetingStarted() {
   if (meetingStartReported.value) return
+  if (isGuestMeetingRoute.value || !auth.isAuthenticated) return
 
   try {
     await postJson(`/meetings/${meetingId.value}/start`, {})
@@ -2891,19 +3297,23 @@ async function endMeeting() {
   try {
     hostTransferDialogOpen.value = false
     meetingEndConfirmOpen.value = false
-    meetingEndHandled.value = true
-    showMeetingEndedScreen('해당 회의는 종료되었습니다.')
     if (isCurrentUserHost.value) {
       await postJson(`/meetings/${meetingId.value}/end`, {}, { keepalive: true })
+      meetingEndHandled.value = true
+      showMeetingEndedScreen('해당 회의는 종료되었습니다.')
       meetingConnectionStatus.value = '회의 종료됨'
       meetingConnectionError.value = ''
       await publishMeetingEndedSignal('host-ended').catch((error) => {
         meetingConnectionError.value = error?.message || ''
       })
+    } else {
+      meetingEndHandled.value = true
+      showMeetingEndedScreen('해당 회의는 종료되었습니다.')
     }
     await nextTick()
     await disconnectMeetingRoom({ preserveEndedView: true })
   } catch (error) {
+    meetingEndHandled.value = false
     meetingConnectionError.value = error?.message || '회의를 종료하지 못했습니다.'
   } finally {
     meetingEndPending.value = false
@@ -2984,8 +3394,12 @@ function handleDeviceChange() {
   })
 }
 
-watch(tab, (nextTab) => {
-  if (nextTab !== 'stt') return
+function handleViewportResize() {
+  viewportWidth.value = window.innerWidth
+}
+
+watch(activeSidePanel, (nextPanel) => {
+  if (nextPanel !== 'stt') return
   nextTick(() => {
     updateCaptionScrollState()
     if (captionFollowLatest.value) {
@@ -3004,6 +3418,34 @@ watch(orderedCaptions, () => {
   })
 })
 
+watch([participantMediaTiles, participantGridPageSize], () => {
+  const lastPageIndex = Math.max(0, totalGridPages.value - 1)
+  if (currentGridPage.value > lastPageIndex) {
+    currentGridPage.value = lastPageIndex
+  }
+})
+
+watch([filmstripTiles, focusFilmstripPageSize], () => {
+  const lastPageIndex = Math.max(0, focusFilmstripPageCount.value - 1)
+  if (focusFilmstripPage.value > lastPageIndex) {
+    focusFilmstripPage.value = lastPageIndex
+  }
+})
+
+watch(meetingLayoutMode, (mode) => {
+  if (mode !== 'grid') {
+    currentGridPage.value = 0
+  }
+  if (mode !== 'focus') {
+    showFilmstripInFocus.value = false
+    focusFilmstripPage.value = 0
+  }
+})
+
+watch(selectedTileKey, () => {
+  focusFilmstripPage.value = 0
+})
+
 watch([meetingId, popupSessionId], () => {
   if (!isDedicatedMeetingWindow.value) return
   // 같은 meeting popup 창을 재사용할 때는 이전 room 상태가 남을 수 있으므로
@@ -3019,11 +3461,15 @@ onMounted(() => {
   initializeDevices()
   navigator.mediaDevices?.addEventListener?.('devicechange', handleDeviceChange)
   window.addEventListener('beforeunload', handleBeforeUnload)
+  window.addEventListener('resize', handleViewportResize)
+  document.addEventListener('fullscreenchange', handleFullscreenChange)
 })
 
 onBeforeUnmount(() => {
   navigator.mediaDevices?.removeEventListener?.('devicechange', handleDeviceChange)
   window.removeEventListener('beforeunload', handleBeforeUnload)
+  window.removeEventListener('resize', handleViewportResize)
+  document.removeEventListener('fullscreenchange', handleFullscreenChange)
   clearInterval(elapsedTimer)
   stopPreview()
   void disconnectMeetingRoom()

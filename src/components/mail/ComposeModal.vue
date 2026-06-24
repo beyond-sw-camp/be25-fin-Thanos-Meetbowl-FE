@@ -11,15 +11,26 @@
       </div>
     </header>
     <div class="compose-body">
-      <label>받는 사람</label>
+      <div class="compose-recipient-label-row">
+        <label>받는 사람</label>
+        <label class="mail-send-self-check" :class="{ selected: selfSelected }">
+          <input type="checkbox" :checked="selfSelected" :disabled="!selfRecipient" @change="toggleSelfRecipient($event.target.checked)">
+          <span>내게 보내기</span>
+        </label>
+      </div>
+      <div class="mail-selected-recipients" :class="{ empty: !recipients.length }">
+        <small v-if="!recipients.length">선택된 수신자가 없습니다.</small>
+        <span v-for="member in recipients" :key="userKey(member)">
+          {{ member.name }}
+          <small>{{ member.department || member.team || member.email }}</small>
+          <button type="button" :aria-label="`${member.name} 수신자 제거`" @click="removeRecipient(userKey(member))">×</button>
+        </span>
+      </div>
       <div ref="recipientPicker" class="recipient-picker">
-        <div class="recipient-box" @focusin="openRecipientPicker">
-          <span v-for="member in recipients" :key="userKey(member)">
-            {{ member.name }} · {{ member.department || member.team || member.email }}
-            <button type="button" @click="removeRecipient(userKey(member))">×</button>
-          </span>
-          <input v-model="recipientQuery" placeholder="이름, 계열사, 부서/팀, 이메일로 검색">
-        </div>
+        <label class="mail-recipient-search" @focusin="openRecipientPicker">
+          <Search :size="15" />
+          <input v-model="recipientQuery" placeholder="수신자 추가: 이름, 부서/팀, 이메일 검색">
+        </label>
         <div v-if="pickerOpen && (recipientQuery || recipientMatches.length || recipientLoading)" class="recipient-results">
           <small v-if="recipientLoading">수신자를 검색하는 중입니다.</small>
           <button v-for="member in recipientMatches" :key="userKey(member)" type="button" @click="addRecipient(member)">
@@ -62,12 +73,13 @@
 
 <script setup>
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
-import { ChevronDown, FileType2, Paperclip, Upload, X } from '@lucide/vue'
+import { ChevronDown, FileType2, Paperclip, Search, Upload, X } from '@lucide/vue'
 import ModalShell from '../common/ModalShell.vue'
 
 const props = defineProps({
   initialDraft: { type: Object, default: () => ({}) },
   initialRecipients: { type: Array, default: () => [] },
+  selfRecipient: { type: Object, default: null },
   recipientSearch: { type: Function, required: true },
   templates: { type: Array, required: true },
 })
@@ -90,6 +102,10 @@ watch(recipientQuery, (value) => {
 })
 watch(() => [props.initialDraft, props.initialRecipients], applyInitialState, { immediate: true })
 const canSend = computed(() => recipients.value.length > 0 && draft.value.subject.trim() && draft.value.body.trim())
+const selfSelected = computed(() => {
+  const selfId = userKey(props.selfRecipient)
+  return Boolean(selfId && recipients.value.some((member) => userKey(member) === selfId))
+})
 
 onMounted(() => document.addEventListener('mousedown', closeRecipientPickerOnOutside))
 onUnmounted(() => document.removeEventListener('mousedown', closeRecipientPickerOnOutside))
@@ -110,10 +126,21 @@ function applyInitialState() {
 }
 
 function addRecipient(member) {
+  const memberId = userKey(member)
+  if (!memberId || recipients.value.some((recipient) => userKey(recipient) === memberId)) return
   recipients.value.push(member)
   recipientQuery.value = ''
   recipientMatches.value = []
   pickerOpen.value = false
+}
+
+function toggleSelfRecipient(checked) {
+  if (!props.selfRecipient) return
+  if (checked) {
+    addRecipient(props.selfRecipient)
+    return
+  }
+  removeRecipient(userKey(props.selfRecipient))
 }
 
 function selectRecipientSuggestion(member) {
@@ -155,7 +182,7 @@ async function searchRecipients(keyword) {
 }
 
 function userKey(member) {
-  return member.userId || member.id
+  return member?.userId || member?.id || ''
 }
 
 function openRecipientPicker() {

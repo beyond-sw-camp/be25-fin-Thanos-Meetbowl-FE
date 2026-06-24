@@ -13,16 +13,31 @@
       <header>
         <h1>{{ mail.subject }}</h1>
       </header>
-      <div class="mail-sender-line">
-        <span class="table-avatar">{{ (mail.senderName || '?').slice(0, 1) }}</span>
-        <div class="mail-sender-body">
-          <div class="mail-sender-name-row">
-            <strong>{{ mail.senderName || mail.senderUserId }}</strong>
-            <span>{{ mail.senderMeta || '사용자' }}</span>
-          </div>
-          <small>받는 사람 {{ mail.recipientUserIds?.length || 0 }}명 · <span class="mail-date-text">{{ mail.displayDate }}</span></small>
+      <dl class="mail-message-meta">
+        <div class="mail-message-meta-sender">
+          <dt>보낸 사람</dt>
+          <dd>
+            <span class="mail-sender-chip">
+              {{ mail.senderName || mail.senderUserId }}
+              <small v-if="mail.senderEmail">&lt;{{ mail.senderEmail }}&gt;</small>
+            </span>
+          </dd>
         </div>
-      </div>
+        <div>
+          <dt>받는 사람</dt>
+          <dd class="mail-recipient-chips">
+            <span v-for="recipient in recipients" :key="recipient.userId" class="mail-sender-chip">
+              {{ recipient.name }}
+              <small v-if="recipient.email">&lt;{{ recipient.email }}&gt;</small>
+            </span>
+            <span v-if="!recipients.length">{{ mail.recipientUserIds?.length || 0 }}명</span>
+          </dd>
+        </div>
+        <div>
+          <dt>보낸 날짜</dt>
+          <dd><time class="mail-date-text">{{ mail.displayDateTime || mail.displayDate }}</time></dd>
+        </div>
+      </dl>
       <pre class="mail-body-text">{{ mail.body }}</pre>
       <div v-if="attachmentCount" class="mail-attachments">
         <strong>첨부파일 {{ attachmentCount }}개</strong>
@@ -52,6 +67,7 @@ const props = defineProps({
 
 defineEmits(['back', 'backup', 'delete', 'download-attachment', 'forward', 'print', 'reply', 'restore'])
 
+const recipients = computed(() => props.mail.recipients || [])
 const attachments = computed(() => props.mail.attachments || props.mail.attachmentSummaries || [])
 const attachmentCount = computed(() => attachments.value.length || props.mail.attachmentCount || (props.mail.hasAttachments ? 1 : 0))
 
