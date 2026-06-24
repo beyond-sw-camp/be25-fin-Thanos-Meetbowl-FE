@@ -178,7 +178,7 @@ export default defineComponent({
   template: `
     <section class="page">
       <header class="page-header"><h1>안녕하세요, {{ user?.name }}님</h1><p>오늘의 회의 일정과 업무 현황을 한 눈에 확인하세요.</p></header>
-      <div class="metric-grid">
+      <div class="metric-grid dashboard-metric-grid">
         <RouterLink v-for="kpi in kpis" :key="kpi.label" :to="kpi.to" class="metric-card">
           <span>{{ kpi.label }}</span><strong>{{ kpi.value }}</strong>
         </RouterLink>

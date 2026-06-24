@@ -1,5 +1,6 @@
 <script setup>
 import { computed, onMounted, ref } from 'vue'
+import AppSelect from '../../components/common/AppSelect.vue'
 import { useRouter } from 'vue-router'
 import { changeInitialPassword } from '../../lib/auth'
 import {
@@ -368,7 +369,7 @@ function statusLabel(status) {
           </div>
           <div class="settings-notification-row">
             <span>회의 시작 전 알림</span>
-            <select v-model.number="settingsForm.meetingStartReminderMinutes">
+            <AppSelect v-model.number="settingsForm.meetingStartReminderMinutes">
               <option
                 v-for="option in reminderOptions"
                 :key="option.value"
@@ -376,11 +377,11 @@ function statusLabel(status) {
               >
                 {{ option.label }}
               </option>
-            </select>
+            </AppSelect>
           </div>
           <div class="settings-notification-row">
             <span>회의록 미검토 알림</span>
-            <select v-model.number="settingsForm.minutesReviewReminderMinutes">
+            <AppSelect v-model.number="settingsForm.minutesReviewReminderMinutes">
               <option
                 v-for="option in minutesReviewReminderOptions"
                 :key="option.value"
@@ -388,7 +389,7 @@ function statusLabel(status) {
               >
                 {{ option.label }}
               </option>
-            </select>
+            </AppSelect>
           </div>
           <p v-if="settingsMessage" class="settings-success">{{ settingsMessage }}</p>
           <div v-if="settingsError" class="error-box" style="margin-top: 12px;">{{ settingsError }}</div>

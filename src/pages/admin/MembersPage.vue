@@ -1,5 +1,6 @@
 <script setup>
 import { ref } from 'vue'
+import ActionButton from '../../components/common/ActionButton.vue'
 import UserDirectoryPanel from '../../components/common/UserDirectoryPanel.vue'
 import { useAuthStore } from '../../stores/auth'
 
@@ -19,7 +20,7 @@ const auth = useAuthStore()
       </div>
       <div v-if="auth.user?.role === 'ADMIN'" class="admin-actions header-actions">
         <!-- 페이지 상단 오른쪽에 두는 주요 진입점이다. -->
-        <button class="primary-button add-member-button" @click="directoryPanel?.openCreate?.()">회원 추가</button>
+        <ActionButton variant="primary" @click="directoryPanel?.openCreate?.()">회원 추가</ActionButton>
       </div>
     </header>
 
@@ -37,18 +38,8 @@ const auth = useAuthStore()
 
 .header-actions {
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   justify-content: flex-end;
-  margin-top: 28px;
-}
-
-.add-member-button {
-  min-width: 104px;
-  min-height: 44px;
-  padding: 0 18px;
-  border-radius: 8px;
-  font-size: 16px;
-  font-weight: 700;
 }
 
 @media (max-width: 959px) {

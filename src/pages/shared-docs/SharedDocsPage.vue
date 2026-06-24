@@ -6,9 +6,15 @@
         <p>공유 자료, 멤버, 버전 이력을 워크스페이스 단위로 관리합니다.</p>
       </div>
       <div class="shared-header-actions">
-        <button type="button" class="ghost-button icon-action" @click="openCreate"><FolderKanban :size="16" /> 프로젝트 생성</button>
-        <button type="button" class="ghost-button icon-action" :disabled="!activeSpaceId" @click="openMemberManage"><Plus :size="15" /> 멤버 관리</button>
-        <button type="button" class="primary-button small" :disabled="!activeSpaceId" @click="openUpload"><Upload :size="15" /> 파일 업로드</button>
+        <ActionButton type="button" variant="ghost" size="sm" @click="openCreate">
+          <FolderKanban :size="16" /> 프로젝트 생성
+        </ActionButton>
+        <ActionButton type="button" variant="ghost" size="sm" :disabled="!activeSpaceId" @click="openMemberManage">
+          <Plus :size="15" /> 멤버 관리
+        </ActionButton>
+        <ActionButton type="button" variant="primary" size="sm" :disabled="!activeSpaceId" @click="openUpload">
+          <Upload :size="15" /> 파일 업로드
+        </ActionButton>
       </div>
     </header>
 
@@ -97,9 +103,9 @@
         <section>
           <div class="shared-member-section-title">
             <h2>파일 미리보기</h2>
-            <button type="button" class="secondary-button small" @click="versionUploadOpen = !versionUploadOpen">
+            <ActionButton type="button" variant="secondary" size="sm" @click="versionUploadOpen = !versionUploadOpen">
               {{ versionUploadOpen ? '닫기' : '새 버전 업로드' }}
-            </button>
+            </ActionButton>
           </div>
           <form v-if="versionUploadOpen" class="shared-version-upload" @submit.prevent="submitNewVersion">
             <div class="shared-member-section-title">
@@ -109,9 +115,9 @@
             <input type="file" @change="versionDraft.file = $event.target.files?.[0] || null">
             <input v-model="versionDraft.newVersion" placeholder="새 버전 (예: v2)">
             <input v-model="versionDraft.changeMemo" placeholder="변경 메모 (선택)">
-            <button type="submit" class="primary-button small" :disabled="!versionDraft.file || !versionDraft.newVersion.trim() || versionUploading">
+            <ActionButton type="submit" variant="primary" size="sm" :disabled="!versionDraft.file || !versionDraft.newVersion.trim() || versionUploading">
               {{ versionUploading ? '업로드 중...' : '업로드' }}
-            </button>
+            </ActionButton>
           </form>
           <article class="shared-version-preview file-preview-panel">
             <div v-if="filePreviewLoading" class="empty-state">파일을 불러오는 중입니다.</div>
@@ -129,7 +135,9 @@
               <div><dt>버전</dt><dd>{{ openDoc.currentVersion }}</dd></div>
             </dl>
             <div class="file-preview-actions">
-              <button type="button" class="primary-button small" @click="downloadFile(openDoc)"><Download :size="14" /> 다운로드</button>
+              <ActionButton type="button" variant="primary" size="sm" @click="downloadFile(openDoc)">
+                <Download :size="14" /> 다운로드
+              </ActionButton>
             </div>
           </article>
           <h2>버전 이력</h2>
@@ -151,7 +159,7 @@
 
     <div v-if="createOpen" class="modal-backdrop" @click="createOpen = false">
       <form class="write-modal shared-create-modal" @submit.prevent="createSpace" @click.stop>
-        <header><h2>프로젝트 생성</h2><button type="button" @click="createOpen = false">닫기</button></header>
+        <header><h2>프로젝트 생성</h2><ActionButton type="button" variant="ghost" size="sm" @click="createOpen = false">닫기</ActionButton></header>
         <label>이름<input v-model="spaceDraft.name" placeholder="예: Q3 신제품 TF"></label>
         <label>설명<textarea v-model="spaceDraft.description" rows="3" placeholder="프로젝트 목적이나 공유 범위를 입력하세요."></textarea></label>
         <p v-if="createErrorMessage" class="warning-text">{{ createErrorMessage }}</p>
@@ -177,13 +185,16 @@
             </div>
           </div>
         </section>
-        <footer><button type="button" class="ghost-button" @click="createOpen = false">취소</button><button type="submit" class="primary-button small">생성</button></footer>
+        <footer>
+          <ActionButton type="button" variant="ghost" size="sm" @click="createOpen = false">취소</ActionButton>
+          <ActionButton type="submit" variant="primary" size="sm">생성</ActionButton>
+        </footer>
       </form>
     </div>
 
     <div v-if="uploadOpen" class="modal-backdrop" @click="uploadOpen = false">
       <form class="write-modal" @submit.prevent="submitUpload" @click.stop>
-        <header><h2>파일 업로드</h2><button type="button" @click="uploadOpen = false">닫기</button></header>
+        <header><h2>파일 업로드</h2><ActionButton type="button" variant="ghost" size="sm" @click="uploadOpen = false">닫기</ActionButton></header>
         <p class="shared-upload-note">선택한 공유 프로젝트에 새 파일로 등록합니다. 여러 개를 한 번에 올릴 수 있습니다.</p>
         <button
           type="button"
@@ -205,10 +216,10 @@
           </li>
         </ul>
         <footer>
-          <button type="button" class="ghost-button" @click="uploadOpen = false">취소</button>
-          <button type="submit" class="primary-button small" :disabled="!uploadDraft.files.length || uploadLoading">
+          <ActionButton type="button" variant="ghost" size="sm" @click="uploadOpen = false">취소</ActionButton>
+          <ActionButton type="submit" variant="primary" size="sm" :disabled="!uploadDraft.files.length || uploadLoading">
             {{ uploadLoading ? '업로드 중...' : `업로드 (${uploadDraft.files.length})` }}
-          </button>
+          </ActionButton>
         </footer>
       </form>
     </div>
@@ -220,7 +231,7 @@
             <h2>멤버 관리</h2>
             <p>{{ activeSpace?.name || '공유 프로젝트' }} 멤버를 확인하고 초대합니다.</p>
           </div>
-          <button type="button" @click="inviteOpen = false">닫기</button>
+          <ActionButton type="button" variant="ghost" size="sm" @click="inviteOpen = false">닫기</ActionButton>
         </header>
         <section class="shared-member-current">
           <div class="shared-member-section-title">
@@ -248,17 +259,20 @@
             <strong>멤버 초대</strong>
             <small>이름, 부서/팀, 이메일로 검색</small>
           </div>
-        <div ref="inviteSearchRoot" class="recipient-picker">
-          <input v-model="userKeyword" placeholder="이름, 부서/팀, 이메일 검색" @focus="openInviteSearch">
-          <div v-if="inviteSearchOpen && userCandidates.length" class="participant-results">
-            <button v-for="user in userCandidates" :key="user.userId" type="button" :class="{ selected: inviteUserId === user.userId }" @click="selectInviteUser(user)">
-              <strong>{{ user.name }} <small>{{ user.position }}</small></strong>
-              <span>{{ user.department || user.team || '-' }} · {{ user.email }}</span>
-            </button>
+          <div ref="inviteSearchRoot" class="recipient-picker">
+            <input v-model="userKeyword" placeholder="이름, 부서/팀, 이메일 검색" @focus="openInviteSearch">
+            <div v-if="inviteSearchOpen && userCandidates.length" class="participant-results">
+              <button v-for="user in userCandidates" :key="user.userId" type="button" :class="{ selected: inviteUserId === user.userId }" @click="selectInviteUser(user)">
+                <strong>{{ user.name }} <small>{{ user.position }}</small></strong>
+                <span>{{ user.department || user.team || '-' }} · {{ user.email }}</span>
+              </button>
+            </div>
           </div>
-        </div>
         </section>
-        <footer><button type="button" class="ghost-button" @click="inviteOpen = false">취소</button><button type="submit" class="primary-button small" :disabled="!inviteUserId">초대</button></footer>
+        <footer>
+          <ActionButton type="button" variant="ghost" size="sm" @click="inviteOpen = false">취소</ActionButton>
+          <ActionButton type="submit" variant="primary" size="sm" :disabled="!inviteUserId">초대</ActionButton>
+        </footer>
       </form>
     </div>
     <div class="toast-stack" aria-live="polite">
@@ -273,6 +287,7 @@
 <script setup>
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { Download, FileSpreadsheet, FileText, FileType2, FolderKanban, Info, MoreHorizontal, Plus, Search, Trash2, Upload, X } from '@lucide/vue'
+import ActionButton from '../../components/common/ActionButton.vue'
 import {
   changeSharedWorkspaceAudience,
   addSharedWorkspaceFileVersion,

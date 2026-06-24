@@ -121,7 +121,7 @@
 
             <label>
               마이크
-              <select
+              <AppSelect
                 v-model="selectedAudioInput"
                 :disabled="!audioInputs.length || loadingDevices"
                 @change="restartPreview"
@@ -130,7 +130,7 @@
                 <option v-for="device in audioInputs" :key="device.deviceId" :value="device.deviceId">
                   {{ device.label }}
                 </option>
-              </select>
+              </AppSelect>
             </label>
 
             <div class="microphone-test">
@@ -163,7 +163,7 @@
 
             <label>
               스피커
-              <select
+              <AppSelect
                 v-model="selectedAudioOutput"
                 :disabled="!audioOutputs.length || !supportsSpeakerSelection"
                 @change="applySpeaker"
@@ -172,7 +172,7 @@
                 <option v-for="device in audioOutputs" :key="device.deviceId" :value="device.deviceId">
                   {{ device.label }}
                 </option>
-              </select>
+              </AppSelect>
               <small v-if="!supportsSpeakerSelection">
                 이 브라우저에서는 스피커 선택을 지원하지 않습니다.
               </small>
@@ -180,7 +180,7 @@
 
             <label>
               카메라
-              <select
+              <AppSelect
                 v-model="selectedVideoInput"
                 :disabled="!videoInputs.length || loadingDevices"
                 @change="restartPreview"
@@ -189,7 +189,7 @@
                 <option v-for="device in videoInputs" :key="device.deviceId" :value="device.deviceId">
                   {{ device.label }}
                 </option>
-              </select>
+              </AppSelect>
             </label>
           </div>
 
@@ -860,7 +860,7 @@
       <div class="device-fields">
         <label>
           마이크
-          <select
+          <AppSelect
             v-model="selectedAudioInput"
             :disabled="!audioInputs.length || loadingDevices"
             @change="handleAudioInputSelection"
@@ -869,12 +869,12 @@
             <option v-for="device in audioInputs" :key="device.deviceId" :value="device.deviceId">
               {{ device.label }}
             </option>
-          </select>
+          </AppSelect>
         </label>
 
         <label>
           스피커
-          <select
+          <AppSelect
             v-model="selectedAudioOutput"
             :disabled="!audioOutputs.length || !supportsSpeakerSelection"
             @change="applySpeaker"
@@ -883,7 +883,7 @@
             <option v-for="device in audioOutputs" :key="device.deviceId" :value="device.deviceId">
               {{ device.label }}
             </option>
-          </select>
+          </AppSelect>
           <small v-if="!supportsSpeakerSelection">
             이 브라우저에서는 스피커 선택을 지원하지 않습니다.
           </small>
@@ -891,7 +891,7 @@
 
         <label>
           카메라
-          <select
+          <AppSelect
             v-model="selectedVideoInput"
             :disabled="!videoInputs.length || loadingDevices"
             @change="handleVideoInputSelection"
@@ -900,7 +900,7 @@
             <option v-for="device in videoInputs" :key="device.deviceId" :value="device.deviceId">
               {{ device.label }}
             </option>
-          </select>
+          </AppSelect>
         </label>
       </div>
 
@@ -934,7 +934,7 @@
 
       <label class="guest-link-field">
         새 관리자
-        <select v-model="hostTransferTargetUserId">
+        <AppSelect v-model="hostTransferTargetUserId">
           <option v-if="!hostTransferCandidates.length" value="">
             이전할 수 있는 사용자가 없습니다.
           </option>
@@ -945,7 +945,7 @@
           >
             {{ participant.name }}
           </option>
-        </select>
+        </AppSelect>
       </label>
 
       <p class="guest-link-note">
@@ -1000,6 +1000,7 @@
 
 <script setup>
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import AppSelect from '../../components/common/AppSelect.vue'
 import {
   Captions,
   ChevronDown,

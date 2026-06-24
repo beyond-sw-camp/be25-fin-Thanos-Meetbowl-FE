@@ -1,5 +1,7 @@
 <script setup>
 import { computed, onMounted, ref, watch } from 'vue'
+import ActionButton from '../../components/common/ActionButton.vue'
+import AppSelect from '../../components/common/AppSelect.vue'
 import {
   changeMeetingRoomAvailability,
   createMeetingBuilding,
@@ -399,8 +401,8 @@ function normalizeBuilding(item) {
         <p>사이트·건물을 등록하고 회의실 운영 상태를 관리합니다.</p>
       </div>
       <div class="admin-actions">
-        <button class="secondary-button" type="button" @click="openSiteModal">사이트/건물 추가</button>
-        <button class="primary-button" type="button" @click="openCreateRoom">회의실 등록</button>
+        <ActionButton variant="secondary" @click="openSiteModal">사이트/건물 추가</ActionButton>
+        <ActionButton variant="primary" @click="openCreateRoom">회의실 등록</ActionButton>
       </div>
     </header>
 
@@ -414,7 +416,7 @@ function normalizeBuilding(item) {
     <article v-else-if="errorMessage" class="card">
       <div class="error-box">{{ errorMessage }}</div>
       <div class="admin-actions retry-actions">
-        <button class="secondary-button" type="button" @click="loadPage">다시 시도</button>
+        <ActionButton variant="secondary" @click="loadPage">다시 시도</ActionButton>
       </div>
     </article>
 
@@ -494,17 +496,17 @@ function normalizeBuilding(item) {
             <div class="form-row two">
               <label>
                 사이트
-                <select v-model="roomForm.siteId">
+                <AppSelect v-model="roomForm.siteId">
                   <option v-for="site in sites" :key="site.siteId" :value="site.siteId">{{ site.name }}</option>
-                </select>
+                </AppSelect>
               </label>
               <label>
                 건물
-                <select v-if="!editingRoom" v-model="roomForm.buildingId">
+                <AppSelect v-if="!editingRoom" v-model="roomForm.buildingId">
                   <option v-for="building in formBuildings" :key="building.buildingId" :value="building.buildingId">
                     {{ building.name }}
                   </option>
-                </select>
+                </AppSelect>
                 <input v-else v-model="roomForm.buildingName" placeholder="건물명 입력">
               </label>
             </div>
@@ -523,8 +525,8 @@ function normalizeBuilding(item) {
               <input type="checkbox" v-model="roomForm.isAvailable">
             </label>
             <div class="modal-actions">
-              <button type="button" class="secondary-button" @click="closeRoomModal">취소</button>
-              <button class="primary-button" :disabled="saving">{{ saving ? '저장 중...' : '저장' }}</button>
+              <ActionButton variant="secondary" type="button" @click="closeRoomModal">취소</ActionButton>
+              <ActionButton variant="primary" type="submit" :disabled="saving">{{ saving ? '저장 중...' : '저장' }}</ActionButton>
             </div>
           </form>
         </article>
@@ -540,8 +542,8 @@ function normalizeBuilding(item) {
             <label>사이트<input v-model="siteForm.siteName" required placeholder="예: 판교"></label>
             <label>건물<input v-model="siteForm.buildingName" required placeholder="예: 본관"></label>
             <div class="modal-actions">
-              <button type="button" class="secondary-button" @click="closeSiteModal">취소</button>
-              <button class="primary-button" :disabled="saving">{{ saving ? '추가 중...' : '추가' }}</button>
+              <ActionButton variant="secondary" type="button" @click="closeSiteModal">취소</ActionButton>
+              <ActionButton variant="primary" type="submit" :disabled="saving">{{ saving ? '추가 중...' : '추가' }}</ActionButton>
             </div>
           </form>
         </article>

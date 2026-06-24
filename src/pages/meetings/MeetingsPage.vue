@@ -14,8 +14,8 @@
           <input v-model="excludeEnded" type="checkbox">
           종료·취소된 회의 제외
         </label>
-        <select v-model="range"><option value="all">전체 기간</option><option value="3m">최근 3개월</option><option value="6m">최근 6개월</option></select>
-        <select v-model="sort"><option value="latest">최신순</option><option value="oldest">오래된순</option></select>
+        <AppSelect v-model="range"><option value="all">전체 기간</option><option value="3m">최근 3개월</option><option value="6m">최근 6개월</option></AppSelect>
+        <AppSelect v-model="sort"><option value="latest">최신순</option><option value="oldest">오래된순</option></AppSelect>
         <span>총 {{ filtered.length }}건</span>
       </div>
     </div>
@@ -104,6 +104,7 @@
 <script setup>
 
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import AppSelect from '../../components/common/AppSelect.vue'
 import { useRoute, useRouter } from 'vue-router'
 import Pagination from '../../components/common/Pagination.vue'
 import ModalShell from '../../components/common/ModalShell.vue'

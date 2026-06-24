@@ -1,5 +1,6 @@
 <script setup>
 import { computed, onMounted, ref } from 'vue'
+import AppSelect from '../../components/common/AppSelect.vue'
 import {
   getAdminMailRetentionPolicy,
   updateAdminMailRetentionPolicy,
@@ -314,7 +315,7 @@ function flashSavedState(target) {
           <div class="mail-policy-field">
             <label class="mail-policy-label" for="mail-retention-years">보관 기간</label>
             <div class="mail-policy-input-row">
-              <select
+              <AppSelect
                 id="mail-retention-years"
                 class="mail-policy-select"
                 :value="mailForm.retentionYears"
@@ -323,9 +324,9 @@ function flashSavedState(target) {
                 <option v-for="year in yearOptions" :key="`year-${year}`" :value="year">
                   {{ year }}년
                 </option>
-              </select>
+              </AppSelect>
 
-              <select
+              <AppSelect
                 class="mail-policy-select"
                 :value="mailForm.retentionMonths"
                 @change="onRetentionMonthsChange"
@@ -338,9 +339,9 @@ function flashSavedState(target) {
                 >
                   {{ month }}개월
                 </option>
-              </select>
+              </AppSelect>
 
-              <select
+              <AppSelect
                 class="mail-policy-select"
                 :value="mailForm.retentionWeeks"
                 @change="onRetentionWeeksChange"
@@ -353,7 +354,7 @@ function flashSavedState(target) {
                 >
                   {{ week }}주
                 </option>
-              </select>
+              </AppSelect>
             </div>
             <small class="mail-policy-help">메일 보관 기간을 년/개월/주 단위로 선택합니다.</small>
             <small class="mail-policy-help">현재 보관 기간: {{ retentionPeriodText }}</small>

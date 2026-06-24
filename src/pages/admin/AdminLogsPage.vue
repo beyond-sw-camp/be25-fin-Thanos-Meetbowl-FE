@@ -1,5 +1,6 @@
 <script setup>
 import { computed, onMounted, reactive, ref, watch } from 'vue'
+import AppSelect from '../../components/common/AppSelect.vue'
 import Pagination from '../../components/common/Pagination.vue'
 import { getAdminAuditLogDetail, getAdminAuditLogs } from '../../lib/admin-audit-logs'
 import {
@@ -413,40 +414,40 @@ function toIsoUtc(value) {
       <article class="card admin-toolbar admin-log-toolbar">
         <form class="admin-log-filter-form" @submit.prevent="submitFilters">
 
-          <select v-model="filterForm.actionType" aria-label="작업 유형">
+          <AppSelect v-model="filterForm.actionType" aria-label="작업 유형">
             <option v-for="option in AUDIT_ACTION_TYPE_OPTIONS" :key="option.value || 'all-action'" :value="option.value">
               {{ option.label }}
             </option>
-          </select>
+          </AppSelect>
 
-          <select v-model="filterForm.targetType" aria-label="대상 유형">
+          <AppSelect v-model="filterForm.targetType" aria-label="대상 유형">
             <option v-for="option in AUDIT_TARGET_TYPE_OPTIONS" :key="option.value || 'all-target'" :value="option.value">
               {{ option.label }}
             </option>
-          </select>
+          </AppSelect>
 
-          <select v-model="filterForm.result" aria-label="결과">
+          <AppSelect v-model="filterForm.result" aria-label="결과">
             <option v-for="option in RESULT_OPTIONS" :key="option.value || 'all-result'" :value="option.value">
               {{ option.label }}
             </option>
-          </select>
+          </AppSelect>
 
-          <select v-model="filterForm.dateRange" aria-label="기간 빠른 선택">
+          <AppSelect v-model="filterForm.dateRange" aria-label="기간 빠른 선택">
             <option v-for="option in DATE_RANGE_OPTIONS" :key="option.value" :value="option.value">
               {{ option.label }}
             </option>
-          </select>
+          </AppSelect>
 
           <template v-if="useCustomDateRange">
             <input v-model="filterForm.from" type="datetime-local" aria-label="시작 기간" />
             <input v-model="filterForm.to" type="datetime-local" aria-label="종료 기간" />
           </template>
 
-          <select v-model.number="pageSize" aria-label="페이지 크기">
+          <AppSelect v-model.number="pageSize" aria-label="페이지 크기">
             <option v-for="size in PAGE_SIZE_OPTIONS" :key="size" :value="size">
               {{ size }}개씩 보기
             </option>
-          </select>
+          </AppSelect>
 
           <button class="secondary-button" type="button" @click="resetFilters">초기화</button>
           <button class="primary-button" type="submit">검색</button>
