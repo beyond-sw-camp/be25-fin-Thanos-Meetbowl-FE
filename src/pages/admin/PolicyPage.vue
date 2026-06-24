@@ -247,7 +247,7 @@ function flashSavedState(target) {
           </button>
         </div>
       </div>
-      <p class="policy-summary-note">회의록 보관, 백업 문서 보관, 공유 설정, 메일 보관 정책을 한 화면에서 관리합니다.</p>
+      <p class="policy-summary-note">회의록과 백업 문서, 메일 데이터의 보관 기준을 한 화면에서 관리합니다.</p>
     </article>
 
     <div class="policy-card-grid">
@@ -365,7 +365,7 @@ function flashSavedState(target) {
               </div>
               <div class="mail-policy-help-group">
                 <small class="mail-policy-help">메일 보관 기간을 년/개월/주 단위로 선택합니다.</small>
-                <small class="mail-policy-help">현재 보관 기간: {{ retentionPeriodText }}</small>
+                <small class="mail-policy-help mail-policy-current">현재 설정: {{ retentionPeriodText }}</small>
               </div>
               <div v-if="retentionDaysError" class="error-box mail-policy-field-error">{{ retentionDaysError }}</div>
             </div>
@@ -420,6 +420,7 @@ function flashSavedState(target) {
 .policy-summary-card {
   display: grid;
   gap: 10px;
+  margin-bottom: 20px;
 }
 
 .policy-summary-meta {
@@ -445,13 +446,14 @@ function flashSavedState(target) {
 
 .policy-section-group {
   display: grid;
-  gap: 16px;
+  gap: 18px;
   flex: 1;
+  grid-auto-rows: min-content;
 }
 
 .policy-form-section {
   display: grid;
-  gap: 12px;
+  gap: 10px;
 }
 
 .policy-form-section + .policy-form-section {
@@ -464,42 +466,49 @@ function flashSavedState(target) {
   font-size: 15px;
   font-weight: 800;
   color: var(--foreground);
+  line-height: 1.35;
 }
 
 /* 정책 카드의 입력 필드를 균형 있게 묶어 좌우 밀도를 맞춘다. */
 .policy-field-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 14px 16px;
+  gap: 12px 16px;
 }
 
 .policy-input-field {
   min-width: 0;
+  align-content: start;
 }
 
 .policy-input-field > span {
   color: var(--foreground);
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1.4;
 }
 
 .policy-check-field {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
-  align-items: center;
+  align-items: start;
   gap: 12px;
+  padding-top: 30px;
 }
 
 .policy-check-field input {
   width: 18px;
   height: 18px;
-  margin: 0;
+  margin: 2px 0 0;
   accent-color: var(--primary);
 }
 
 .mail-policy-grid {
   display: grid;
-  gap: 14px;
+  gap: 18px;
   align-content: start;
   flex: 1;
+  grid-auto-rows: min-content;
 }
 
 .mail-policy-state {
@@ -532,6 +541,7 @@ function flashSavedState(target) {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 10px;
+  margin-top: 2px;
 }
 
 .mail-policy-select {
@@ -573,7 +583,8 @@ function flashSavedState(target) {
 
 .mail-policy-help-group {
   display: grid;
-  gap: 4px;
+  gap: 3px;
+  margin-top: -2px;
 }
 
 .mail-policy-help {
@@ -582,11 +593,16 @@ function flashSavedState(target) {
   line-height: 1.45;
 }
 
+.mail-policy-current {
+  font-weight: 600;
+}
+
 .mail-policy-choice-group {
   display: inline-flex;
   gap: 8px;
   flex-wrap: wrap;
   align-self: flex-start;
+  margin-top: 2px;
 }
 
 .mail-policy-choice {
@@ -617,11 +633,19 @@ function flashSavedState(target) {
 }
 
 .settings-card-head {
-  margin-bottom: 12px;
+  margin-bottom: 16px;
 }
 
 .settings-card-head > div {
   max-width: 520px;
+}
+
+.settings-card-head h2 {
+  line-height: 1.35;
+}
+
+.settings-card-head p {
+  line-height: 1.5;
 }
 
 @media (max-width: 960px) {
