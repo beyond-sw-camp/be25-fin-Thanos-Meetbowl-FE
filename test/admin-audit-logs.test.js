@@ -5,13 +5,53 @@ import { setApiClientAuthHandlers } from '../src/lib/api-client.js'
 import { writeStoredAuthSession } from '../src/lib/auth-session.js'
 import { getAdminAuditLogDetail, getAdminAuditLogs } from '../src/lib/admin-audit-logs.js'
 import {
+  AUDIT_ACTION_TYPE_OPTIONS,
+  AUDIT_TARGET_TYPE_OPTIONS,
   extractAuditLogTargetDisplay,
   formatActionTypeLabel,
   formatAuditResultLabel,
   formatTargetTypeLabel,
+  getAuditActionDisplay,
+  getAuditActorIp,
+  getAuditDisplayChangeItems,
+  getAuditDisplayTitle,
+  getAuditTargetLoginId,
+  getAuditTargetName,
+  getAuditTargetTypeDisplay,
+  isUserRelatedAuditAction,
   sanitizeSnapshot,
   summarizeAuditLogChanges,
 } from '../src/lib/admin-audit-log-utils.js'
+
+const K = {
+  success: '성공',
+  failed: '실패',
+  userCreate: '회원 생성',
+  userUpdate: '회원 수정',
+  userDelete: '회원 삭제',
+  userStatusChange: '회원 상태 변경',
+  passwordReset: '회원 비밀번호 초기화',
+  excelImport: '조직/회원 엑셀 업로드',
+  organizationMemberExcel: '조직/회원 엑셀',
+  mailRetentionPolicy: '메일 보관 정책',
+  retentionPolicy: '보관 정책',
+  user: '회원',
+  name: '이름',
+  department: '부서',
+  team: '팀',
+  position: '직급',
+  status: '상태',
+  active: '활성',
+  inactive: '비활성',
+  autoDelete: '자동 삭제',
+  no: '아니오',
+  yes: '예',
+  fileName: '파일명',
+  failureReason: '실패 사유',
+  errorCount: '오류 건수',
+  processedCount: '처리 건수',
+  actionContent: '작업 내용',
+}
 
 function createStorage() {
   const values = new Map()
@@ -141,10 +181,149 @@ test('audit log snapshot utilities mask sensitive keys and translate labels', ()
     nested: {},
     items: [{}],
   })
-  assert.equal(formatAuditResultLabel('SUCCESS'), '성공')
-  assert.equal(formatAuditResultLabel('FAILED'), '실패')
-  assert.equal(formatActionTypeLabel('USER_UPDATE'), '회원 수정')
-  assert.equal(formatTargetTypeLabel('MAIL_RETENTION_POLICY'), '메일 보관 정책')
+  assert.equal(formatAuditResultLabel('SUCCESS'), K.success)
+  assert.equal(formatAuditResultLabel('FAILED'), K.failed)
+  assert.equal(formatActionTypeLabel('USER_UPDATE'), K.userUpdate)
+  assert.equal(formatActionTypeLabel('USER_DELETE'), K.userDelete)
+  assert.equal(formatActionTypeLabel('USER_PASSWORD_RESET'), K.passwordReset)
+  assert.equal(formatActionTypeLabel('ORGANIZATION_MEMBER_EXCEL_IMPORT'), K.excelImport)
+  assert.notEqual(
+    formatActionTypeLabel('USER_PASSWORD_RESET_REQUEST_APPROVE'),
+    'USER_PASSWORD_RESET_REQUEST_APPROVE',
+  )
+  assert.notEqual(
+    formatActionTypeLabel('USER_PASSWORD_RESET_REQUEST_REJECT'),
+    'USER_PASSWORD_RESET_REQUEST_REJECT',
+  )
+  assert.equal(formatTargetTypeLabel('MAIL_RETENTION_POLICY'), K.mailRetentionPolicy)
+  assert.equal(formatTargetTypeLabel('RETENTION_POLICY'), K.retentionPolicy)
+  assert.equal(formatTargetTypeLabel('ORGANIZATION_MEMBER_EXCEL'), K.organizationMemberExcel)
+})
+
+test('audit log action and target display prefer backend display fields', () => {
+  const log = {
+    actionType: 'USER_UPDATE',
+    actionLabel: `${K.userUpdate}(BE)`,
+    targetType: 'USER',
+    targetTypeLabel: `${K.user}(BE)`,
+    displayTitle: `${K.userUpdate}(BE 제목)`,
+  }
+
+  assert.equal(getAuditActionDisplay(log), `${K.userUpdate}(BE)`)
+  assert.equal(getAuditTargetTypeDisplay(log), `${K.user}(BE)`)
+  assert.equal(getAuditDisplayTitle(log), `${K.userUpdate}(BE 제목)`)
+})
+
+test('audit log action display localizes raw action codes from backend fields', () => {
+  const log = {
+    actionType: 'USER_PASSWORD_RESET_REQUEST_APPROVE',
+    actionLabel: 'USER_PASSWORD_RESET_REQUEST_APPROVE',
+    displayTitle: 'USER_PASSWORD_RESET_REQUEST_APPROVE',
+    targetType: 'UNKNOWN_TARGET',
+  }
+
+  assert.notEqual(getAuditActionDisplay(log), 'USER_PASSWORD_RESET_REQUEST_APPROVE')
+  assert.equal(getAuditTargetTypeDisplay(log), 'UNKNOWN_TARGET')
+  assert.notEqual(getAuditDisplayTitle(log), 'USER_PASSWORD_RESET_REQUEST_APPROVE')
+})
+
+test('user-related audit action helper recognizes the requested raw action types', () => {
+  assert.equal(isUserRelatedAuditAction('USER_CREATE'), true)
+  assert.equal(isUserRelatedAuditAction('USER_UPDATE'), true)
+  assert.equal(isUserRelatedAuditAction('USER_DELETE'), true)
+  assert.equal(isUserRelatedAuditAction('USER_STATUS_CHANGE'), true)
+  assert.equal(isUserRelatedAuditAction('PASSWORD_RESET'), true)
+  assert.equal(isUserRelatedAuditAction('MAIL_RETENTION_POLICY_UPDATE'), false)
+})
+
+test('audit log target field priority prefers direct backend fields', () => {
+  const log = {
+    targetLoginId: 'user7',
+    targetName: '유리',
+    targetUserLoginId: 'wrong-login',
+    targetUserName: 'wrong-name',
+    targetDisplayName: 'wrong-display',
+    target: {
+      loginId: 'wrong-target-login',
+      name: 'wrong-target-name',
+    },
+  }
+
+  assert.equal(getAuditTargetLoginId(log), 'user7')
+  assert.equal(getAuditTargetName(log), '유리')
+})
+
+test('audit log target field priority falls back through legacy fields and dash', () => {
+  assert.equal(
+    getAuditTargetLoginId({
+      targetUserLoginId: 'legacy-user',
+    }),
+    'legacy-user',
+  )
+  assert.equal(
+    getAuditTargetName({
+      targetDisplayName: '레거시 이름',
+    }),
+    '레거시 이름',
+  )
+  assert.equal(getAuditTargetLoginId({ target: { loginId: 'nested-user' } }), 'nested-user')
+  assert.equal(getAuditTargetName({ target: { name: '중첩 이름' } }), '중첩 이름')
+  assert.equal(getAuditTargetLoginId({}), '-')
+  assert.equal(getAuditTargetName({}), '-')
+})
+
+test('audit log target display prefers backend target fields over snapshots', () => {
+  assert.deepEqual(
+    extractAuditLogTargetDisplay(
+      {
+        targetId: '00000000-0000-0000-0000-000000000204',
+        targetLoginId: 'user7',
+        targetName: '유리',
+      },
+      { loginId: 'old-user', name: '이전 이름' },
+      { loginId: 'deleted-raw', name: '톰브스톤 이름' },
+    ),
+    {
+      loginId: 'user7',
+      name: '유리',
+      rawTargetId: '00000000-0000-0000-0000-000000000204',
+    },
+  )
+})
+
+test('audit log target display falls back to snapshots and dash for older logs', () => {
+  assert.deepEqual(
+    extractAuditLogTargetDisplay(
+      {
+        targetId: '00000000-0000-0000-0000-000000000205',
+      },
+      {},
+      { name: '서비스개발팀' },
+    ),
+    {
+      loginId: '-',
+      name: '서비스개발팀',
+      rawTargetId: '00000000-0000-0000-0000-000000000205',
+    },
+  )
+})
+
+test('audit log actor IP priority prefers direct backend fields and falls back to dash', () => {
+  assert.equal(
+    getAuditActorIp({
+      actorIp: '198.51.100.1',
+      operatorIp: '198.51.100.2',
+      clientIp: '198.51.100.3',
+      ipAddress: '198.51.100.4',
+      requestIp: '198.51.100.5',
+    }),
+    '198.51.100.1',
+  )
+  assert.equal(getAuditActorIp({ operatorIp: '198.51.100.2' }), '198.51.100.2')
+  assert.equal(getAuditActorIp({ clientIp: '198.51.100.3' }), '198.51.100.3')
+  assert.equal(getAuditActorIp({ ipAddress: '198.51.100.4' }), '198.51.100.4')
+  assert.equal(getAuditActorIp({ requestIp: '198.51.100.5' }), '198.51.100.5')
+  assert.equal(getAuditActorIp({}), '-')
 })
 
 test('audit log change summaries replace organization UUIDs with names', () => {
@@ -173,8 +352,8 @@ test('audit log change summaries replace organization UUIDs with names', () => {
       referenceMaps: {
         affiliateId: new Map(),
         departmentId: new Map([
-          ['11111111-1111-4111-8111-111111111111', '경영지원부'],
-          ['44444444-4444-4444-8444-444444444444', '서비스개발부'],
+          ['11111111-1111-4111-8111-111111111111', '경영지원팀'],
+          ['44444444-4444-4444-8444-444444444444', '서비스개발팀'],
         ]),
         teamId: new Map([['22222222-2222-4222-8222-222222222222', '운영관리팀']]),
         positionId: new Map([
@@ -188,7 +367,7 @@ test('audit log change summaries replace organization UUIDs with names', () => {
   assert.deepEqual(changes, [
     {
       key: 'name',
-      label: '이름',
+      label: K.name,
       before: '로컬 관리자',
       after: '박관리',
       beforeTitle: '',
@@ -196,15 +375,15 @@ test('audit log change summaries replace organization UUIDs with names', () => {
     },
     {
       key: 'departmentId',
-      label: '부서',
-      before: '경영지원부',
-      after: '서비스개발부',
+      label: K.department,
+      before: '경영지원팀',
+      after: '서비스개발팀',
       beforeTitle: '11111111-1111-4111-8111-111111111111',
       afterTitle: '44444444-4444-4444-8444-444444444444',
     },
     {
       key: 'teamId',
-      label: '팀',
+      label: K.team,
       before: '운영관리팀',
       after: '-',
       beforeTitle: '22222222-2222-4222-8222-222222222222',
@@ -212,7 +391,7 @@ test('audit log change summaries replace organization UUIDs with names', () => {
     },
     {
       key: 'positionId',
-      label: '직급',
+      label: K.position,
       before: '대리',
       after: '과장',
       beforeTitle: '33333333-3333-4333-8333-333333333333',
@@ -220,46 +399,59 @@ test('audit log change summaries replace organization UUIDs with names', () => {
     },
     {
       key: 'status',
-      label: '상태',
-      before: '활성',
-      after: '비활성',
+      label: K.status,
+      before: K.active,
+      after: K.inactive,
       beforeTitle: '',
       afterTitle: '',
     },
     {
       key: 'autoDeleteEnabled',
-      label: '자동 삭제 여부',
-      before: '사용 안 함',
-      after: '사용',
+      label: K.autoDelete,
+      before: K.no,
+      after: K.yes,
       beforeTitle: '',
       afterTitle: '',
     },
   ])
 })
 
-test('audit log change summaries fall back safely when mapping is missing', () => {
+test('audit log change summaries filter internal fields from raw fallback data', () => {
   const changes = summarizeAuditLogChanges(
     {
-      affiliateId: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
+      retentionDays: 365,
+      autoDeleteEnabled: false,
+      updatedAt: 1781675159.420096,
+      createdAt: 1781000000,
+      version: 1,
+      id: 'policy-id',
     },
     {
-      affiliateId: 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb',
-    },
-    {
-      referenceMaps: {
-        affiliateId: new Map(),
-      },
+      retentionDays: 372,
+      autoDeleteEnabled: true,
+      updatedAt: 1781681227.5482714,
+      createdAt: 1781000000,
+      version: 2,
+      id: 'policy-id',
     },
   )
 
   assert.deepEqual(changes, [
     {
-      key: 'affiliateId',
-      label: '계열사',
-      before: '알 수 없는 항목',
-      after: '알 수 없는 항목',
-      beforeTitle: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
-      afterTitle: 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb',
+      key: 'retentionDays',
+      label: '보관 기간',
+      before: '365일',
+      after: '372일',
+      beforeTitle: '',
+      afterTitle: '',
+    },
+    {
+      key: 'autoDeleteEnabled',
+      label: K.autoDelete,
+      before: K.no,
+      after: K.yes,
+      beforeTitle: '',
+      afterTitle: '',
     },
   ])
 })
@@ -281,30 +473,214 @@ test('audit log change summaries report no changes when values match after sanit
   assert.deepEqual(changes, [])
 })
 
-test('audit log target display prefers snapshot loginId and name, and avoids UUID fallback', () => {
-  assert.deepEqual(
-    extractAuditLogTargetDisplay(
-      '00000000-0000-0000-0000-000000000204',
-      { loginId: 'old-admin', name: '이전 관리자' },
-      { loginId: 'park-admin', name: '박관리' },
-    ),
+test('audit log display change items use backend display list when present', () => {
+  const items = getAuditDisplayChangeItems({
+    displayChangeItems: [
+      {
+        label: K.status,
+        beforeValue: K.active,
+        afterValue: K.inactive,
+      },
+      {
+        label: K.failureReason,
+        value: '필수값이 비어 있습니다.',
+      },
+    ],
+  })
+
+  assert.deepEqual(items, [
     {
-      loginId: 'park-admin',
-      name: '박관리',
-      rawTargetId: '00000000-0000-0000-0000-000000000204',
+      key: `${K.status}-0`,
+      label: K.status,
+      text: `${K.active} → ${K.inactive}`,
+      title: '',
+    },
+    {
+      key: `${K.failureReason}-1`,
+      label: K.failureReason,
+      text: '필수값이 비어 있습니다.',
+      title: '',
+    },
+  ])
+})
+
+test('audit log display change items convert user timestamps into readable dates', () => {
+  const items = getAuditDisplayChangeItems({
+    actionType: 'USER_STATUS_CHANGE',
+    beforeSnapshot: {
+      status: 'ACTIVE',
+      activeFrom: 1780531200,
+      activeUntil: null,
+    },
+    afterSnapshot: {
+      status: 'INACTIVE',
+      activeFrom: 1781827200,
+      activeUntil: 1782000000,
+    },
+  })
+
+  assert.deepEqual(items, [
+    {
+      key: 'status',
+      label: K.status,
+      text: `${K.active} → ${K.inactive}`,
+      title: '',
+    },
+    {
+      key: 'activeFrom',
+      label: '활성 시작일',
+      text: '2026.06.04 → 2026.06.19',
+      title: '',
+    },
+    {
+      key: 'activeUntil',
+      label: '활성 종료일',
+      text: '- → 2026.06.21',
+      title: '',
+    },
+  ])
+})
+
+test('audit log display change items summarize retention policy changes without internal fields', () => {
+  const items = getAuditDisplayChangeItems({
+    actionType: 'MAIL_RETENTION_POLICY_UPDATE',
+    beforeSnapshot: {
+      retentionDays: 365,
+      autoDeleteEnabled: false,
+      updatedAt: 1781675159.420096,
+      version: 1,
+    },
+    afterSnapshot: {
+      retentionDays: 372,
+      autoDeleteEnabled: true,
+      updatedAt: 1781681227.5482714,
+      version: 2,
+    },
+  })
+
+  assert.deepEqual(items, [
+    {
+      key: 'retentionDays',
+      label: '보관 기간',
+      text: '365일 → 372일',
+      title: '',
+    },
+    {
+      key: 'autoDeleteEnabled',
+      label: K.autoDelete,
+      text: `${K.no} → ${K.yes}`,
+      title: '',
+    },
+  ])
+})
+
+test('audit log display change items summarize excel failure without raw json', () => {
+  const items = getAuditDisplayChangeItems({
+    actionType: 'ORGANIZATION_MEMBER_EXCEL_IMPORT',
+    targetType: 'ORGANIZATION_MEMBER_EXCEL',
+    afterSnapshot: {
+      fileName: 'meetbowl_organization_members_template_v2.xlsx',
+      message: '이메일은 필수입니다.',
+      errorCount: 3,
+      result: {
+        createdUsers: 1,
+        updatedUsers: 2,
+      },
+    },
+    result: 'FAILED',
+    reason: '{"message":"raw-json"}',
+  })
+
+  assert.deepEqual(items, [
+    {
+      key: 'fileName',
+      label: K.fileName,
+      text: 'meetbowl_organization_members_template_v2.xlsx',
+      title: '',
+    },
+    {
+      key: 'result',
+      label: '작업 결과',
+      text: K.failed,
+      title: '',
+    },
+    {
+      key: 'message',
+      label: K.failureReason,
+      text: '이메일은 필수입니다.',
+      title: '',
+    },
+    {
+      key: 'errorCount',
+      label: K.errorCount,
+      text: '3',
+      title: '',
+    },
+    {
+      key: 'processedCount',
+      label: K.processedCount,
+      text: '3',
+      title: '',
+    },
+  ])
+})
+
+test('audit log display change items hide sensitive values from backend display items and raw fallback', () => {
+  const backendItems = getAuditDisplayChangeItems({
+    displayChangeItems: [
+      { label: '토큰', value: 'Bearer secret-token' },
+      { label: '비밀번호', value: '1234' },
+    ],
+  })
+
+  assert.equal(backendItems[0].text.includes('secret-token'), false)
+  assert.equal(backendItems[1].text.includes('1234'), false)
+
+  const rawFallbackItems = getAuditDisplayChangeItems({
+    beforeSnapshot: {
+      status: 'ACTIVE',
+      passwordHash: 'hash-value',
+      resetToken: 'reset-token',
+    },
+    afterSnapshot: {
+      status: 'INACTIVE',
+      passwordHash: 'another-hash',
+      resetToken: 'another-token',
+    },
+  })
+
+  assert.deepEqual(rawFallbackItems, [
+    {
+      key: 'status',
+      label: K.status,
+      text: `${K.active} → ${K.inactive}`,
+      title: '',
+    },
+  ])
+})
+
+test('audit log option labels are localized while keeping raw values', () => {
+  assert.deepEqual(
+    AUDIT_ACTION_TYPE_OPTIONS.find((option) => option.value === 'USER_UPDATE'),
+    {
+      value: 'USER_UPDATE',
+      label: K.userUpdate,
     },
   )
-
   assert.deepEqual(
-    extractAuditLogTargetDisplay(
-      '00000000-0000-0000-0000-000000000205',
-      {},
-      { name: '서비스개발부' },
+    AUDIT_ACTION_TYPE_OPTIONS.find(
+      (option) => option.value === 'ORGANIZATION_MEMBER_EXCEL_IMPORT',
     ),
     {
-      loginId: '-',
-      name: '서비스개발부',
-      rawTargetId: '00000000-0000-0000-0000-000000000205',
+      value: 'ORGANIZATION_MEMBER_EXCEL_IMPORT',
+      label: K.excelImport,
+    },
+  )
+  assert.deepEqual(
+    AUDIT_TARGET_TYPE_OPTIONS.find((option) => option.value === 'ORGANIZATION_MEMBER_EXCEL'),
+    {
+      value: 'ORGANIZATION_MEMBER_EXCEL',
+      label: K.organizationMemberExcel,
     },
   )
 })
