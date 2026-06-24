@@ -515,59 +515,61 @@ function toIsoUtc(value) {
             <button type="button" @click="closeDetail">닫기</button>
           </header>
 
-          <div v-if="detailLoading" class="empty-state">
-            작업 로그 상세 정보를 불러오는 중입니다.
-          </div>
-          <div v-else-if="detailError" class="error-box">{{ detailError }}</div>
-          <template v-else-if="selectedLog">
-            <section class="detail-section">
-              <h3>변경 내용</h3>
-              <div class="detail-section-body">
-                <ul v-if="changeSummary.length" class="change-summary-list prominent">
-                  <li
-                    v-for="change in changeSummary"
-                    :key="change.key"
-                    :title="formatChangeTitle(change)"
-                  >
-                    <strong>{{ change.label }}</strong>
-                    <span>{{ change.before }} → {{ change.after }}</span>
-                  </li>
-                </ul>
-                <p v-else class="empty-change-text">변경된 항목이 없습니다.</p>
-              </div>
-            </section>
-
-            <div class="detail-grid">
-              <section class="detail-section">
-                <h3>작업 정보</h3>
-                <dl class="detail-list">
-                  <div><dt>작업 유형</dt><dd>{{ formatActionTypeLabel(selectedLog.actionType) }}</dd></div>
-                  <div><dt>결과</dt><dd>{{ formatAuditResultLabel(selectedLog.result) }}</dd></div>
-                  <div><dt>발생 일시</dt><dd>{{ formatDateTime(selectedLog.createdAt) }}</dd></div>
-                  <div><dt>작업자 IP</dt><dd>{{ selectedLog.ipAddress || '-' }}</dd></div>
-                  <div><dt>작업자</dt><dd>{{ selectedLog.actorName || '-' }}</dd></div>
-                </dl>
-              </section>
-
-              <section class="detail-section">
-                <h3>대상 정보</h3>
-                <dl class="detail-list">
-                  <div><dt>대상 유형</dt><dd>{{ formatTargetTypeLabel(selectedLog.targetType) }}</dd></div>
-                  <div><dt>대상 ID</dt><dd>{{ formatAuxiliaryId(selectedLog.targetId) }}</dd></div>
-                  <div><dt>대상 로그인 ID</dt><dd>{{ selectedLog.targetLoginId || '-' }}</dd></div>
-                  <div><dt>변경 대상 이름</dt><dd>{{ selectedLog.targetName || '-' }}</dd></div>
-                </dl>
-              </section>
+          <div class="detail-body">
+            <div v-if="detailLoading" class="empty-state">
+              작업 로그 상세 정보를 불러오는 중입니다.
             </div>
+            <div v-else-if="detailError" class="error-box">{{ detailError }}</div>
+            <template v-else-if="selectedLog">
+              <section class="detail-section">
+                <h3>변경 내용</h3>
+                <div class="detail-section-body">
+                  <ul v-if="changeSummary.length" class="change-summary-list prominent">
+                    <li
+                      v-for="change in changeSummary"
+                      :key="change.key"
+                      :title="formatChangeTitle(change)"
+                    >
+                      <strong>{{ change.label }}</strong>
+                      <span>{{ change.before }} → {{ change.after }}</span>
+                    </li>
+                  </ul>
+                  <p v-else class="empty-change-text">변경된 항목이 없습니다.</p>
+                </div>
+              </section>
 
-            <section class="detail-section">
-              <h3>추가 정보</h3>
-              <dl class="detail-list">
-                <div><dt>사유 또는 메시지</dt><dd>{{ selectedLog.reason || '-' }}</dd></div>
-                <div><dt>감사 로그 ID</dt><dd>{{ formatAuxiliaryId(selectedLog.auditLogId) }}</dd></div>
-              </dl>
-            </section>
-          </template>
+              <div class="detail-grid">
+                <section class="detail-section">
+                  <h3>작업 정보</h3>
+                  <dl class="detail-list">
+                    <div><dt>작업 유형</dt><dd>{{ formatActionTypeLabel(selectedLog.actionType) }}</dd></div>
+                    <div><dt>결과</dt><dd>{{ formatAuditResultLabel(selectedLog.result) }}</dd></div>
+                    <div><dt>발생 일시</dt><dd>{{ formatDateTime(selectedLog.createdAt) }}</dd></div>
+                    <div><dt>작업자 IP</dt><dd>{{ selectedLog.ipAddress || '-' }}</dd></div>
+                    <div><dt>작업자</dt><dd>{{ selectedLog.actorName || '-' }}</dd></div>
+                  </dl>
+                </section>
+
+                <section class="detail-section">
+                  <h3>대상 정보</h3>
+                  <dl class="detail-list">
+                    <div><dt>대상 유형</dt><dd>{{ formatTargetTypeLabel(selectedLog.targetType) }}</dd></div>
+                    <div><dt>대상 ID</dt><dd>{{ formatAuxiliaryId(selectedLog.targetId) }}</dd></div>
+                    <div><dt>대상 로그인 ID</dt><dd>{{ selectedLog.targetLoginId || '-' }}</dd></div>
+                    <div><dt>변경 대상 이름</dt><dd>{{ selectedLog.targetName || '-' }}</dd></div>
+                  </dl>
+                </section>
+              </div>
+
+              <section class="detail-section">
+                <h3>추가 정보</h3>
+                <dl class="detail-list">
+                  <div><dt>사유 또는 메시지</dt><dd>{{ selectedLog.reason || '-' }}</dd></div>
+                  <div><dt>감사 로그 ID</dt><dd>{{ formatAuxiliaryId(selectedLog.auditLogId) }}</dd></div>
+                </dl>
+              </section>
+            </template>
+          </div>
         </article>
       </div>
     </template>
@@ -691,6 +693,14 @@ function toIsoUtc(value) {
 
 .audit-log-detail-modal {
   width: min(980px, calc(100vw - 32px));
+}
+
+.audit-log-detail-modal .detail-body {
+  display: grid;
+  gap: 16px;
+  min-height: 0;
+  overflow-y: auto;
+  padding-right: 4px;
 }
 
 .detail-subtitle {

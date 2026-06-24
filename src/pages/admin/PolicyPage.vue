@@ -30,14 +30,14 @@ const dateTimeFormatter = new Intl.DateTimeFormat('ko-KR', {
 })
 
 const mailLoading = ref(true)
-const mailSaving = ref(false)
+const pageSaving = ref(false)
 const mailForbidden = ref(false)
 const mailErrorMessage = ref('')
 const mailSuccessMessage = ref('')
 const mailSaveErrorMessage = ref('')
 const retentionDaysError = ref('')
+const pageUpdatedAt = ref(null)
 
-const mailPolicy = ref(null)
 const mailForm = ref(createEmptyMailForm())
 const retentionPolicy = ref(createRetentionPolicy())
 const retentionPolicySaved = ref(false)
@@ -70,6 +70,7 @@ async function loadMailPolicy() {
   try {
     const result = await getAdminMailRetentionPolicy()
     applyMailPolicy(result)
+    pageUpdatedAt.value = result?.updatedAt || pageUpdatedAt.value
   } catch (error) {
     if (error?.status === 403) {
       mailForbidden.value = true
@@ -83,12 +84,13 @@ async function loadMailPolicy() {
   }
 }
 
-async function saveMailPolicy() {
-  if (mailSaving.value) return
+async function saveAllPolicies() {
+  if (pageSaving.value) return
 
   mailSuccessMessage.value = ''
   mailSaveErrorMessage.value = ''
   retentionDaysError.value = ''
+  mailErrorMessage.value = ''
 
   const validationMessage = validateRetentionPeriod(
     mailForm.value.retentionYears,
@@ -100,7 +102,7 @@ async function saveMailPolicy() {
     return
   }
 
-  mailSaving.value = true
+  pageSaving.value = true
 
   try {
     const savedPolicy = await updateAdminMailRetentionPolicy({
@@ -113,7 +115,10 @@ async function saveMailPolicy() {
     })
 
     applyMailPolicy(savedPolicy)
+    pageUpdatedAt.value = new Date().toISOString()
     mailSuccessMessage.value = '메일 보관 정책을 저장했습니다.'
+    flashSavedState(retentionPolicySaved)
+    flashSavedState(notificationPolicySaved)
   } catch (error) {
     if (error?.status === 403) {
       mailForbidden.value = true
@@ -128,14 +133,12 @@ async function saveMailPolicy() {
       mailSaveErrorMessage.value = nextErrorMessage
     }
   } finally {
-    mailSaving.value = false
+    pageSaving.value = false
   }
 }
 
 function applyMailPolicy(result) {
-  // 메일 정책은 기존 API를 그대로 재사용하고, 통합 화면에서도 카드별 저장 상태를 따로 유지한다.
   const retentionPeriod = fromRetentionDays(result?.retentionDays)
-  mailPolicy.value = result || null
   mailForm.value = {
     retentionYears: retentionPeriod.years,
     retentionMonths: retentionPeriod.months,
@@ -216,14 +219,6 @@ function flashSavedState(target) {
     target.value = false
   }, 1800)
 }
-
-function saveRetentionPolicy() {
-  flashSavedState(retentionPolicySaved)
-}
-
-function saveNotificationPolicy() {
-  flashSavedState(notificationPolicySaved)
-}
 </script>
 
 <template>
@@ -233,38 +228,67 @@ function saveNotificationPolicy() {
       <p>{{ description }}</p>
     </header>
 
-    <article class="card settings-card">
-      <div class="settings-card-head">
-        <h2>보관 정책</h2>
-        <button class="primary-button small" type="button" @click="saveRetentionPolicy">저장</button>
-      </div>
-      <div class="settings-form-grid">
-        <label>회의록 보관 기간<input v-model.number="retentionPolicy.minutesRetentionDays" type="number"></label>
-        <label>백업 문서 보관 기간<input v-model.number="retentionPolicy.backupRetentionDays" type="number"></label>
-        <label>검토 지연 알림<input v-model.number="retentionPolicy.reviewHours" type="number"></label>
-      </div>
-      <p v-if="retentionPolicySaved" class="settings-success">정책을 저장했습니다.</p>
-    </article>
-
-    <article class="card settings-card">
+    <article class="card settings-card policy-summary-card">
       <div class="settings-card-head">
         <div>
-          <h2>알림 기준</h2>
-          <p>정책 변경 이력은 관리자 작업 로그에 남깁니다.</p>
+          <h2>페이지 최종 수정일</h2>
+          <p>보관 정책 페이지 전체의 마지막 변경 시각입니다.</p>
         </div>
-        <button class="primary-button small" type="button" @click="saveNotificationPolicy">저장</button>
+        <div class="policy-summary-meta">
+          <strong class="policy-updated-at">{{ formatDateTime(pageUpdatedAt) }}</strong>
+          <button
+            type="button"
+            class="primary-button"
+            :disabled="pageSaving"
+            @click="saveAllPolicies"
+          >
+            {{ pageSaving ? '저장 중...' : '전체 저장' }}
+          </button>
+        </div>
       </div>
-      <label class="settings-toggle-row">
-        <span>검토 완료 시 자동 공유 메일 발송</span>
-        <input v-model="retentionPolicy.autoShare" type="checkbox">
-      </label>
-      <p v-if="notificationPolicySaved" class="settings-success">정책을 저장했습니다.</p>
+      <p class="policy-summary-note">회의록 보관, 백업 보관, 알림 기준, 메일 보관 정책을 한 화면에서 관리합니다.</p>
     </article>
 
     <article class="card settings-card">
       <div class="settings-card-head">
         <div>
-          <h2>메일 보관 정책</h2>
+          <h2>보관 정책</h2>
+          <p>회의록과 백업의 보관 기간, 그리고 관련 알림 기준을 설정합니다.</p>
+        </div>
+      </div>
+
+      <div class="policy-section-group">
+        <div class="policy-section">
+          <div class="settings-form-grid">
+            <label>회의록 보관 기간<input v-model.number="retentionPolicy.minutesRetentionDays" type="number"></label>
+            <label>백업 문서 보관 기간<input v-model.number="retentionPolicy.backupRetentionDays" type="number"></label>
+            <label>검토 지연 알림<input v-model.number="retentionPolicy.reviewHours" type="number"></label>
+          </div>
+          <p v-if="retentionPolicySaved" class="settings-success">정책을 저장했습니다.</p>
+        </div>
+
+        <div class="policy-divider" />
+
+        <div class="policy-section">
+          <div class="settings-card-head compact">
+            <div>
+              <h3>알림 기준</h3>
+              <p>정책 변경 이력은 관리자 작업 로그에 남깁니다.</p>
+            </div>
+          </div>
+          <label class="settings-toggle-row">
+            <span>검토 완료 시 자동 공유 메일 발송</span>
+            <input v-model="retentionPolicy.autoShare" type="checkbox">
+          </label>
+          <p v-if="notificationPolicySaved" class="settings-success">정책을 저장했습니다.</p>
+        </div>
+      </div>
+    </article>
+
+    <article class="card settings-card">
+      <div class="settings-card-head">
+        <div>
+          <h2>메일 보관 설정</h2>
           <p>메일 데이터의 보관 기간과 자동 삭제 여부를 설정합니다.</p>
         </div>
       </div>
@@ -361,26 +385,8 @@ function saveNotificationPolicy() {
           </div>
         </div>
 
-        <div class="mail-policy-meta">
-          <div class="mail-policy-meta-item">
-            <span class="mail-policy-meta-label">최종 수정일</span>
-            <strong class="mail-policy-meta-value">{{ formatDateTime(mailPolicy?.updatedAt) }}</strong>
-          </div>
-        </div>
-
         <p v-if="mailSuccessMessage" class="settings-success">{{ mailSuccessMessage }}</p>
         <div v-if="mailSaveErrorMessage" class="error-box mail-policy-submit-error">{{ mailSaveErrorMessage }}</div>
-
-        <div class="mail-policy-actions">
-          <button
-            type="button"
-            class="primary-button"
-            :disabled="mailSaving"
-            @click="saveMailPolicy"
-          >
-            {{ mailSaving ? '저장 중...' : '저장' }}
-          </button>
-        </div>
       </template>
     </article>
   </section>
@@ -516,11 +522,61 @@ function saveNotificationPolicy() {
   word-break: break-all;
 }
 
-.mail-policy-actions {
-  margin-top: 16px;
+.policy-summary-card {
+  display: grid;
+  gap: 10px;
+}
+
+.policy-summary-meta {
   display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
   justify-content: flex-end;
-  padding-top: 8px;
+}
+
+.policy-updated-at {
+  color: var(--primary-dark);
+  font-size: 16px;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+.policy-summary-note {
+  margin: 0;
+  color: var(--muted-foreground);
+  font-size: 13px;
+}
+
+.policy-section-group {
+  display: grid;
+  gap: 18px;
+}
+
+.policy-divider {
+  height: 1px;
+  background: var(--border);
+}
+
+.policy-section {
+  display: grid;
+  gap: 14px;
+}
+
+.settings-card-head.compact {
+  margin-bottom: 0;
+  padding: 0;
+}
+
+.settings-card-head.compact h3 {
+  margin: 0;
+  font-size: 15px;
+}
+
+.settings-card-head.compact p {
+  margin: 4px 0 0;
+  color: var(--muted-foreground);
+  font-size: 12px;
 }
 
 .mail-policy-field-error,
@@ -544,6 +600,10 @@ function saveNotificationPolicy() {
   .mail-policy-grid,
   .mail-policy-meta {
     grid-template-columns: 1fr;
+  }
+
+  .policy-summary-meta {
+    justify-content: flex-start;
   }
 
   .mail-policy-input-row {
