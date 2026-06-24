@@ -113,7 +113,7 @@ const tabs = [
   { key: 'today', label: '오늘' },
   { key: 'week', label: '이번 주' },
   { key: 'month', label: '이번 달' },
-  { key: 'cancelled', label: '취소된 회의' },
+  { key: 'cancelled', label: '종료/취소' },
 ]
 
 const STATUS = {
@@ -123,30 +123,24 @@ const STATUS = {
   CANCELLED: { label: '취소됨', tone: 'danger' },
 }
 
-// 다가오는 예약 — 표 노출용. "아직 안 끝난"(종료시각 >= now) 기준. 진행 중 회의 포함,
-// 완전히 끝난 회의는 제외. 종료(ENDED)는 회색 이력으로 남기되, 취소(CANCELLED)는 '취소' 탭에서
-// 따로 보여주므로 전체/기간 탭에서는 제외한다.
+const roomOnlyRole = computed(() => props.role === 'host')
+
 const upcomingMeetings = computed(() => {
-  const now = Date.now()
   return meetings.value
-    .filter((meeting) => meeting.status !== 'CANCELLED')
-    .filter((meeting) => new Date(meeting.scheduledEndAt).getTime() >= now)
-    // 날짜순(가까운 예약부터) 정렬.
+    .filter((meeting) => meeting.status !== 'ENDED' && meeting.status !== 'CANCELLED')
     .sort((a, b) => new Date(a.scheduledAt).getTime() - new Date(b.scheduledAt).getTime())
 })
-// 취소된 예약 — '취소' 탭 전용. 기간/미종료 제한 없이 취소된 예약 전체를,
-// 오늘(now)에 가장 가까운 예정일(과거·미래 무관)부터 위로 보여준다.
-const cancelledMeetings = computed(() => {
+const historyMeetings = computed(() => {
   const compare = compareByDistanceTo(Date.now())
   return meetings.value
-    .filter((meeting) => meeting.status === 'CANCELLED')
+    .filter((meeting) => meeting.status === 'ENDED' || meeting.status === 'CANCELLED')
     .sort((a, b) => compare(a.scheduledAt, b.scheduledAt))
 })
 // 카운트 전용 — 다가오는 예약 ∩ 활성(SCHEDULED/IN_PROGRESS). 취소/종료는 유효 예약 수에서 제외한다.
 const activeUpcomingMeetings = computed(() => upcomingMeetings.value.filter(isActive))
 
 const displayedMeetings = computed(() => {
-  if (activeTab.value === 'cancelled') return cancelledMeetings.value
+  if (activeTab.value === 'cancelled') return historyMeetings.value
   return activeTab.value === 'all'
     ? upcomingMeetings.value
     : upcomingMeetings.value.filter((meeting) => inPeriod(meeting, activeTab.value))
@@ -167,10 +161,9 @@ async function load() {
       getMeetings({ role: props.role }),
     ])
     rooms.value = roomData?.items || []
-    // 회의실 예약 현황이므로 회의실이 지정된 회의만 다룬다(화상회의만 진행하는 회의 제외).
     meetings.value = (meetingData || [])
-      .filter((meeting) => meeting.meetingRoomId)
-      .map(normalizeMeeting)
+      .filter((item) => !roomOnlyRole.value || item.meetingRoomId)
+      .map((item) => normalizeMeeting(item))
   } catch (error) {
     errorMessage.value = error?.message || '예약 현황을 불러오지 못했습니다. 잠시 후 다시 시도해 주세요.'
   } finally {
@@ -179,7 +172,8 @@ async function load() {
 }
 
 function normalizeMeeting(item) {
-  const room = rooms.value.find((candidate) => candidate.roomId === item.meetingRoomId)
+  const roomId = item.meetingRoomId
+  const room = rooms.value.find((candidate) => candidate.roomId === roomId)
   return {
     meetingId: item.meetingId,
     title: item.title || '-',
@@ -188,7 +182,7 @@ function normalizeMeeting(item) {
     date: utcToKstDate(item.scheduledAt),
     start: utcToKstClock(item.scheduledAt),
     end: utcToKstClock(item.scheduledEndAt),
-    roomName: room?.name || '-',
+    roomName: room?.name || '원격',
     status: item.status,
     mine: item.hostUserId === myUserId.value,
   }
@@ -201,7 +195,7 @@ function isActive(meeting) {
   return meeting.status === 'SCHEDULED' || meeting.status === 'IN_PROGRESS'
 }
 function isInactive(meeting) {
-  return meeting.status === 'CANCELLED' || meeting.status === 'ENDED'
+  return meeting.status === 'ENDED' || meeting.status === 'CANCELLED'
 }
 function canCancel(meeting) {
   return meeting.mine && (meeting.status === 'SCHEDULED' || meeting.status === 'IN_PROGRESS')

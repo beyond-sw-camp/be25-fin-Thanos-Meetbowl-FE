@@ -20,7 +20,7 @@ setApiClientAuthHandlers({
     }
 
     auth.clearSession()
-    if (router.currentRoute.value.path !== '/login') {
+    if (!router.currentRoute.value.meta?.public && router.currentRoute.value.path !== '/login') {
       await router.push('/login')
     }
     return false

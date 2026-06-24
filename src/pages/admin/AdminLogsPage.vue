@@ -1,5 +1,6 @@
 <script setup>
 import { computed, onMounted, reactive, ref, watch } from 'vue'
+import AppSelect from '../../components/common/AppSelect.vue'
 import Pagination from '../../components/common/Pagination.vue'
 import { getAdminAuditLogDetail, getAdminAuditLogs } from '../../lib/admin-audit-logs'
 import {
@@ -445,52 +446,41 @@ function toIsoUtc(value) {
     <template v-else>
       <article class="card admin-toolbar admin-log-toolbar">
         <form class="admin-log-filter-form" @submit.prevent="submitFilters">
-          <select v-model="filterForm.actionType" aria-label="작업 유형">
-            <option
-              v-for="option in AUDIT_ACTION_TYPE_OPTIONS"
-              :key="option.value || 'all-action'"
-              :value="option.value"
-            >
+
+          <AppSelect v-model="filterForm.actionType" aria-label="작업 유형">
+            <option v-for="option in AUDIT_ACTION_TYPE_OPTIONS" :key="option.value || 'all-action'" :value="option.value">
               {{ option.label }}
             </option>
-          </select>
+          </AppSelect>
 
-          <select v-model="filterForm.targetType" aria-label="대상 유형">
-            <option
-              v-for="option in AUDIT_TARGET_TYPE_OPTIONS"
-              :key="option.value || 'all-target'"
-              :value="option.value"
-            >
+          <AppSelect v-model="filterForm.targetType" aria-label="대상 유형">
+            <option v-for="option in AUDIT_TARGET_TYPE_OPTIONS" :key="option.value || 'all-target'" :value="option.value">
               {{ option.label }}
             </option>
-          </select>
+          </AppSelect>
 
-          <select v-model="filterForm.result" aria-label="결과">
-            <option
-              v-for="option in RESULT_OPTIONS"
-              :key="option.value || 'all-result'"
-              :value="option.value"
-            >
+          <AppSelect v-model="filterForm.result" aria-label="결과">
+            <option v-for="option in RESULT_OPTIONS" :key="option.value || 'all-result'" :value="option.value">
               {{ option.label }}
             </option>
-          </select>
+          </AppSelect>
 
-          <select v-model="filterForm.dateRange" aria-label="기간 빠른 선택">
+          <AppSelect v-model="filterForm.dateRange" aria-label="기간 빠른 선택">
             <option v-for="option in DATE_RANGE_OPTIONS" :key="option.value" :value="option.value">
               {{ option.label }}
             </option>
-          </select>
+          </AppSelect>
 
           <template v-if="useCustomDateRange">
             <input v-model="filterForm.from" type="datetime-local" aria-label="시작 기간" />
             <input v-model="filterForm.to" type="datetime-local" aria-label="종료 기간" />
           </template>
 
-          <select v-model.number="pageSize" aria-label="페이지 크기">
+          <AppSelect v-model.number="pageSize" aria-label="페이지 크기">
             <option v-for="size in PAGE_SIZE_OPTIONS" :key="size" :value="size">
               {{ size }}개씩 보기
             </option>
-          </select>
+          </AppSelect>
 
           <button class="secondary-button" type="button" @click="resetFilters">초기화</button>
           <button class="primary-button" type="submit">검색</button>
@@ -561,39 +551,45 @@ function toIsoUtc(value) {
             <button type="button" class="detail-close-button" @click="closeDetail">닫기</button>
           </header>
 
-          <div class="detail-modal-body">
-            <div v-if="detailLoading" class="detail-feedback empty-state">작업 로그 상세 정보를 불러오는 중입니다.</div>
-            <div v-else-if="detailError" class="detail-feedback error-box">{{ detailError }}</div>
+          <div class="detail-body">
+            <div v-if="detailLoading" class="empty-state">
+              작업 로그 상세 정보를 불러오는 중입니다.
+            </div>
+            <div v-else-if="detailError" class="error-box">{{ detailError }}</div>
             <template v-else-if="selectedLog">
-              <section class="detail-section detail-section-compact">
-                <h3>작업 내용</h3>
+              <section class="detail-section">
+                <h3>변경 내용</h3>
                 <div class="detail-section-body">
                   <ul v-if="changeSummary.length" class="change-summary-list prominent">
-                    <li v-for="change in changeSummary" :key="change.key" :title="change.title || ''">
+                    <li
+                      v-for="change in changeSummary"
+                      :key="change.key"
+                      :title="formatChangeTitle(change)"
+                    >
                       <strong>{{ change.label }}</strong>
-                      <span>{{ change.text }}</span>
+                      <span>{{ change.before }} → {{ change.after }}</span>
                     </li>
                   </ul>
-                  <p v-else class="empty-change-text">표시할 작업 내용이 없습니다.</p>
+                  <p v-else class="empty-change-text">변경된 항목이 없습니다.</p>
                 </div>
               </section>
 
               <div class="detail-grid">
                 <section class="detail-section">
-                  <h3>기본 정보</h3>
-                  <dl class="detail-list detail-kv-list">
-                    <div><dt>작업 내용</dt><dd>{{ getAuditDisplayTitle(selectedLog) }}</dd></div>
+                  <h3>작업 정보</h3>
+                  <dl class="detail-list">
+                    <div><dt>작업 유형</dt><dd>{{ formatActionTypeLabel(selectedLog.actionType) }}</dd></div>
                     <div><dt>결과</dt><dd>{{ formatAuditResultLabel(selectedLog.result) }}</dd></div>
                     <div><dt>발생 일시</dt><dd>{{ formatDateTime(selectedLog.createdAt) }}</dd></div>
-                    <div><dt>작업자</dt><dd>{{ selectedLog.actorName || '-' }}</dd></div>
                     <div><dt>작업자 IP</dt><dd>{{ selectedLog.ipAddress || '-' }}</dd></div>
+                    <div><dt>작업자</dt><dd>{{ selectedLog.actorName || '-' }}</dd></div>
                   </dl>
                 </section>
 
                 <section class="detail-section">
                   <h3>대상 정보</h3>
-                  <dl class="detail-list detail-kv-list">
-                    <div><dt>대상 유형</dt><dd>{{ getAuditTargetTypeDisplay(selectedLog) }}</dd></div>
+                  <dl class="detail-list">
+                    <div><dt>대상 유형</dt><dd>{{ formatTargetTypeLabel(selectedLog.targetType) }}</dd></div>
                     <div><dt>대상 ID</dt><dd>{{ formatAuxiliaryId(selectedLog.targetId) }}</dd></div>
                     <div><dt>대상 로그인 ID</dt><dd>{{ selectedLog.targetLoginId || '-' }}</dd></div>
                     <div><dt>변경 대상 이름</dt><dd>{{ selectedLog.targetName || '-' }}</dd></div>
@@ -601,13 +597,11 @@ function toIsoUtc(value) {
                 </section>
               </div>
 
-              <section v-if="additionalInfoItems.length" class="detail-section detail-section-compact">
+              <section class="detail-section">
                 <h3>추가 정보</h3>
-                <dl class="detail-list detail-kv-list detail-kv-list-single">
-                  <div v-for="item in additionalInfoItems" :key="item.key">
-                    <dt>{{ item.label }}</dt>
-                    <dd>{{ item.value }}</dd>
-                  </div>
+                <dl class="detail-list">
+                  <div><dt>사유 또는 메시지</dt><dd>{{ selectedLog.reason || '-' }}</dd></div>
+                  <div><dt>감사 로그 ID</dt><dd>{{ formatAuxiliaryId(selectedLog.auditLogId) }}</dd></div>
                 </dl>
               </section>
             </template>
@@ -849,6 +843,14 @@ function toIsoUtc(value) {
 
 .detail-close-button:hover {
   background: var(--muted);
+}
+
+.audit-log-detail-modal .detail-body {
+  display: grid;
+  gap: 16px;
+  min-height: 0;
+  overflow-y: auto;
+  padding-right: 4px;
 }
 
 .detail-subtitle {

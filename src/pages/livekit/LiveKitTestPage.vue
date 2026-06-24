@@ -19,7 +19,7 @@
         <label>API Secret<input v-model.trim="form.apiSecret" type="password" placeholder="local-livekit-secret-change-me-123456"></label>
         <label>Identity<input v-model.trim="form.identity" placeholder="livekit-test"></label>
         <label>표시 이름<input v-model.trim="form.displayName" placeholder="테스트 사용자"></label>
-        <label>마이크<select v-model="form.deviceId"><option value="">기본 마이크</option><option v-for="device in audioInputs" :key="device.deviceId" :value="device.deviceId">{{ device.label }}</option></select></label>
+        <label>마이크<AppSelect v-model="form.deviceId"><option value="">기본 마이크</option><option v-for="device in audioInputs" :key="device.deviceId" :value="device.deviceId">{{ device.label }}</option></AppSelect></label>
         <label>Access Token<textarea v-model.trim="form.token" rows="4" placeholder="자동 생성 또는 직접 붙여넣기"></textarea></label>
 
         <div class="toolbar">
@@ -83,6 +83,7 @@
 
 <script setup>
 import { computed, onBeforeUnmount, ref } from 'vue'
+import AppSelect from '../../components/common/AppSelect.vue'
 import {
   LocalAudioTrack,
   Room,
