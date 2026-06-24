@@ -89,6 +89,8 @@ import OrganizationDetailPanel from './OrganizationDetailPanel.vue'
 import OrganizationTreeNavigation from './OrganizationTreeNavigation.vue'
 import { buildOrganizationFullChart } from '../../lib/organization-full-chart'
 
+const SIDE_PANEL_WIDTH = '232px'
+
 const props = defineProps({
   affiliateName: { type: String, default: '' },
   departments: { type: Array, default: () => [] },
@@ -162,6 +164,7 @@ onBeforeUnmount(() => {
 
 <style scoped>
 :deep(.organization-full-chart-modal) {
+  --organization-side-panel-width: v-bind(SIDE_PANEL_WIDTH);
   position: fixed;
   inset: 16px;
   width: auto;
@@ -236,7 +239,7 @@ onBeforeUnmount(() => {
   min-height: 0;
   min-width: 0;
   display: grid;
-  grid-template-columns: 232px minmax(0, 1fr) 292px;
+  grid-template-columns: var(--organization-side-panel-width) minmax(0, 1fr) var(--organization-side-panel-width);
 }
 
 .organization-full-chart__detail {
@@ -287,7 +290,7 @@ onBeforeUnmount(() => {
   }
 
   .organization-full-chart__body {
-    grid-template-columns: 224px minmax(0, 1fr);
+    grid-template-columns: var(--organization-side-panel-width) minmax(0, 1fr);
   }
 
   .organization-full-chart__detail {

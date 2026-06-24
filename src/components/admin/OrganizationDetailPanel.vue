@@ -148,9 +148,9 @@ const memberSectionTitle = computed(() => {
   min-height: 0;
   display: grid;
   align-content: start;
-  gap: 10px;
-  padding: 16px;
-  background: linear-gradient(180deg, #ffffff 0%, #fbfcfe 100%);
+  gap: 8px;
+  padding: 13px;
+  background: #fbfcfe;
   overflow-y: auto;
 }
 
@@ -160,20 +160,20 @@ const memberSectionTitle = computed(() => {
 }
 
 .organization-detail-panel__head strong {
-  font-size: 16px;
+  font-size: 15px;
 }
 
 .organization-detail-panel__head span {
   color: var(--muted-foreground);
-  font-size: 12px;
+  font-size: 11px;
 }
 
 .organization-detail-panel__summary {
   border: 1px solid var(--border);
-  border-radius: 14px;
+  border-radius: 12px;
   background: #ffffff;
-  padding: 14px;
-  box-shadow: 0 10px 22px rgba(15, 23, 42, 0.04);
+  padding: 12px;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
 }
 
 .organization-detail-panel__summary.is-department {
@@ -203,19 +203,21 @@ const memberSectionTitle = computed(() => {
 
 .organization-detail-panel__summary h3 {
   margin-top: 6px;
-  font-size: 18px;
+  font-size: 16px;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
 }
 
 .organization-detail-panel__summary p:last-child {
-  margin-top: 8px;
+  margin-top: 6px;
   color: var(--muted-foreground);
   font-size: 12px;
-  line-height: 1.5;
+  line-height: 1.45;
 }
 
 .organization-detail-panel__stats {
   display: grid;
-  gap: 8px;
+  gap: 6px;
   margin: 0;
 }
 
@@ -225,32 +227,35 @@ const memberSectionTitle = computed(() => {
   gap: 8px 12px;
   align-items: center;
   border: 1px solid var(--border);
-  border-radius: 12px;
+  border-radius: 10px;
   background: #ffffff;
-  min-height: 40px;
-  padding: 10px 12px;
+  min-height: 34px;
+  padding: 8px 10px;
 }
 
 .organization-detail-panel__stats dt {
   color: var(--muted-foreground);
-  font-size: 12px;
+  font-size: 11px;
   font-weight: 700;
 }
 
 .organization-detail-panel__stats dd {
   margin: 0;
-  font-size: 13px;
+  font-size: 12px;
   font-weight: 700;
+  max-width: 100%;
+  overflow-wrap: anywhere;
+  text-align: right;
 }
 
 .organization-detail-panel__section {
   display: grid;
-  gap: 8px;
+  gap: 6px;
 }
 
 .organization-detail-panel__section h4 {
   margin: 0;
-  font-size: 13px;
+  font-size: 12px;
 }
 
 .organization-detail-panel__list {
@@ -258,47 +263,50 @@ const memberSectionTitle = computed(() => {
   margin: 0;
   padding: 0;
   display: grid;
-  gap: 8px;
+  gap: 6px;
 }
 
 .organization-detail-panel__list li {
   display: flex;
   justify-content: space-between;
-  gap: 12px;
+  gap: 10px;
   align-items: flex-start;
   border: 1px solid var(--border);
-  border-radius: 12px;
+  border-radius: 10px;
   background: #ffffff;
-  padding: 10px 12px;
+  padding: 8px 10px;
 }
 
 .organization-detail-panel__list li span {
   min-width: 0;
   display: grid;
-  gap: 4px;
+  gap: 3px;
   color: var(--foreground);
-  font-size: 13px;
+  font-size: 12px;
 }
 
 .organization-detail-panel__list li span strong {
-  font-size: 13px;
+  font-size: 12px;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
 }
 
 .organization-detail-panel__list li span small,
 .organization-detail-panel__list li em {
   color: var(--muted-foreground);
-  font-size: 12px;
+  font-size: 11px;
   font-style: normal;
+  overflow-wrap: anywhere;
 }
 
 .organization-detail-panel__empty {
   border: 1px dashed var(--border);
   border-radius: 12px;
   background: #f8fafc;
-  padding: 16px 14px;
+  padding: 14px 12px;
   color: var(--muted-foreground);
   font-size: 12px;
-  line-height: 1.6;
+  line-height: 1.5;
 }
 
 .organization-detail-panel.is-drawer {
