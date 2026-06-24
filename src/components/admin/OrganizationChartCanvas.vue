@@ -452,25 +452,32 @@ watch(
 }
 
 .organization-chart-canvas__node--root {
-  min-width: 220px;
-  min-height: 42px;
+  min-width: 156px;
+  min-height: 38px;
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 12px;
-  padding: 9px 14px;
+  gap: 8px;
+  padding: 6px 10px;
   border-width: 2px;
   border-color: var(--org-root-border);
   background: var(--org-root-background);
+  box-shadow: 0 1px 2px rgba(249, 115, 22, 0.06);
 }
 
 .organization-chart-canvas__node--root strong {
-  font-size: 14px;
+  min-width: 0;
+  font-size: 13px;
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .organization-chart-canvas__node--root small {
   color: var(--org-text-muted);
-  font-size: 12px;
+  font-size: 11px;
+  font-weight: 600;
   white-space: nowrap;
 }
 
