@@ -197,6 +197,8 @@ const tab = ref(['all', 'host', 'attendee', 'active'].includes(route.query.tab) 
 const range = ref('all')
 // 기본 정렬: 최신순(scheduledAt 내림차순) — 최근/다가오는 회의가 위로.
 const sort = ref('latest')
+// 종료/취소된 회의 숨기기 체크박스 상태(기본: 전체 표시).
+const excludeEnded = ref(false)
 const pageNo = ref(1)
 const pageSize = 10
 
