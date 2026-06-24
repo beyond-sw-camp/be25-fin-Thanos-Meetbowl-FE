@@ -13,7 +13,11 @@
         <span v-if="feedbacks.length" class="realtime-feedback-count">
           {{ feedbacks.length }}건
         </span>
-        <div class="realtime-feedback-height-controls" aria-label="피드백 영역 높이 조절">
+        <div
+          v-if="!fill"
+          class="realtime-feedback-height-controls"
+          aria-label="피드백 영역 높이 조절"
+        >
           <button
             type="button"
             :aria-label="expanded ? '피드백 영역 기본 높이로 줄이기' : '피드백 영역 높이 늘리기'"
@@ -87,6 +91,7 @@ import { formatKstTime } from '../../utils/dateTime'
 defineProps({
   feedbacks: { type: Array, default: () => [] },
   connected: { type: Boolean, default: false },
+  fill: { type: Boolean, default: false },
 })
 
 const FEEDBACK_TYPE_LABELS = {
@@ -104,6 +109,7 @@ function feedbackTypeLabel(type) {
 
 <style scoped>
 .realtime-feedback-panel {
+  height: 100%;
   min-height: 0;
   display: grid;
   grid-template-rows: auto minmax(0, 1fr);
@@ -116,6 +122,10 @@ function feedbackTypeLabel(type) {
 
 .realtime-feedback-panel.feedback-height-expanded {
   height: min(560px, 68vh);
+}
+
+.realtime-feedback-panel.meeting-realtime-feedback {
+  height: 100%;
 }
 
 .realtime-feedback-header {

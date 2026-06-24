@@ -20,7 +20,7 @@
 
     <div class="mail-tabs">
       <button v-for="item in tabs" :key="item.id" :class="{ active: tab === item.id }" @click="changeTab(item.id)">{{ item.label }}</button>
-      <select v-model="sort"><option value="latest">최신순</option><option value="oldest">오래된 순</option></select>
+      <AppSelect v-model="sort" size="sm"><option value="latest">최신순</option><option value="oldest">오래된 순</option></AppSelect>
       <label class="toolbar-search mail-search">
         <Search :size="15" />
         <input v-model="q" placeholder="메일 검색">
@@ -62,6 +62,7 @@
 </template>
 
 <script setup>
+import AppSelect from '../../components/common/AppSelect.vue'
 import { computed, onMounted, ref, watch } from 'vue'
 import { Archive, PenSquare, RefreshCw, Search, Trash2 } from '@lucide/vue'
 import Pagination from '../../components/common/Pagination.vue'

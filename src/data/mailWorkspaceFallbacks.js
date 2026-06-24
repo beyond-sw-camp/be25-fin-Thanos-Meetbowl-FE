@@ -38,6 +38,10 @@ export function fallbackUserSearch({ keyword = '', page = 1, size = 8 } = {}) {
       department: member.dept,
       team: member.dept,
     }))
+    .filter((member) => {
+      const role = String(member.role || '').toUpperCase()
+      return role !== 'ADMIN' && role !== 'SYSTEM'
+    })
     .filter((member) => !query || `${member.name} ${member.email} ${member.company} ${member.dept} ${member.position}`.toLowerCase().includes(query))
   return pageItems(items, page, size)
 }

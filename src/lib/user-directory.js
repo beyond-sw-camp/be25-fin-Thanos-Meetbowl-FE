@@ -4,6 +4,11 @@ const userDirectoryRequestOptions = {
   skipForbiddenHandler: true,
 }
 
+function isSearchableMember(user) {
+  const role = String(user?.role || '').toUpperCase()
+  return role !== 'ADMIN' && role !== 'SYSTEM'
+}
+
 export function searchUsers(params = {}) {
   const searchParams = new URLSearchParams()
 
@@ -25,6 +30,10 @@ export function searchUsers(params = {}) {
   const query = searchParams.toString()
   const path = query ? `/users/search?${query}` : '/users/search'
   return getJson(path, userDirectoryRequestOptions)
+    .then((data) => ({
+      ...data,
+      items: (data?.items || []).filter(isSearchableMember),
+    }))
 }
 
 export function getOrganizationUserSummary(userId) {

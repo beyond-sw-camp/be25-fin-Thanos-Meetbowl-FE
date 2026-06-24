@@ -7,7 +7,12 @@ const CONNECTION_STORAGE_KEY = 'meetbowl.livekit.connection'
  *
  * 브라우저는 더 이상 API secret을 알지 못하며, 이전처럼 query/env 값으로 JWT를 합성하지 않는다.
  */
-export async function resolveLiveKitConnection({ meetingId, participantIdentity, displayName }) {
+export async function resolveLiveKitConnection({
+  meetingId,
+  participantIdentity,
+  displayName,
+  skipAuth = false,
+}) {
   if (!meetingId) {
     throw new Error('회의 ID가 없어 접속 정보를 발급받을 수 없습니다.')
   }
@@ -16,6 +21,9 @@ export async function resolveLiveKitConnection({ meetingId, participantIdentity,
   const connection = await postJson(`/meetings/${meetingId}/join`, {
     displayName,
     participantIdentity,
+  }, {
+    skipAuth,
+    skipAuthRefresh: skipAuth,
   })
 
   const resolved = {

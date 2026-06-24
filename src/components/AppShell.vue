@@ -40,7 +40,6 @@
     <main class="main">
       <header class="topbar">
         <button class="icon-button mobile-menu" type="button" @click="mobileOpen = true">☰</button>
-        <div class="search-box">검색</div>
         <div class="top-actions">
           <div class="dropdown-wrap">
             <button class="icon-button notification-button" type="button" @click="toggleNotifications">
@@ -128,8 +127,8 @@
             </div>
           </div>
 
-          <div class="dropdown-wrap">
-            <button class="profile-button" type="button" @click="profileOpen = !profileOpen">
+          <div ref="profileMenuRoot" class="dropdown-wrap">
+            <button class="profile-button" type="button" @click="toggleProfileMenu">
               <span class="avatar">{{ user?.avatar }}</span>
               <span class="profile-name">{{ user?.name }}</span>
             </button>
@@ -184,6 +183,7 @@ const auth = useAuthStore()
 const mobileOpen = ref(false)
 const notificationsOpen = ref(false)
 const profileOpen = ref(false)
+const profileMenuRoot = ref(null)
 
 const user = computed(() => auth.user)
 const homePath = computed(() => auth.homePath)
@@ -390,6 +390,16 @@ function toggleNotifications() {
   loadNotifications()
 }
 
+function toggleProfileMenu() {
+  profileOpen.value = !profileOpen.value
+}
+
+function handleDocumentPointerDown(event) {
+  if (!profileOpen.value) return
+  if (profileMenuRoot.value?.contains(event.target)) return
+  profileOpen.value = false
+}
+
 async function handleNotificationClick(item) {
   notificationsOpen.value = false
   if (item.read) return
@@ -432,10 +442,12 @@ onMounted(() => {
       }
     },
   })
+  document.addEventListener('pointerdown', handleDocumentPointerDown, true)
 })
 
 onBeforeUnmount(() => {
   notificationSource?.close()
+  document.removeEventListener('pointerdown', handleDocumentPointerDown, true)
 })
 
 const visibleSections = computed(() =>

@@ -40,9 +40,9 @@
           <button class="secondary-button" @click="date = todayKst()">오늘</button>
         </div>
         <div class="room-legend">
-          <select class="room-site-select" v-model="site">
+          <AppSelect class="room-site-select" v-model="site">
             <option v-for="item in sites" :key="item" :value="item">{{ item }}</option>
-          </select>
+          </AppSelect>
           <span><i class="mine"></i>내 예약</span>
           <span><i></i>예약됨</span>
           <span><i class="restricted"></i>사용 제한</span>
@@ -118,6 +118,7 @@
 <script setup>
 import { computed, onMounted, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
+import AppSelect from '../../components/common/AppSelect.vue'
 import ModalShell from '../../components/common/ModalShell.vue'
 import ConfirmDialog from '../../components/common/ConfirmDialog.vue'
 import { useConfirmDialog } from '../../composables/useConfirmDialog'
