@@ -45,67 +45,85 @@
             </button>
           </div>
 
-          <div class="organization-chart-canvas__departments">
-            <article
-              v-for="department in chartData.rootNode.departments"
-              :key="department.key"
-              class="organization-chart-canvas__department"
-            >
-              <button
-                :ref="bindNodeRef(department.key)"
-                type="button"
-                class="organization-chart-canvas__node organization-chart-canvas__node--department"
-                :class="{ 'is-active': selectedNodeKey === department.key }"
-                @click="$emit('select', department.key)"
+          <div class="organization-chart-canvas__departments-section">
+            <div class="organization-chart-canvas__root-connector" aria-hidden="true">
+              <span class="organization-chart-canvas__root-connector-stem"></span>
+              <span class="organization-chart-canvas__root-connector-rail"></span>
+            </div>
+
+            <div class="organization-chart-canvas__departments">
+              <article
+                v-for="department in chartData.rootNode.departments"
+                :key="department.key"
+                class="organization-chart-canvas__department"
               >
-                <div class="organization-chart-canvas__department-main">
-                  <strong>{{ department.name }}</strong>
-                  <span>{{ department.memberCount }}명</span>
-                </div>
-                <small>팀 {{ department.teamCount }}개</small>
-              </button>
-
-              <div v-if="department.teams.length" class="organization-chart-canvas__teams">
-                <section
-                  v-for="team in department.teams"
-                  :key="team.key"
-                  class="organization-chart-canvas__team-column"
+                <button
+                  :ref="bindNodeRef(department.key)"
+                  type="button"
+                  class="organization-chart-canvas__node organization-chart-canvas__node--department"
+                  :class="{ 'is-active': selectedNodeKey === department.key }"
+                  @click="$emit('select', department.key)"
                 >
-                  <button
-                    :ref="bindNodeRef(team.key)"
-                    type="button"
-                    class="organization-chart-canvas__node organization-chart-canvas__node--team"
-                    :class="{ 'is-active': selectedNodeKey === team.key }"
-                    @click="$emit('select', team.key)"
-                  >
-                    <strong>{{ team.name }}</strong>
-                    <span>{{ team.memberCount }}명</span>
-                  </button>
-
-                  <div class="organization-chart-canvas__member-list" :class="{ 'is-active': isSelectedTeam(team.key) }">
-                    <!-- 팀원 row는 팀 카드 바로 아래에서만 세로로 쌓이게 유지한다. -->
-                    <button
-                      v-for="member in team.members"
-                      :key="member.key"
-                      :ref="bindNodeRef(member.key)"
-                      type="button"
-                      class="organization-chart-canvas__member-row"
-                      :class="{ 'is-active': selectedNodeKey === member.key }"
-                      @click="$emit('select', member.key)"
-                    >
-                      <strong>{{ member.name }}</strong>
-                      <span>{{ member.position || '-' }}</span>
-                    </button>
-
-                    <div v-if="!team.members.length" class="organization-chart-canvas__member-empty">
-                      구성원 없음
-                    </div>
+                  <div class="organization-chart-canvas__department-main">
+                    <strong>{{ department.name }}</strong>
+                    <span>{{ department.memberCount }}명</span>
                   </div>
-                </section>
-              </div>
+                  <small>팀 {{ department.teamCount }}개</small>
+                </button>
 
-              <div v-else class="organization-chart-canvas__member-empty">하위 팀 없음</div>
-            </article>
+                <div v-if="department.teams.length" class="organization-chart-canvas__department-branch">
+                  <div class="organization-chart-canvas__department-connector" aria-hidden="true">
+                    <span class="organization-chart-canvas__department-connector-stem"></span>
+                    <span class="organization-chart-canvas__department-connector-rail"></span>
+                  </div>
+
+                  <div class="organization-chart-canvas__teams">
+                    <section
+                      v-for="team in department.teams"
+                      :key="team.key"
+                      class="organization-chart-canvas__team-column"
+                    >
+                      <button
+                        :ref="bindNodeRef(team.key)"
+                        type="button"
+                        class="organization-chart-canvas__node organization-chart-canvas__node--team"
+                        :class="{ 'is-active': selectedNodeKey === team.key }"
+                        @click="$emit('select', team.key)"
+                      >
+                        <strong>{{ team.name }}</strong>
+                        <span>{{ team.memberCount }}명</span>
+                      </button>
+
+                      <div class="organization-chart-canvas__team-members">
+                        <span class="organization-chart-canvas__team-members-stem" aria-hidden="true"></span>
+
+                        <div class="organization-chart-canvas__member-list" :class="{ 'is-active': isSelectedTeam(team.key) }">
+                          <!-- 팀원 row는 팀 카드와 같은 세로 축을 따라 묶여 보이게 유지한다. -->
+                          <button
+                            v-for="member in team.members"
+                            :key="member.key"
+                            :ref="bindNodeRef(member.key)"
+                            type="button"
+                            class="organization-chart-canvas__member-row"
+                            :class="{ 'is-active': selectedNodeKey === member.key }"
+                            @click="$emit('select', member.key)"
+                          >
+                            <strong>{{ member.name }}</strong>
+                            <span>{{ member.position || '-' }}</span>
+                          </button>
+
+                          <div v-if="!team.members.length" class="organization-chart-canvas__member-empty">
+                            구성원 없음
+                          </div>
+                        </div>
+                      </div>
+                    </section>
+                  </div>
+                </div>
+
+                <div v-else class="organization-chart-canvas__member-empty">하위 팀 없음</div>
+              </article>
+            </div>
           </div>
         </div>
       </div>
@@ -279,22 +297,41 @@ watch(
   width: max-content;
   display: grid;
   justify-items: center;
-  gap: 24px;
+  gap: 20px;
   transform-origin: top center;
 }
 
 .organization-chart-canvas__root-wrap {
   position: relative;
-  padding-bottom: 8px;
 }
 
-.organization-chart-canvas__root-wrap::after {
-  content: '';
+.organization-chart-canvas__departments-section {
+  width: max-content;
+  display: grid;
+  gap: 0;
+}
+
+.organization-chart-canvas__root-connector {
+  position: relative;
+  height: 28px;
+}
+
+.organization-chart-canvas__root-connector-stem {
   position: absolute;
+  top: 0;
   left: 50%;
-  bottom: -16px;
   width: 1px;
-  height: 16px;
+  height: 14px;
+  background: var(--org-line-color);
+  transform: translateX(-0.5px);
+}
+
+.organization-chart-canvas__root-connector-rail {
+  position: absolute;
+  top: 14px;
+  left: 137px;
+  right: 137px;
+  height: 1px;
   background: var(--org-line-color);
 }
 
@@ -303,17 +340,6 @@ watch(
   display: flex;
   align-items: flex-start;
   gap: 24px;
-  padding-top: 16px;
-}
-
-.organization-chart-canvas__departments::before {
-  content: '';
-  position: absolute;
-  top: 0;
-  left: 137px;
-  right: 137px;
-  height: 1px;
-  background: var(--org-line-color);
 }
 
 .organization-chart-canvas__department {
@@ -323,7 +349,7 @@ watch(
   display: grid;
   gap: 10px;
   justify-items: center;
-  padding-top: 16px;
+  padding-top: 14px;
 }
 
 .organization-chart-canvas__department::before {
@@ -332,7 +358,39 @@ watch(
   top: 0;
   left: 50%;
   width: 1px;
-  height: 16px;
+  height: 14px;
+  background: var(--org-line-color);
+  transform: translateX(-0.5px);
+}
+
+.organization-chart-canvas__department-branch {
+  position: relative;
+  width: 100%;
+  display: grid;
+  gap: 0;
+}
+
+.organization-chart-canvas__department-connector {
+  position: relative;
+  height: 24px;
+}
+
+.organization-chart-canvas__department-connector-stem {
+  position: absolute;
+  top: 0;
+  left: 50%;
+  width: 1px;
+  height: 12px;
+  background: var(--org-line-color);
+  transform: translateX(-0.5px);
+}
+
+.organization-chart-canvas__department-connector-rail {
+  position: absolute;
+  top: 12px;
+  left: 66px;
+  right: 66px;
+  height: 1px;
   background: var(--org-line-color);
 }
 
@@ -343,27 +401,6 @@ watch(
   gap: 14px;
   justify-content: center;
   width: 100%;
-  padding-top: 14px;
-}
-
-.organization-chart-canvas__teams::before {
-  content: '';
-  position: absolute;
-  top: 0;
-  left: 50%;
-  width: 1px;
-  height: 14px;
-  background: var(--org-line-color);
-}
-
-.organization-chart-canvas__teams::after {
-  content: '';
-  position: absolute;
-  top: 14px;
-  left: 66px;
-  right: 66px;
-  height: 1px;
-  background: var(--org-line-color);
 }
 
 .organization-chart-canvas__team-column {
@@ -380,11 +417,12 @@ watch(
 .organization-chart-canvas__team-column::before {
   content: '';
   position: absolute;
-  top: -14px;
+  top: -12px;
   left: 50%;
   width: 1px;
-  height: 14px;
+  height: 12px;
   background: var(--org-line-color);
+  transform: translateX(-0.5px);
 }
 
 .organization-chart-canvas__node {
@@ -499,23 +537,29 @@ watch(
   white-space: nowrap;
 }
 
-.organization-chart-canvas__member-list {
+.organization-chart-canvas__team-members {
   position: relative;
   width: 100%;
   display: grid;
-  gap: 5px;
+  justify-items: center;
   padding-top: 8px;
 }
 
-/* 팀 카드와 팀원 목록은 하나의 세로 축으로만 이어지게 유지한다. */
-.organization-chart-canvas__member-list::before {
-  content: '';
+.organization-chart-canvas__team-members-stem {
   position: absolute;
   top: 0;
   left: 50%;
   width: 1px;
   height: 8px;
   background: var(--org-line-color);
+  transform: translateX(-0.5px);
+}
+
+.organization-chart-canvas__member-list {
+  position: relative;
+  width: 100%;
+  display: grid;
+  gap: 5px;
 }
 
 .organization-chart-canvas__member-row {
