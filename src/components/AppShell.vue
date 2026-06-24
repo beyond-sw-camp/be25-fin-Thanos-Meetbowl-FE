@@ -14,6 +14,7 @@
               :to="item.to"
               class="nav-link"
               :class="{ active: isActive(item.to) }"
+              :data-tour="item.tourId"
               @click="mobileOpen = false"
             >
               <span class="nav-icon">{{ item.icon }}</span>
@@ -43,7 +44,7 @@
         <div class="search-box">검색</div>
         <div class="top-actions">
           <div class="dropdown-wrap">
-            <button class="icon-button notification-button" type="button" @click="toggleNotifications">
+            <button class="icon-button notification-button" type="button" data-tour="notifications" @click="toggleNotifications">
               <Bell :size="20" />
               <span v-if="notificationBadgeCount > 0" class="notification-badge">
                 {{ notificationBadgeCount > 99 ? '99+' : notificationBadgeCount }}
@@ -145,6 +146,14 @@
               >
                 설정
               </RouterLink>
+              <button
+                v-if="user?.role === 'USER'"
+                type="button"
+                class="profile-menu-link"
+                @click="startTutorial"
+              >
+                튜토리얼 다시 보기
+              </button>
               <button type="button" class="ghost-button" @click="handleLogout">로그아웃</button>
             </div>
           </div>
@@ -154,6 +163,8 @@
     </main>
 
     <FloatingChatbot v-if="showFloatingChatbot" />
+
+    <OnboardingTour v-if="tutorialOpen" @finish="closeTutorial" />
   </div>
 </template>
 
@@ -162,6 +173,8 @@ import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { Bell } from '@lucide/vue'
 import FloatingChatbot from './FloatingChatbot.vue'
+import OnboardingTour from './tutorial/OnboardingTour.vue'
+import { isTutorialCompleted, markTutorialCompleted } from '../lib/tutorial'
 import {
   approveAdminPasswordResetRequest,
   getAdminPasswordResetRequests,
@@ -184,6 +197,7 @@ const auth = useAuthStore()
 const mobileOpen = ref(false)
 const notificationsOpen = ref(false)
 const profileOpen = ref(false)
+const tutorialOpen = ref(false)
 
 const user = computed(() => auth.user)
 const homePath = computed(() => auth.homePath)
@@ -229,18 +243,19 @@ const navSections = [
     title: '개인 워크스페이스',
     roles: ['USER'],
     items: [
-      { to: '/app/dashboard', label: '대시보드', icon: 'D' },
+      { to: '/app/dashboard', label: '대시보드', icon: 'D', tourId: 'dashboard' },
       {
         to: '/app/rooms',
         label: '회의실 예약',
         icon: 'R',
+        tourId: 'rooms',
         children: [
           { to: '/app/my-reservations', label: '내 예약', icon: 'M' },
           { to: '/app/my-attending', label: '참석 회의', icon: 'A' },
         ],
       },
-      { to: '/app/meetings', label: '회의', icon: 'M' },
-      { to: '/app/minutes', label: '내 회의록', icon: 'N' },
+      { to: '/app/meetings', label: '회의', icon: 'M', tourId: 'meetings' },
+      { to: '/app/minutes', label: '내 회의록', icon: 'N', tourId: 'minutes' },
       { to: '/app/mail', label: '메일', icon: 'L' },
       { to: '/app/workspace', label: '개인 워크스페이스', icon: 'W' },
       { to: '/app/shared-docs', label: '공유 워크스페이스', icon: 'S' },
@@ -421,6 +436,12 @@ onMounted(() => {
   }
 
   loadNotifications()
+
+  // 첫 로그인(아직 완료 기록 없음)인 USER에게 온보딩을 자동 노출한다.
+  if (!isTutorialCompleted(user.value?.userId)) {
+    tutorialOpen.value = true
+  }
+
   notificationSource = subscribeNotifications({
     onNotification: (notification) => {
       const index = notifications.value.findIndex((item) => item.id === notification.id)
@@ -449,6 +470,17 @@ function isActive(to) {
 function isExpanded(item) {
   if (!item.children) return false
   return isActive(item.to) || item.children.some((child) => isActive(child.to))
+}
+
+function startTutorial() {
+  profileOpen.value = false
+  tutorialOpen.value = true
+}
+
+function closeTutorial() {
+  tutorialOpen.value = false
+  // 완료/건너뛰기 모두 같은 브라우저에선 다시 자동으로 뜨지 않게 기록한다.
+  markTutorialCompleted(user.value?.userId)
 }
 
 async function handleLogout() {
