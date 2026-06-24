@@ -7,12 +7,15 @@ import {
   createMeetingBuilding,
   createMeetingRoom,
   createSiteWithBuilding,
+  deleteMeetingBuilding,
   deleteMeetingRoom,
+  deleteMeetingSite,
   getMeetingBuildings,
   getMeetingRooms,
   getMeetingSites,
   updateMeetingBuilding,
   updateMeetingRoom,
+  updateMeetingSite,
 } from '../../lib/admin-rooms'
 import { useAuthStore } from '../../stores/auth'
 
@@ -36,6 +39,9 @@ const editingRoom = ref(null)
 
 const roomForm = ref(createEmptyRoomForm())
 const siteForm = ref({ siteName: '', buildingName: '' })
+// 사이트 관리 모달 내 인라인 수정 상태. editingSite가 있으면 그 사이트 행이 수정 폼으로 바뀐다.
+const editingSite = ref(null)
+const siteEditForm = ref({ name: '', address: '' })
 
 const isAdmin = computed(() => auth.user?.role === 'ADMIN')
 
@@ -196,11 +202,134 @@ function openSiteModal() {
   actionError.value = ''
   successMessage.value = ''
   siteForm.value = { siteName: '', buildingName: '' }
+  editingSite.value = null
   siteModal.value = true
 }
 
 function closeSiteModal() {
   siteModal.value = false
+  editingSite.value = null
+}
+
+// 사이트 행의 '수정' → 그 행을 인라인 수정 폼으로 전환(이름·주소 채움).
+function openEditSite(site) {
+  actionError.value = ''
+  successMessage.value = ''
+  editingSite.value = site
+  siteEditForm.value = {
+    name: site.name && site.name !== '-' ? site.name : '',
+    address: site.address || '',
+  }
+}
+
+function cancelEditSite() {
+  editingSite.value = null
+  actionError.value = ''
+}
+
+// 사이트 수정 저장. name(필수)·address(선택)만 PATCH → siteId 유지라 건물·회의실 관계는 그대로.
+// 성공 시 전체 재조회로 회의실 목록의 사이트 컬럼·상단 필터 칩에도 바뀐 이름이 반영된다.
+async function saveSiteEdit() {
+  if (saving.value || !editingSite.value) return
+  const name = siteEditForm.value.name.trim()
+  if (!name) {
+    actionError.value = '사이트명을 입력해 주세요.'
+    return
+  }
+
+  saving.value = true
+  actionError.value = ''
+  successMessage.value = ''
+
+  try {
+    await updateMeetingSite(editingSite.value.siteId, {
+      name,
+      address: siteEditForm.value.address.trim(),
+    })
+    successMessage.value = '사이트 정보를 수정했습니다.'
+    editingSite.value = null
+    await reloadAllData()
+  } catch (error) {
+    if (error?.status === 403) {
+      forbidden.value = true
+      closeSiteModal()
+      return
+    }
+
+    actionError.value = error?.message || '사이트 수정에 실패했습니다.'
+  } finally {
+    saving.value = false
+  }
+}
+
+// 특정 사이트에 속한 건물 목록(사이트 관리 모달에서 사이트별로 건물·삭제 버튼을 보여주기 위함).
+function buildingsOfSite(siteId) {
+  return buildings.value.filter((building) => building.siteId === siteId)
+}
+
+// 사이트 삭제. 하위 건물이 있으면 백엔드가 차단하므로 프론트에서 먼저 막아 명확히 안내한다.
+async function removeSite(site) {
+  if (saving.value) return
+
+  const childBuildings = buildingsOfSite(site.siteId)
+  if (childBuildings.length) {
+    actionError.value = `'${site.name}' 사이트에 건물이 ${childBuildings.length}개 있어 삭제할 수 없습니다. 건물을 먼저 삭제하세요.`
+    return
+  }
+  if (!window.confirm(`'${site.name}' 사이트를 삭제하시겠습니까?`)) return
+
+  saving.value = true
+  actionError.value = ''
+  successMessage.value = ''
+
+  try {
+    await deleteMeetingSite(site.siteId)
+    successMessage.value = '사이트를 삭제했습니다.'
+    if (editingSite.value?.siteId === site.siteId) editingSite.value = null
+    await reloadAllData()
+  } catch (error) {
+    if (error?.status === 403) {
+      forbidden.value = true
+      closeSiteModal()
+      return
+    }
+
+    actionError.value = error?.message || '사이트 삭제에 실패했습니다.'
+  } finally {
+    saving.value = false
+  }
+}
+
+// 건물 삭제. 하위 회의실이 있으면 백엔드가 차단하므로 프론트에서 먼저 막아 명확히 안내한다.
+async function removeBuilding(building) {
+  if (saving.value) return
+
+  const roomCount = roomCountByBuilding(building.buildingId)
+  if (roomCount) {
+    actionError.value = `'${building.name}' 건물에 회의실이 ${roomCount}개 있어 삭제할 수 없습니다. 회의실을 먼저 삭제하세요.`
+    return
+  }
+  if (!window.confirm(`'${building.name}' 건물을 삭제하시겠습니까?`)) return
+
+  saving.value = true
+  actionError.value = ''
+  successMessage.value = ''
+
+  try {
+    await deleteMeetingBuilding(building.buildingId)
+    successMessage.value = '건물을 삭제했습니다.'
+    await reloadAllData()
+  } catch (error) {
+    if (error?.status === 403) {
+      forbidden.value = true
+      closeSiteModal()
+      return
+    }
+
+    actionError.value = error?.message || '건물 삭제에 실패했습니다.'
+  } finally {
+    saving.value = false
+  }
 }
 
 async function saveRoom() {
@@ -535,9 +664,14 @@ function normalizeBuilding(item) {
       <div v-if="siteModal" class="modal-backdrop" @click.self="closeSiteModal">
         <article class="card write-modal admin-modal">
           <header>
-            <h2>사이트 / 건물 추가</h2>
+            <h2>사이트 / 건물 관리</h2>
             <button type="button" @click="closeSiteModal">닫기</button>
           </header>
+
+          <!-- 모달 안 에러 표시(페이지 상단 피드백은 모달 뒤라 안 보이므로). -->
+          <div v-if="actionError" class="error-box site-modal-error">{{ actionError }}</div>
+
+          <!-- 사이트/건물 추가(기존 기능 유지) -->
           <form class="form-grid" @submit.prevent="saveSite">
             <label>사이트<input v-model="siteForm.siteName" required placeholder="예: 판교"></label>
             <label>건물<input v-model="siteForm.buildingName" required placeholder="예: 본관"></label>
@@ -546,6 +680,52 @@ function normalizeBuilding(item) {
               <ActionButton variant="primary" type="submit" :disabled="saving">{{ saving ? '추가 중...' : '추가' }}</ActionButton>
             </div>
           </form>
+
+          <!-- 사이트 목록 + 인라인 수정 -->
+          <div class="site-manage">
+            <h3 class="site-manage-title">사이트 목록</h3>
+            <p v-if="!sites.length" class="empty-text">등록된 사이트가 없습니다.</p>
+            <ul v-else class="site-manage-list">
+              <li v-for="site in sites" :key="site.siteId" class="site-item">
+                <div class="site-row">
+                  <form
+                    v-if="editingSite && editingSite.siteId === site.siteId"
+                    class="site-edit-form"
+                    @submit.prevent="saveSiteEdit"
+                  >
+                    <input v-model="siteEditForm.name" required placeholder="사이트명">
+                    <input v-model="siteEditForm.address" placeholder="주소(선택)">
+                    <button class="primary-button small" type="submit" :disabled="saving">{{ saving ? '저장 중...' : '저장' }}</button>
+                    <button class="secondary-button small" type="button" @click="cancelEditSite">취소</button>
+                  </form>
+                  <template v-else>
+                    <div class="site-row-info">
+                      <strong>{{ site.name }}</strong>
+                      <span class="site-row-address">{{ site.address || '주소 미등록' }}</span>
+                    </div>
+                    <div class="site-row-actions">
+                      <button class="secondary-button small" type="button" @click="openEditSite(site)">수정</button>
+                      <button class="secondary-button small danger" type="button" :disabled="saving" @click="removeSite(site)">삭제</button>
+                    </div>
+                  </template>
+                </div>
+
+                <!-- 사이트별 건물 목록 + 삭제. 사이트를 지우려면 건물을 먼저 비워야 하므로 함께 관리한다. -->
+                <ul class="building-sublist">
+                  <li
+                    v-for="building in buildingsOfSite(site.siteId)"
+                    :key="building.buildingId"
+                    class="building-row"
+                  >
+                    <span class="building-name">{{ building.name }}</span>
+                    <span class="building-room-count">회의실 {{ roomCountByBuilding(building.buildingId) }}개</span>
+                    <button class="secondary-button small danger" type="button" :disabled="saving" @click="removeBuilding(building)">삭제</button>
+                  </li>
+                  <li v-if="!buildingsOfSite(site.siteId).length" class="building-empty">등록된 건물이 없습니다.</li>
+                </ul>
+              </li>
+            </ul>
+          </div>
         </article>
       </div>
     </template>
@@ -592,5 +772,107 @@ function normalizeBuilding(item) {
 /* 운영 중 토글 */
 .settings-toggle-row {
   justify-content: flex-start;
+}
+
+/* 사이트 관리(추가 폼 아래 사이트 목록 + 인라인 수정) */
+.site-modal-error {
+  margin-bottom: 12px;
+}
+.site-manage {
+  margin-top: 20px;
+  border-top: 1px solid var(--border);
+  padding-top: 16px;
+}
+.site-manage-title {
+  margin: 0 0 10px;
+  font-size: 14px;
+  font-weight: 700;
+}
+.site-manage-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 8px;
+}
+.site-item {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 8px 10px;
+}
+.site-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+.site-row-info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.site-row-address {
+  color: var(--muted-foreground);
+  font-size: 12px;
+}
+.site-row-actions {
+  display: flex;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+/* 사이트별 건물 목록(삭제 버튼 포함) */
+.building-sublist {
+  list-style: none;
+  margin: 8px 0 0;
+  padding: 8px 0 0;
+  border-top: 1px dashed var(--border);
+  display: grid;
+  gap: 6px;
+}
+.building-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding-left: 10px;
+}
+.building-name {
+  font-size: 13px;
+  font-weight: 600;
+}
+.building-room-count {
+  color: var(--muted-foreground);
+  font-size: 12px;
+  margin-left: auto;
+}
+.building-empty {
+  padding-left: 10px;
+  color: var(--muted-foreground);
+  font-size: 12px;
+}
+
+/* 위험(삭제) 버튼 */
+.secondary-button.danger {
+  color: var(--destructive, #dc2626);
+  border-color: var(--destructive, #dc2626);
+}
+.site-edit-form {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+}
+.site-edit-form input {
+  flex: 1 1 120px;
+  min-width: 0;
+}
+/* 행 버튼은 컴팩트하게(.small 유무와 무관하게 보장). */
+.site-row .secondary-button,
+.building-row .secondary-button,
+.site-edit-form button {
+  padding: 6px 12px;
+  font-size: 13px;
 }
 </style>

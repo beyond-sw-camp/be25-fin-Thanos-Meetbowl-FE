@@ -36,6 +36,9 @@
     <UserSearchPicker
       v-model="form.attendees"
       :fixed-user-ids="hostUserId ? [hostUserId] : []"
+      :validate-add="attendeeValidate"
+      :warning="attendeeWarning"
+      @reject="$emit('attendee-reject', $event)"
     />
 
     <label>
@@ -71,8 +74,12 @@ const props = defineProps({
   roomUsageEnabled: { type: Boolean, default: false },
   // 원격 회의 토글 노출 여부. 회의 페이지에서만 true, 회의실 예약에서는 false.
   allowRemote: { type: Boolean, default: false },
+  // 참석자 추가 직전 비동기 검증 훅(시간 겹침 검사). UserSearchPicker로 그대로 전달한다.
+  attendeeValidate: { type: Function, default: null },
+  // 참석자 겹침 경고 문구. '참석자 검색' 라벨 위 오버레이로 표시한다.
+  attendeeWarning: { type: String, default: '' },
 })
-defineEmits(['submit', 'enable-room-usage', 'disable-room-usage'])
+defineEmits(['submit', 'enable-room-usage', 'disable-room-usage', 'attendee-reject'])
 const reviewerOptions = computed(() => props.form.attendees.filter((attendee) => attendee.userId))
 </script>
 
