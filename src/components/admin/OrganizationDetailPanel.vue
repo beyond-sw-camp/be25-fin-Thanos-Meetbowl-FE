@@ -159,6 +159,8 @@ const memberRowClass = computed(() =>
 <style scoped>
 .organization-detail-panel {
   --detail-panel-gap: 8px;
+  --detail-section-gap: 7px;
+  --detail-section-separation: 6px;
   --detail-panel-padding: 12px;
   --detail-card-padding: 10px 11px;
   --detail-row-padding: 6px 9px;
@@ -287,7 +289,8 @@ const memberRowClass = computed(() =>
 
 .organization-detail-panel__section {
   display: grid;
-  gap: 5px;
+  gap: var(--detail-section-gap);
+  margin-top: var(--detail-section-separation);
 }
 
 .organization-detail-panel__section h4 {
@@ -301,7 +304,7 @@ const memberRowClass = computed(() =>
   margin: 0;
   padding: 0;
   display: grid;
-  gap: 5px;
+  gap: 6px;
 }
 
 .organization-detail-panel__list li {
