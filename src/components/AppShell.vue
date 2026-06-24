@@ -15,7 +15,7 @@
               class="nav-link"
               :class="{ active: isActive(item.to) }"
               :data-tour="item.tourId"
-              @click="mobileOpen = false"
+              @click="handleNavClick(item.to)"
             >
               <span class="nav-icon">{{ item.icon }}</span>
               <span>{{ item.label }}</span>
@@ -26,7 +26,7 @@
               :to="child.to"
               class="nav-link nav-sublink"
               :class="{ active: isActive(child.to) }"
-              @click="mobileOpen = false"
+              @click="handleNavClick(child.to)"
             >
               <span class="nav-icon">{{ child.icon }}</span>
               <span>{{ child.label }}</span>
@@ -158,7 +158,7 @@
           </div>
         </div>
       </header>
-      <RouterView />
+      <RouterView :key="`${route.path}::${navResetKey}`" />
     </main>
 
     <FloatingChatbot v-if="showFloatingChatbot" />
@@ -194,6 +194,8 @@ const route = useRoute()
 const router = useRouter()
 const auth = useAuthStore()
 const mobileOpen = ref(false)
+// 같은 메뉴를 다시 눌렀을 때 그 기능의 초기 화면으로 되돌리기 위해, RouterView를 강제 remount한다.
+const navResetKey = ref(0)
 const notificationsOpen = ref(false)
 const profileOpen = ref(false)
 const tutorialOpen = ref(false)
@@ -477,6 +479,15 @@ const visibleSections = computed(() =>
 
 function isActive(to) {
   return route.path === to || route.path.startsWith(`${to}/`)
+}
+
+function handleNavClick(to) {
+  mobileOpen.value = false
+  // 이미 그 메뉴의 화면(또는 하위 상세)에 있으면 라우터 이동이 없으므로, 직접 그 기능 홈으로 보내고 화면을 초기화한다.
+  if (isActive(to)) {
+    if (route.path !== to) router.push(to)
+    navResetKey.value += 1
+  }
 }
 
 function isExpanded(item) {

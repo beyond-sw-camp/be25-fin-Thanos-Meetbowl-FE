@@ -74,6 +74,7 @@
       @close="editTarget = null"
       @saved="onEditSaved"
     />
+    <ConfirmDialog v-if="confirmDialog" v-bind="confirmDialog" @cancel="cancelConfirm" @confirm="acceptConfirm" />
   </section>
 </template>
 
@@ -81,8 +82,10 @@
 import { computed, onMounted, ref } from 'vue'
 import { useAuthStore } from '../../stores/auth'
 import ReservationModal from '../rooms/ReservationModal.vue'
+import ConfirmDialog from '../common/ConfirmDialog.vue'
 import { cancelMeeting, getMeetings, getRooms } from '../../lib/reservations'
 import { compareByDistanceTo, shiftDateKst, todayKst, utcToKstClock, utcToKstDate } from '../../utils/dateTime'
+import { useConfirmDialog } from '../../composables/useConfirmDialog'
 
 const props = defineProps({
   // 데이터 기준: 'host'(내가 주최/예약) | 'invited'(내가 참석자로 지정)
@@ -96,6 +99,7 @@ const props = defineProps({
 })
 
 const auth = useAuthStore()
+const { confirmDialog, requestConfirm, cancelConfirm, acceptConfirm } = useConfirmDialog()
 const myUserId = computed(() => auth.user?.userId || '')
 
 const loading = ref(true)
@@ -215,7 +219,12 @@ async function onEditSaved() {
 
 async function cancel(meeting) {
   if (saving.value || !canCancel(meeting)) return
-  if (!window.confirm(`'${meeting.title}' 예약을 취소하시겠습니까?`)) return
+  const confirmed = await requestConfirm({
+    title: '예약을 취소할까요?',
+    message: `'${meeting.title}' 예약을 취소합니다.`,
+    confirmLabel: '예약 취소',
+  })
+  if (!confirmed) return
 
   saving.value = true
   actionError.value = ''

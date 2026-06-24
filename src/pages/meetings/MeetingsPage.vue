@@ -139,6 +139,7 @@
         </template>
       </div>
     </ModalShell>
+    <ConfirmDialog v-if="confirmDialog" v-bind="confirmDialog" @cancel="cancelConfirm" @confirm="acceptConfirm" />
   </section>
 </template>
 
@@ -149,12 +150,14 @@ import AppSelect from '../../components/common/AppSelect.vue'
 import { useRoute, useRouter } from 'vue-router'
 import Pagination from '../../components/common/Pagination.vue'
 import ModalShell from '../../components/common/ModalShell.vue'
+import ConfirmDialog from '../../components/common/ConfirmDialog.vue'
 import ReservationModal from '../../components/rooms/ReservationModal.vue'
   
 import { getMeetingJoinBlockedMessage, openMeetingWindow } from '../../lib/meeting-route'
 import { cancelMeeting, getMeeting, getMeetings, getRooms } from '../../lib/reservations'
 import { useAuthStore } from '../../stores/auth'
 import { useUserNames } from '../../composables/useUserNames'
+import { useConfirmDialog } from '../../composables/useConfirmDialog'
 import { utcToKstClock, utcToKstDate } from '../../utils/dateTime'
 
 const router = useRouter()
@@ -162,6 +165,7 @@ const route = useRoute()
 const auth = useAuthStore()
 const myUserId = computed(() => auth.user?.userId || '')
 const { nameMap, resolveNames } = useUserNames()
+const { confirmDialog, requestConfirm, cancelConfirm, acceptConfirm } = useConfirmDialog()
 
 const statusLabel = { live: '진행 중', upcoming: '예정', ended: '종료', cancelled: '취소됨' }
 
@@ -452,7 +456,12 @@ function enterFromDetail() {
 // 모달이 열려 있었으면 닫고, 실패는 alert로 알린다(행에서 호출돼도 동일하게 동작).
 async function requestCancelMeeting(meeting) {
   if (!meeting || cancelling.value) return
-  if (!window.confirm('이 회의를 취소하시겠습니까? 참석자에게 취소 알림이 전송됩니다.')) return
+  const confirmed = await requestConfirm({
+    title: '회의를 취소할까요?',
+    message: `'${meeting.title}' 회의를 취소하면 참석자에게 취소 알림이 전송됩니다.`,
+    confirmLabel: '회의 취소',
+  })
+  if (!confirmed) return
   cancelling.value = true
   try {
     await cancelMeeting(meeting.meetingId)

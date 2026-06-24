@@ -6,15 +6,10 @@
         <p>공유 자료, 멤버, 버전 이력을 워크스페이스 단위로 관리합니다.</p>
       </div>
       <div class="shared-header-actions">
-        <ActionButton type="button" variant="ghost" size="sm" @click="openCreate">
-          <FolderKanban :size="16" /> 프로젝트 생성
-        </ActionButton>
-        <ActionButton type="button" variant="ghost" size="sm" :disabled="!activeSpaceId" @click="openMemberManage">
-          <Plus :size="15" /> 멤버 관리
-        </ActionButton>
-        <ActionButton type="button" variant="primary" size="sm" :disabled="!activeSpaceId" @click="openUpload">
-          <Upload :size="15" /> 파일 업로드
-        </ActionButton>
+        <button type="button" class="ghost-button icon-action" @click="openCreate"><FolderKanban :size="16" /> 프로젝트 생성</button>
+        <button type="button" class="ghost-button icon-action" :disabled="!activeSpaceId" @click="openMemberManage"><Plus :size="15" /> 멤버 관리</button>
+        <button v-if="isActiveSpaceOwner" type="button" class="danger-button small" @click="removeActiveSpace"><Trash2 :size="15" /> 프로젝트 삭제</button>
+        <button type="button" class="primary-button small" :disabled="!activeSpaceId" @click="openUpload"><Upload :size="15" /> 파일 업로드</button>
       </div>
     </header>
 
@@ -103,9 +98,9 @@
         <section>
           <div class="shared-member-section-title">
             <h2>파일 미리보기</h2>
-            <ActionButton type="button" variant="secondary" size="sm" @click="versionUploadOpen = !versionUploadOpen">
+            <button type="button" class="secondary-button small" @click="versionUploadOpen = !versionUploadOpen">
               {{ versionUploadOpen ? '닫기' : '새 버전 업로드' }}
-            </ActionButton>
+            </button>
           </div>
           <form v-if="versionUploadOpen" class="shared-version-upload" @submit.prevent="submitNewVersion">
             <div class="shared-member-section-title">
@@ -115,9 +110,9 @@
             <input type="file" @change="versionDraft.file = $event.target.files?.[0] || null">
             <input v-model="versionDraft.newVersion" placeholder="새 버전 (예: v2)">
             <input v-model="versionDraft.changeMemo" placeholder="변경 메모 (선택)">
-            <ActionButton type="submit" variant="primary" size="sm" :disabled="!versionDraft.file || !versionDraft.newVersion.trim() || versionUploading">
+            <button type="submit" class="primary-button small" :disabled="!versionDraft.file || !versionDraft.newVersion.trim() || versionUploading">
               {{ versionUploading ? '업로드 중...' : '업로드' }}
-            </ActionButton>
+            </button>
           </form>
           <article class="shared-version-preview file-preview-panel">
             <div v-if="filePreviewLoading" class="empty-state">파일을 불러오는 중입니다.</div>
@@ -135,12 +130,10 @@
               <div><dt>버전</dt><dd>{{ openDoc.currentVersion }}</dd></div>
             </dl>
             <div class="file-preview-actions">
-              <ActionButton type="button" variant="primary" size="sm" @click="downloadFile(openDoc)">
-                <Download :size="14" /> 다운로드
-              </ActionButton>
+              <button type="button" class="primary-button small" @click="downloadFile(openDoc)"><Download :size="14" /> 다운로드</button>
             </div>
           </article>
-          <h2>버전 이력</h2>
+          <h2 class="shared-version-history-title">버전 이력</h2>
           <article v-for="version in versions" :key="version.versionId" class="version-card" :class="{ active: selectedVersion?.versionId === version.versionId }" @click="selectedVersion = version">
             <div><span class="badge primary">{{ version.version }}</span><strong>{{ version.changeMemo || '변경 메모 없음' }}</strong><small>{{ displayDate(version.uploadedAt) }}</small></div>
             <p>{{ userLabel(version.uploaderUserId) }} · {{ formatSize(version.sizeBytes) }}</p>
@@ -159,11 +152,9 @@
 
     <div v-if="createOpen" class="modal-backdrop" @click="createOpen = false">
       <form class="write-modal shared-create-modal" @submit.prevent="createSpace" @click.stop>
-        <header><h2>프로젝트 생성</h2><ActionButton type="button" variant="ghost" size="sm" @click="createOpen = false">닫기</ActionButton></header>
-        <label>이름<input v-model="spaceDraft.name" placeholder="예: Q3 신제품 TF"></label>
-        <label>설명<textarea v-model="spaceDraft.description" rows="3" placeholder="프로젝트 목적이나 공유 범위를 입력하세요."></textarea></label>
-        <p v-if="createErrorMessage" class="warning-text">{{ createErrorMessage }}</p>
-        <section class="shared-member-invite">
+        <header><h2>프로젝트 생성</h2><button type="button" @click="createOpen = false">닫기</button></header>
+        <label class="shared-create-field">이름<input v-model="spaceDraft.name" placeholder="예: Q3 신제품 TF"></label>
+        <section class="shared-member-invite shared-create-field">
           <div class="shared-member-section-title">
             <strong>프로젝트 멤버</strong>
             <small>{{ createSelectedMembers.length }}명 선택</small>
@@ -185,16 +176,13 @@
             </div>
           </div>
         </section>
-        <footer>
-          <ActionButton type="button" variant="ghost" size="sm" @click="createOpen = false">취소</ActionButton>
-          <ActionButton type="submit" variant="primary" size="sm">생성</ActionButton>
-        </footer>
+        <footer><button type="button" class="ghost-button" @click="createOpen = false">취소</button><button type="submit" class="primary-button small">생성</button></footer>
       </form>
     </div>
 
     <div v-if="uploadOpen" class="modal-backdrop" @click="uploadOpen = false">
       <form class="write-modal" @submit.prevent="submitUpload" @click.stop>
-        <header><h2>파일 업로드</h2><ActionButton type="button" variant="ghost" size="sm" @click="uploadOpen = false">닫기</ActionButton></header>
+        <header><h2>파일 업로드</h2><button type="button" @click="uploadOpen = false">닫기</button></header>
         <p class="shared-upload-note">선택한 공유 프로젝트에 새 파일로 등록합니다. 여러 개를 한 번에 올릴 수 있습니다.</p>
         <button
           type="button"
@@ -216,10 +204,10 @@
           </li>
         </ul>
         <footer>
-          <ActionButton type="button" variant="ghost" size="sm" @click="uploadOpen = false">취소</ActionButton>
-          <ActionButton type="submit" variant="primary" size="sm" :disabled="!uploadDraft.files.length || uploadLoading">
+          <button type="button" class="ghost-button" @click="uploadOpen = false">취소</button>
+          <button type="submit" class="primary-button small" :disabled="!uploadDraft.files.length || uploadLoading">
             {{ uploadLoading ? '업로드 중...' : `업로드 (${uploadDraft.files.length})` }}
-          </ActionButton>
+          </button>
         </footer>
       </form>
     </div>
@@ -231,7 +219,7 @@
             <h2>멤버 관리</h2>
             <p>{{ activeSpace?.name || '공유 프로젝트' }} 멤버를 확인하고 초대합니다.</p>
           </div>
-          <ActionButton type="button" variant="ghost" size="sm" @click="inviteOpen = false">닫기</ActionButton>
+          <button type="button" @click="inviteOpen = false">닫기</button>
         </header>
         <section class="shared-member-current">
           <div class="shared-member-section-title">
@@ -259,20 +247,17 @@
             <strong>멤버 초대</strong>
             <small>이름, 부서/팀, 이메일로 검색</small>
           </div>
-          <div ref="inviteSearchRoot" class="recipient-picker">
-            <input v-model="userKeyword" placeholder="이름, 부서/팀, 이메일 검색" @focus="openInviteSearch">
-            <div v-if="inviteSearchOpen && userCandidates.length" class="participant-results">
-              <button v-for="user in userCandidates" :key="user.userId" type="button" :class="{ selected: inviteUserId === user.userId }" @click="selectInviteUser(user)">
-                <strong>{{ user.name }} <small>{{ user.position }}</small></strong>
-                <span>{{ user.department || user.team || '-' }} · {{ user.email }}</span>
-              </button>
-            </div>
+        <div ref="inviteSearchRoot" class="recipient-picker">
+          <input v-model="userKeyword" placeholder="이름, 부서/팀, 이메일 검색" @focus="openInviteSearch">
+          <div v-if="inviteSearchOpen && userCandidates.length" class="participant-results">
+            <button v-for="user in userCandidates" :key="user.userId" type="button" :class="{ selected: inviteUserId === user.userId }" @click="selectInviteUser(user)">
+              <strong>{{ user.name }} <small>{{ user.position }}</small></strong>
+              <span>{{ user.department || user.team || '-' }} · {{ user.email }}</span>
+            </button>
           </div>
+        </div>
         </section>
-        <footer>
-          <ActionButton type="button" variant="ghost" size="sm" @click="inviteOpen = false">취소</ActionButton>
-          <ActionButton type="submit" variant="primary" size="sm" :disabled="!inviteUserId">초대</ActionButton>
-        </footer>
+        <footer><button type="button" class="ghost-button" @click="inviteOpen = false">취소</button><button type="submit" class="primary-button small" :disabled="!inviteUserId">초대</button></footer>
       </form>
     </div>
     <div class="toast-stack" aria-live="polite">
@@ -281,17 +266,19 @@
         <span>{{ toast.message }}</span>
       </div>
     </div>
+    <ConfirmDialog v-if="confirmDialog" v-bind="confirmDialog" @cancel="cancelConfirm" @confirm="acceptConfirm" />
   </section>
 </template>
 
 <script setup>
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { Download, FileSpreadsheet, FileText, FileType2, FolderKanban, Info, MoreHorizontal, Plus, Search, Trash2, Upload, X } from '@lucide/vue'
-import ActionButton from '../../components/common/ActionButton.vue'
+import ConfirmDialog from '../../components/common/ConfirmDialog.vue'
 import {
   changeSharedWorkspaceAudience,
   addSharedWorkspaceFileVersion,
   createSharedWorkspace,
+  deleteSharedWorkspace,
   deleteSharedWorkspaceFile,
   downloadSharedWorkspaceFile,
   getSharedWorkspaceFileVersions,
@@ -306,14 +293,11 @@ import {
 import { previewKind, resolveBlobFileName, saveBlob } from '../../lib/file-actions'
 import { getUserSummary, searchUsers } from '../../lib/users'
 import { formatKstDateTime } from '../../utils/dateTime'
-import {
-  fallbackSharedFiles,
-  fallbackSharedMembers,
-  fallbackSharedVersions,
-  fallbackSharedWorkspaces,
-  fallbackUserSearch,
-  withFallback,
-} from '../../data/mailWorkspaceFallbacks'
+import { useAuthStore } from '../../stores/auth'
+import { useConfirmDialog } from '../../composables/useConfirmDialog'
+
+const auth = useAuthStore()
+const { confirmDialog, requestConfirm, cancelConfirm, acceptConfirm } = useConfirmDialog()
 
 const spaces = ref([])
 const activeSpaceId = ref('')
@@ -338,7 +322,7 @@ const uploadOpen = ref(false)
 const inviteOpen = ref(false)
 const uploadInput = ref(null)
 const uploadLoading = ref(false)
-const spaceDraft = ref({ name: '', description: '' })
+const spaceDraft = ref({ name: '' })
 const uploadDraft = ref({ files: [] })
 const createMemberKeyword = ref('')
 const createMemberCandidates = ref([])
@@ -352,10 +336,10 @@ const inviteSearchOpen = ref(false)
 const inviteSearchRoot = ref(null)
 const userMap = ref(new Map())
 const errorMessage = ref('')
-const createErrorMessage = ref('')
 const toasts = ref([])
 
 const activeSpace = computed(() => spaces.value.find((space) => space.workspaceId === activeSpaceId.value))
+const isActiveSpaceOwner = computed(() => Boolean(activeSpace.value?.ownerUserId && activeSpace.value.ownerUserId === auth.user?.userId))
 const filteredFiles = computed(() => files.value.filter((file) => !keyword.value.trim() || file.originalFileName.toLowerCase().includes(keyword.value.trim().toLowerCase())))
 const memberRows = computed(() => members.value.map((member) => {
   const user = userMap.value.get(member.userId) || {}
@@ -374,8 +358,6 @@ const versionPreviewText = computed(() => {
     `버전: ${selectedVersion.value.version}`,
     `작성자: ${userLabel(selectedVersion.value.uploaderUserId)}`,
     `변경 내용: ${selectedVersion.value.changeMemo || '변경 메모 없음'}`,
-    '',
-    '이 영역은 파일 원본 미리보기 API가 연결되기 전까지 버전 메타데이터와 변경 메모를 기반으로 내용을 확인하는 목업입니다.',
   ].join('\n')
 })
 
@@ -409,29 +391,43 @@ async function loadSpaces() {
   errorMessage.value = ''
   try {
     spaces.value = await getSharedWorkspaces()
-    if (!spaces.value.length) spaces.value = fallbackSharedWorkspaces()
-    await Promise.all(spaces.value.map((space) => loadFilesForSpace(space.workspaceId, false)))
-    if (!activeSpaceId.value && spaces.value[0]) await selectSpace(spaces.value[0].workspaceId)
   } catch (error) {
-    spaces.value = fallbackSharedWorkspaces()
-    await Promise.all(spaces.value.map((space) => loadFilesForSpace(space.workspaceId, false)))
-    if (!activeSpaceId.value && spaces.value[0]) await selectSpace(spaces.value[0].workspaceId)
-    errorMessage.value = `${error?.message || '공유 워크스페이스를 불러오지 못했습니다.'} 테스트용 더미 데이터를 표시합니다.`
+    spaces.value = []
+    activeSpaceId.value = ''
+    files.value = []
+    members.value = []
+    errorMessage.value = error?.message || '공유 워크스페이스를 불러오지 못했습니다.'
+    return
+  }
+
+  const fileResults = await Promise.allSettled(
+    spaces.value.map((space) => loadFilesForSpace(space.workspaceId, false)),
+  )
+  if (fileResults.some((result) => result.status === 'rejected')) {
+    errorMessage.value = '일부 공유 프로젝트의 자료를 불러오지 못했습니다. 새로고침 후 다시 확인해 주세요.'
+  }
+  if (!activeSpaceId.value && spaces.value[0]) {
+    await selectSpace(spaces.value[0].workspaceId)
   }
 }
 
 async function selectSpace(spaceId) {
   activeSpaceId.value = spaceId
-  files.value = await loadFilesForSpace(spaceId, true)
-  members.value = await withFallback(() => getSharedWorkspaceMembers(spaceId), () => fallbackSharedMembers(spaceId))
-  if (!members.value.length) members.value = fallbackSharedMembers(spaceId)
+  const [fileResult, memberResult] = await Promise.allSettled([
+    loadFilesForSpace(spaceId, true),
+    getSharedWorkspaceMembers(spaceId),
+  ])
+  files.value = fileResult.status === 'fulfilled' ? fileResult.value : []
+  members.value = memberResult.status === 'fulfilled' ? memberResult.value : []
+  if (fileResult.status === 'rejected' || memberResult.status === 'rejected') {
+    errorMessage.value = '선택한 공유 프로젝트의 자료를 불러오지 못했습니다.'
+  }
   await Promise.all([...members.value.map((member) => member.userId), ...files.value.map((file) => file.uploaderUserId)].map(cacheUser))
 }
 
 async function loadFilesForSpace(spaceId, useCache) {
   if (useCache && filesBySpace.value.has(spaceId)) return filesBySpace.value.get(spaceId)
-  let loaded = await withFallback(() => getSharedWorkspaceFiles(spaceId), () => fallbackSharedFiles(spaceId))
-  if (!loaded.length) loaded = fallbackSharedFiles(spaceId)
+  const loaded = await getSharedWorkspaceFiles(spaceId)
   filesBySpace.value = new Map(filesBySpace.value).set(spaceId, loaded)
   return loaded
 }
@@ -442,8 +438,12 @@ async function openFile(file) {
   versionDraft.value = { file: null, newVersion: '', changeMemo: '' }
   versionUploadOpen.value = false
   await loadFilePreview(file)
-  versions.value = await withFallback(() => getSharedWorkspaceFileVersions(activeSpaceId.value, file.fileId), () => fallbackSharedVersions(file))
-  if (!versions.value.length) versions.value = fallbackSharedVersions(file)
+  try {
+    versions.value = await getSharedWorkspaceFileVersions(activeSpaceId.value, file.fileId)
+  } catch (error) {
+    versions.value = []
+    showToast('버전 이력 조회 실패', error?.message || '버전 이력을 불러오지 못했습니다.')
+  }
   selectedVersion.value = versions.value[0] || null
   await Promise.all(versions.value.map((version) => cacheUser(version.uploaderUserId)))
 }
@@ -456,8 +456,12 @@ async function openFileInfo(file) {
   filePreviewText.value = ''
   filePreviewError.value = ''
   filePreviewLoading.value = false
-  versions.value = await withFallback(() => getSharedWorkspaceFileVersions(activeSpaceId.value, file.fileId), () => fallbackSharedVersions(file))
-  if (!versions.value.length) versions.value = fallbackSharedVersions(file)
+  try {
+    versions.value = await getSharedWorkspaceFileVersions(activeSpaceId.value, file.fileId)
+  } catch (error) {
+    versions.value = []
+    showToast('버전 이력 조회 실패', error?.message || '버전 이력을 불러오지 못했습니다.')
+  }
   selectedVersion.value = versions.value[0] || null
   await Promise.all(versions.value.map((version) => cacheUser(version.uploaderUserId)))
 }
@@ -506,40 +510,20 @@ async function submitNewVersion() {
 }
 
 function openCreate() {
-  spaceDraft.value = { name: '', description: '' }
+  spaceDraft.value = { name: '' }
   createSelectedMembers.value = []
   createMemberKeyword.value = ''
   createMemberCandidates.value = []
   createMemberSearchOpen.value = false
-  createErrorMessage.value = ''
   createOpen.value = true
 }
 
 async function createSpace() {
-  const name = spaceDraft.value.name.trim()
-  const description = spaceDraft.value.description.trim()
-  if (!name) {
-    createErrorMessage.value = '프로젝트 이름을 입력해 주세요.'
-    return
-  }
-  if (name.length > 100) {
-    createErrorMessage.value = '프로젝트 이름은 100자 이하여야 합니다.'
-    return
-  }
-  if (description.length > 1000) {
-    createErrorMessage.value = '프로젝트 설명은 1000자 이하여야 합니다.'
-    return
-  }
-  if (spaces.value.some((space) => space.name?.trim().toLowerCase() === name.toLowerCase())) {
-    createErrorMessage.value = '같은 이름의 프로젝트가 이미 있습니다.'
-    return
-  }
+  if (!spaceDraft.value.name.trim()) return
   errorMessage.value = ''
-  createErrorMessage.value = ''
   try {
     const created = await createSharedWorkspace({
-      name,
-      description: description || null,
+      name: spaceDraft.value.name.trim(),
     })
     const selectedMembers = [...createSelectedMembers.value]
     const inviteResults = await Promise.allSettled(
@@ -551,7 +535,7 @@ async function createSpace() {
     await selectSpace(created.workspaceId)
     showToast('프로젝트 생성 완료', selectedMembers.length ? `${created.name} · 멤버 ${invitedCount}/${selectedMembers.length}명 초대` : created.name)
   } catch (error) {
-    createErrorMessage.value = error?.message || '공유 프로젝트 생성에 실패했습니다.'
+    errorMessage.value = error?.message || '공유 프로젝트 생성에 실패했습니다.'
   }
 }
 
@@ -652,6 +636,12 @@ async function downloadFile(file) {
 
 async function removeFile(file) {
   if (!activeSpaceId.value || !file?.fileId) return
+  const confirmed = await requestConfirm({
+    title: '공유 파일을 삭제할까요?',
+    message: `'${file.originalFileName}'은 프로젝트에서 삭제되며 복구할 수 없습니다.`,
+    confirmLabel: '파일 삭제',
+  })
+  if (!confirmed) return
   await deleteSharedWorkspaceFile(activeSpaceId.value, file.fileId)
   fileActionFileId.value = ''
   if (openDoc.value?.fileId === file.fileId) closeDrawer()
@@ -703,18 +693,17 @@ function removeCreateMember(userId) {
 
 async function inviteMember() {
   if (!activeSpaceId.value || !inviteUserId.value) return
-  let mocked = false
   try {
     await inviteSharedWorkspaceMember(activeSpaceId.value, inviteUserId.value)
-  } catch {
-    addMockMember(inviteUserId.value)
-    mocked = true
+  } catch (error) {
+    showToast('멤버 초대 실패', error?.message || '공유 프로젝트 멤버를 추가하지 못했습니다.')
+    return
   }
   inviteUserId.value = ''
   userKeyword.value = ''
   userCandidates.value = []
   inviteSearchOpen.value = false
-  if (!mocked) await selectSpace(activeSpaceId.value)
+  await selectSpace(activeSpaceId.value)
   showToast('멤버 초대 완료', '공유 프로젝트 멤버를 추가했습니다.')
 }
 
@@ -723,7 +712,7 @@ function selectInviteUser(user) {
 }
 
 async function loadInviteCandidates(keyword) {
-  const data = await withFallback(() => searchUsers({ keyword, size: 20 }), () => fallbackUserSearch({ keyword, size: 20 }))
+  const data = await searchUsers({ keyword, size: 20 }).catch(() => ({ items: [] }))
   const memberIds = new Set(members.value.map((member) => member.userId))
   userCandidates.value = (data.items || []).filter((user) => !memberIds.has(user.userId))
   userCandidates.value.forEach((user) => {
@@ -732,7 +721,7 @@ async function loadInviteCandidates(keyword) {
 }
 
 async function loadCreateMemberCandidates(keyword) {
-  const data = await withFallback(() => searchUsers({ keyword, size: 20 }), () => fallbackUserSearch({ keyword, size: 20 }))
+  const data = await searchUsers({ keyword, size: 20 }).catch(() => ({ items: [] }))
   const selectedIds = new Set(createSelectedMembers.value.map((member) => member.userId))
   createMemberCandidates.value = (data.items || []).filter((user) => !selectedIds.has(user.userId))
   createMemberCandidates.value.forEach((user) => {
@@ -760,6 +749,12 @@ function closeInviteSearchOnOutside(event) {
 }
 
 async function removeMember(userId) {
+  const confirmed = await requestConfirm({
+    title: '프로젝트 멤버를 삭제할까요?',
+    message: `${userLabel(userId)}님은 이 프로젝트의 공유 자료에 접근할 수 없게 됩니다.`,
+    confirmLabel: '멤버 삭제',
+  })
+  if (!confirmed) return
   try {
     await removeSharedWorkspaceMember(activeSpaceId.value, userId)
     await selectSpace(activeSpaceId.value)
@@ -769,9 +764,25 @@ async function removeMember(userId) {
   showToast('멤버 삭제 완료', '공유 프로젝트 멤버를 삭제했습니다.')
 }
 
-function addMockMember(userId) {
-  if (members.value.some((member) => member.userId === userId)) return
-  members.value = [...members.value, { userId, role: 'MEMBER' }]
+async function removeActiveSpace() {
+  if (!activeSpace.value || !isActiveSpaceOwner.value) return
+  const target = activeSpace.value
+  const confirmed = await requestConfirm({
+    title: '공유 프로젝트를 삭제할까요?',
+    message: `'${target.name}' 프로젝트와 연결된 자료가 목록에서 제거됩니다. 이 작업은 생성자만 실행할 수 있습니다.`,
+    confirmLabel: '프로젝트 삭제',
+  })
+  if (!confirmed) return
+
+  await deleteSharedWorkspace(target.workspaceId)
+  spaces.value = spaces.value.filter((space) => space.workspaceId !== target.workspaceId)
+  filesBySpace.value.delete(target.workspaceId)
+  activeSpaceId.value = ''
+  files.value = []
+  members.value = []
+  closeDrawer()
+  if (spaces.value[0]) await selectSpace(spaces.value[0].workspaceId)
+  showToast('프로젝트 삭제 완료', target.name)
 }
 
 function showToast(title, message) {

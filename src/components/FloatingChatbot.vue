@@ -3,10 +3,11 @@
     v-if="!open"
     type="button"
     class="chatbot-floating-button"
-    aria-label="AI 챗봇 열기"
+    :aria-label="hasCompletedResponse ? 'AI 챗봇 응답 완료, 열기' : 'AI 챗봇 열기'"
     @click="openChatbot"
   >
     <MessageSquare :size="22" />
+    <span v-if="hasCompletedResponse" class="chatbot-complete-indicator" aria-hidden="true"></span>
   </button>
 
   <div v-else class="chatbot-floating-layer">
@@ -30,17 +31,17 @@
         <div v-if="messages.length === 0" class="chatbot-message assistant">
           <div class="chatbot-avatar"><Sparkles :size="15" /></div>
           <div class="chatbot-bubble">
-            <p>안녕하세요. 저는 Monday예요. 열람 권한이 있는 회의록, 메일, 개인/공유 워크스페이스 자료를 기반으로 필요한 내용을 찾아드릴게요.</p>
+            <p class="chat-answer">안녕하세요. 저는 Monday예요. 열람 권한이 있는 회의록, 메일, 개인/공유 워크스페이스 자료를 기반으로 필요한 내용을 찾아드릴게요.</p>
           </div>
         </div>
 
         <div v-for="message in messages" :key="message.id" :class="['chatbot-message', message.role]">
           <div v-if="message.role === 'assistant'" class="chatbot-avatar"><Sparkles :size="15" /></div>
           <div class="chatbot-bubble">
-            <p>{{ message.content }}</p>
-            <div v-if="sourceLabel(message.sources)" class="chatbot-source-line">
+            <p :class="{ 'chat-answer': message.role === 'assistant' }">{{ message.content }}</p>
+            <div v-if="formatChatbotSourceLabel(message.sources)" class="chatbot-source-line">
               <FileText :size="14" />
-              <span>{{ sourceLabel(message.sources) }}</span>
+              <span>{{ formatChatbotSourceLabel(message.sources) }}</span>
             </div>
           </div>
         </div>
@@ -71,6 +72,7 @@
 import { nextTick, ref } from 'vue'
 import { FileText, MessageSquare, Send, Sparkles, X } from '@lucide/vue'
 import { askChatbot } from '../lib/chatbot'
+import { formatChatbotSourceLabel } from '../lib/chatbot-sources'
 
 const open = ref(false)
 const messages = ref([])
@@ -78,9 +80,11 @@ const question = ref('')
 const loading = ref(false)
 const errorMessage = ref('')
 const messageScroll = ref(null)
+const hasCompletedResponse = ref(false)
 
 async function openChatbot() {
   open.value = true
+  hasCompletedResponse.value = false
   await scrollToBottom()
 }
 
@@ -106,6 +110,7 @@ async function sendQuestion() {
       sources: response.sources || [],
       model: response.model,
     })
+    if (!open.value) hasCompletedResponse.value = true
   } catch (error) {
     errorMessage.value = error?.message || '챗봇 답변을 생성하지 못했습니다.'
   } finally {
@@ -117,6 +122,7 @@ async function sendQuestion() {
 function clearThread() {
   messages.value = []
   errorMessage.value = ''
+  hasCompletedResponse.value = false
 }
 
 function handleComposerEnter(event) {
@@ -130,12 +136,4 @@ async function scrollToBottom() {
   if (messageScroll.value) messageScroll.value.scrollTop = messageScroll.value.scrollHeight
 }
 
-function sourceLabel(sources = []) {
-  if (!sources.length) return ''
-  const sorted = [...sources].sort((sourceA, sourceB) => (sourceA.displayOrder ?? 0) - (sourceB.displayOrder ?? 0))
-  const primaryName = sorted[0].title || sorted[0].type || '자료'
-  const restCount = sorted.length - 1
-  // 출처가 여러 개면 대표 1개만 보여주고 나머지는 "외 N개"로 요약한다.
-  return restCount > 0 ? `출처: ${primaryName} 외 ${restCount}개` : `출처: ${primaryName}`
-}
 </script>
