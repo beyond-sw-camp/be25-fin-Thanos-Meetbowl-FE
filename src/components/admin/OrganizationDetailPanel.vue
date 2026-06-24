@@ -148,8 +148,8 @@ const memberSectionTitle = computed(() => {
   min-height: 0;
   display: grid;
   align-content: start;
-  gap: 18px;
-  padding: 20px;
+  gap: 10px;
+  padding: 16px;
   background: linear-gradient(180deg, #ffffff 0%, #fbfcfe 100%);
   overflow-y: auto;
 }
@@ -170,10 +170,10 @@ const memberSectionTitle = computed(() => {
 
 .organization-detail-panel__summary {
   border: 1px solid var(--border);
-  border-radius: 18px;
+  border-radius: 14px;
   background: #ffffff;
-  padding: 18px;
-  box-shadow: 0 12px 28px rgba(15, 23, 42, 0.05);
+  padding: 14px;
+  box-shadow: 0 10px 22px rgba(15, 23, 42, 0.04);
 }
 
 .organization-detail-panel__summary.is-department {
@@ -202,20 +202,20 @@ const memberSectionTitle = computed(() => {
 }
 
 .organization-detail-panel__summary h3 {
-  margin-top: 8px;
-  font-size: 22px;
+  margin-top: 6px;
+  font-size: 18px;
 }
 
 .organization-detail-panel__summary p:last-child {
-  margin-top: 10px;
+  margin-top: 8px;
   color: var(--muted-foreground);
-  font-size: 13px;
-  line-height: 1.6;
+  font-size: 12px;
+  line-height: 1.5;
 }
 
 .organization-detail-panel__stats {
   display: grid;
-  gap: 10px;
+  gap: 8px;
   margin: 0;
 }
 
@@ -225,9 +225,10 @@ const memberSectionTitle = computed(() => {
   gap: 8px 12px;
   align-items: center;
   border: 1px solid var(--border);
-  border-radius: 14px;
+  border-radius: 12px;
   background: #ffffff;
-  padding: 14px 16px;
+  min-height: 40px;
+  padding: 10px 12px;
 }
 
 .organization-detail-panel__stats dt {
@@ -244,7 +245,7 @@ const memberSectionTitle = computed(() => {
 
 .organization-detail-panel__section {
   display: grid;
-  gap: 10px;
+  gap: 8px;
 }
 
 .organization-detail-panel__section h4 {
@@ -257,7 +258,7 @@ const memberSectionTitle = computed(() => {
   margin: 0;
   padding: 0;
   display: grid;
-  gap: 10px;
+  gap: 8px;
 }
 
 .organization-detail-panel__list li {
@@ -266,9 +267,9 @@ const memberSectionTitle = computed(() => {
   gap: 12px;
   align-items: flex-start;
   border: 1px solid var(--border);
-  border-radius: 14px;
+  border-radius: 12px;
   background: #ffffff;
-  padding: 14px 16px;
+  padding: 10px 12px;
 }
 
 .organization-detail-panel__list li span {
@@ -292,12 +293,12 @@ const memberSectionTitle = computed(() => {
 
 .organization-detail-panel__empty {
   border: 1px dashed var(--border);
-  border-radius: 16px;
+  border-radius: 12px;
   background: #f8fafc;
-  padding: 22px 18px;
+  padding: 16px 14px;
   color: var(--muted-foreground);
-  font-size: 13px;
-  line-height: 1.7;
+  font-size: 12px;
+  line-height: 1.6;
 }
 
 .organization-detail-panel.is-drawer {

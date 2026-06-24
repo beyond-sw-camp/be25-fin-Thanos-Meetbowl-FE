@@ -68,7 +68,11 @@
               <span class="organization-tree-navigation__badge">{{ team.memberCount }}명</span>
             </button>
 
-            <div v-if="team.members.length" class="organization-tree-navigation__members" role="group">
+            <div
+              v-if="team.members.length && isTeamExpanded(team.key, selectedNode)"
+              class="organization-tree-navigation__members"
+              role="group"
+            >
               <button
                 v-for="member in team.members"
                 :key="member.key"
@@ -96,9 +100,17 @@
 defineProps({
   chartData: { type: Object, required: true },
   selectedNodeKey: { type: String, default: '' },
+  selectedNode: { type: Object, default: null },
 })
 
 defineEmits(['select'])
+
+function isTeamExpanded(teamKey, selectedNode) {
+  if (!selectedNode) return false
+  if (selectedNode.type === 'team') return selectedNode.key === teamKey
+  if (selectedNode.type === 'member') return selectedNode.parentKey === teamKey
+  return false
+}
 </script>
 
 <style scoped>
@@ -113,7 +125,7 @@ defineEmits(['select'])
 .organization-tree-navigation__head {
   display: grid;
   gap: 6px;
-  padding: 20px 18px 16px;
+  padding: 16px 14px 12px;
   border-bottom: 1px solid var(--border);
 }
 
@@ -123,27 +135,27 @@ defineEmits(['select'])
 
 .organization-tree-navigation__head small {
   color: var(--muted-foreground);
-  font-size: 12px;
-  line-height: 1.6;
+  font-size: 11px;
+  line-height: 1.5;
 }
 
 .organization-tree-navigation__body {
   min-height: 0;
   overflow-y: auto;
   display: grid;
-  gap: 10px;
-  padding: 16px;
+  gap: 8px;
+  padding: 12px;
 }
 
 .organization-tree-navigation__branch {
   display: grid;
-  gap: 8px;
+  gap: 6px;
 }
 
 .organization-tree-navigation__children {
   display: grid;
-  gap: 8px;
-  padding-left: 18px;
+  gap: 6px;
+  padding-left: 16px;
   position: relative;
 }
 
@@ -159,15 +171,15 @@ defineEmits(['select'])
 
 .organization-tree-navigation__item {
   width: 100%;
-  min-height: 52px;
+  min-height: 46px;
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 12px;
+  gap: 10px;
   border: 1px solid var(--border);
-  border-radius: 14px;
+  border-radius: 12px;
   background: #ffffff;
-  padding: 12px 14px;
+  padding: 10px 12px;
   color: var(--foreground);
   text-align: left;
   transition: border-color 0.15s ease, background-color 0.15s ease, box-shadow 0.15s ease;
@@ -193,8 +205,8 @@ defineEmits(['select'])
 
 .organization-tree-navigation__members {
   display: grid;
-  gap: 6px;
-  padding-left: 18px;
+  gap: 4px;
+  padding-left: 16px;
   position: relative;
 }
 
@@ -210,8 +222,8 @@ defineEmits(['select'])
 
 .organization-tree-navigation__item--member {
   position: relative;
-  min-height: 44px;
-  padding: 10px 12px;
+  min-height: 34px;
+  padding: 7px 10px;
   background: #fcfcfd;
 }
 
@@ -229,7 +241,7 @@ defineEmits(['select'])
 .organization-tree-navigation__item.is-active {
   border-color: rgba(243, 115, 33, 0.45);
   background: #fff7ed;
-  box-shadow: 0 10px 24px rgba(243, 115, 33, 0.08);
+  box-shadow: 0 8px 18px rgba(243, 115, 33, 0.08);
 }
 
 .organization-tree-navigation__item:focus-visible {
@@ -240,12 +252,12 @@ defineEmits(['select'])
 .organization-tree-navigation__label-wrap {
   min-width: 0;
   display: grid;
-  gap: 4px;
+  gap: 2px;
 }
 
 .organization-tree-navigation__label {
   display: block;
-  font-size: 13px;
+  font-size: 12px;
   font-weight: 700;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -254,7 +266,7 @@ defineEmits(['select'])
 
 .organization-tree-navigation__label-wrap small {
   color: var(--muted-foreground);
-  font-size: 11px;
+  font-size: 10px;
   line-height: 1.4;
 }
 
@@ -262,20 +274,20 @@ defineEmits(['select'])
   flex: 0 0 auto;
   border-radius: 999px;
   background: #fff1e6;
-  padding: 4px 9px;
+  padding: 3px 8px;
   color: var(--primary-dark);
-  font-size: 11px;
+  font-size: 10px;
   font-weight: 700;
 }
 
 .organization-tree-navigation__empty {
-  margin: 16px;
+  margin: 12px;
   border: 1px dashed var(--border);
-  border-radius: 14px;
+  border-radius: 12px;
   background: #ffffff;
-  padding: 18px;
+  padding: 14px;
   color: var(--muted-foreground);
-  font-size: 13px;
+  font-size: 12px;
   line-height: 1.6;
   text-align: center;
 }

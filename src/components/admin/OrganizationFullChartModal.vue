@@ -40,12 +40,14 @@
         <OrganizationTreeNavigation
           :chart-data="chartData"
           :selected-node-key="selectedNodeKey"
+          :selected-node="selectedNode"
           @select="selectNode"
         />
 
         <OrganizationChartCanvas
           :chart-data="chartData"
           :selected-node-key="selectedNodeKey"
+          :selected-node="selectedNode"
           :show-detail-button="isCompactLayout"
           @select="selectNode"
           @toggle-detail="mobileDetailOpen = true"
@@ -161,8 +163,12 @@ onBeforeUnmount(() => {
 
 <style scoped>
 :deep(.organization-full-chart-modal) {
-  width: min(1680px, calc(100vw - 24px));
-  height: min(960px, calc(100vh - 24px));
+  position: fixed;
+  inset: 16px;
+  width: auto;
+  height: auto;
+  max-width: calc(100vw - 32px);
+  max-height: calc(100dvh - 32px);
   display: grid;
   grid-template-rows: auto minmax(0, 1fr);
   padding: 0;
@@ -229,12 +235,14 @@ onBeforeUnmount(() => {
 
 .organization-full-chart__body {
   min-height: 0;
+  min-width: 0;
   display: grid;
-  grid-template-columns: 260px minmax(0, 1fr) 320px;
+  grid-template-columns: 232px minmax(0, 1fr) 292px;
 }
 
 .organization-full-chart__detail {
   min-height: 0;
+  min-width: 0;
   overflow-y: auto;
   border-left: 1px solid var(--border);
   background: #fbfcfe;
@@ -274,12 +282,13 @@ onBeforeUnmount(() => {
 
 @media (max-width: 1180px) {
   :deep(.organization-full-chart-modal) {
-    width: calc(100vw - 20px);
-    height: calc(100vh - 20px);
+    inset: 12px;
+    max-width: calc(100vw - 24px);
+    max-height: calc(100dvh - 24px);
   }
 
   .organization-full-chart__body {
-    grid-template-columns: 260px minmax(0, 1fr);
+    grid-template-columns: 224px minmax(0, 1fr);
   }
 
   .organization-full-chart__detail {
@@ -290,7 +299,7 @@ onBeforeUnmount(() => {
 @media (max-width: 960px) {
   .organization-full-chart__body {
     grid-template-columns: 1fr;
-    grid-template-rows: 260px minmax(0, 1fr);
+    grid-template-rows: 220px minmax(0, 1fr);
   }
 }
 
