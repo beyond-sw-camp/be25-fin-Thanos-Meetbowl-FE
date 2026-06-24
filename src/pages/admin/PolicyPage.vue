@@ -15,7 +15,7 @@ import {
   validateRetentionPeriod,
 } from '../../lib/admin-mail-retention-policy-format.js'
 
-const props = defineProps({
+defineProps({
   title: { type: String, default: '' },
   description: { type: String, default: '' },
 })
@@ -232,7 +232,7 @@ function flashSavedState(target) {
     <article class="card settings-card policy-summary-card">
       <div class="settings-card-head">
         <div>
-          <h2>페이지 최종 수정일</h2>
+          <h2>페이지 최종 수정</h2>
           <p>보관 정책 페이지 전체의 마지막 변경 시각입니다.</p>
         </div>
         <div class="policy-summary-meta">
@@ -250,159 +250,235 @@ function flashSavedState(target) {
       <p class="policy-summary-note">회의록 보관, 백업 보관, 알림 기준, 메일 보관 정책을 한 화면에서 관리합니다.</p>
     </article>
 
-    <article class="card settings-card">
-      <div class="settings-card-head">
-        <div>
-          <h2>보관 정책</h2>
-          <p>회의록과 백업의 보관 기간, 그리고 관련 알림 기준을 설정합니다.</p>
-        </div>
-      </div>
-
-      <div class="policy-section-group">
-        <div class="policy-section">
-          <div class="settings-form-grid">
-            <label>회의록 보관 기간<input v-model.number="retentionPolicy.minutesRetentionDays" type="number"></label>
-            <label>백업 문서 보관 기간<input v-model.number="retentionPolicy.backupRetentionDays" type="number"></label>
-            <label>검토 지연 알림<input v-model.number="retentionPolicy.reviewHours" type="number"></label>
+    <div class="policy-card-grid">
+      <article class="card settings-card policy-card">
+        <div class="settings-card-head">
+          <div>
+            <h2>보관 정책</h2>
+            <p>회의록과 백업 문서 보관 기간, 검토 알림 기준을 정리합니다.</p>
           </div>
-          <p v-if="retentionPolicySaved" class="settings-success">정책을 저장했습니다.</p>
         </div>
 
-        <div class="policy-divider" />
+        <div class="policy-section-group">
+          <div class="policy-field-grid">
+            <label class="policy-input-field">
+              <span>회의록 보관 기간</span>
+              <input v-model.number="retentionPolicy.minutesRetentionDays" type="number">
+            </label>
+            <label class="policy-input-field">
+              <span>백업 문서 보관 기간</span>
+              <input v-model.number="retentionPolicy.backupRetentionDays" type="number">
+            </label>
+            <label class="policy-input-field">
+              <span>검토 지연 알림</span>
+              <input v-model.number="retentionPolicy.reviewHours" type="number">
+            </label>
+          </div>
 
-        <div class="policy-section">
-          <div class="settings-card-head compact">
-            <div>
-              <h3>알림 기준</h3>
-              <p>정책 변경 이력은 관리자 작업 로그에 남깁니다.</p>
+          <div class="policy-subsection">
+            <div class="settings-card-head compact">
+              <div>
+                <h3>알림 기준</h3>
+                <p>검토 완료 이후의 자동 메일 발송 여부를 함께 관리합니다.</p>
+              </div>
             </div>
+            <label class="settings-toggle-row policy-toggle-row">
+              <span>검토 완료 시 자동 공유 메일 발송</span>
+              <input v-model="retentionPolicy.autoShare" type="checkbox">
+            </label>
           </div>
-          <label class="settings-toggle-row">
-            <span>검토 완료 시 자동 공유 메일 발송</span>
-            <input v-model="retentionPolicy.autoShare" type="checkbox">
-          </label>
+
+          <p v-if="retentionPolicySaved" class="settings-success">정책을 저장했습니다.</p>
           <p v-if="notificationPolicySaved" class="settings-success">정책을 저장했습니다.</p>
         </div>
-      </div>
-    </article>
+      </article>
 
-    <article class="card settings-card">
-      <div class="settings-card-head">
-        <div>
-          <h2>메일 보관 설정</h2>
-          <p>메일 데이터의 보관 기간과 자동 삭제 여부를 설정합니다.</p>
-        </div>
-      </div>
-
-      <div v-if="mailLoading" class="empty-state mail-policy-state">
-        메일 보관 정책을 불러오는 중입니다.
-      </div>
-
-      <div v-else-if="mailForbidden" class="empty-state mail-policy-state">
-        <h3>접근 권한 없음</h3>
-        <p>{{ mailErrorMessage || '메일 보관 정책에 접근할 권한이 없습니다.' }}</p>
-      </div>
-
-      <div v-else-if="mailErrorMessage" class="mail-policy-state">
-        <div class="error-box">{{ mailErrorMessage }}</div>
-        <div class="admin-actions" style="margin-top: 12px;">
-          <button class="secondary-button" type="button" @click="loadMailPolicy">다시 시도</button>
-        </div>
-      </div>
-
-      <template v-else>
-        <div class="mail-policy-grid">
-          <div class="mail-policy-field">
-            <label class="mail-policy-label" for="mail-retention-years">보관 기간</label>
-            <div class="mail-policy-input-row">
-              <AppSelect
-                id="mail-retention-years"
-                class="mail-policy-select"
-                :value="mailForm.retentionYears"
-                @change="onRetentionYearsChange"
-              >
-                <option v-for="year in yearOptions" :key="`year-${year}`" :value="year">
-                  {{ year }}년
-                </option>
-              </AppSelect>
-
-              <AppSelect
-                class="mail-policy-select"
-                :value="mailForm.retentionMonths"
-                @change="onRetentionMonthsChange"
-              >
-                <option
-                  v-for="month in monthOptions"
-                  :key="`month-${month}`"
-                  :value="month"
-                  :disabled="isMonthOptionDisabled(month)"
-                >
-                  {{ month }}개월
-                </option>
-              </AppSelect>
-
-              <AppSelect
-                class="mail-policy-select"
-                :value="mailForm.retentionWeeks"
-                @change="onRetentionWeeksChange"
-              >
-                <option
-                  v-for="week in weekOptions"
-                  :key="`week-${week}`"
-                  :value="week"
-                  :disabled="isWeekOptionDisabled(week)"
-                >
-                  {{ week }}주
-                </option>
-              </AppSelect>
-            </div>
-            <small class="mail-policy-help">메일 보관 기간을 년/개월/주 단위로 선택합니다.</small>
-            <small class="mail-policy-help">현재 보관 기간: {{ retentionPeriodText }}</small>
-            <div v-if="retentionDaysError" class="error-box mail-policy-field-error">{{ retentionDaysError }}</div>
-          </div>
-
-          <div class="mail-policy-field">
-            <span class="mail-policy-label">자동 삭제</span>
-            <div class="mail-policy-choice-group" role="radiogroup" aria-label="자동 삭제">
-              <button
-                type="button"
-                class="mail-policy-choice"
-                :class="{ active: mailForm.autoDeleteEnabled }"
-                :aria-pressed="mailForm.autoDeleteEnabled"
-                @click="selectAutoDeleteOption(true)"
-              >
-                사용
-              </button>
-              <button
-                type="button"
-                class="mail-policy-choice"
-                :class="{ active: !mailForm.autoDeleteEnabled }"
-                :aria-pressed="!mailForm.autoDeleteEnabled"
-                @click="selectAutoDeleteOption(false)"
-              >
-                사용 안 함
-              </button>
-            </div>
+      <article class="card settings-card policy-card">
+        <div class="settings-card-head">
+          <div>
+            <h2>메일 보관 설정</h2>
+            <p>메일 데이터 보관 기간과 자동 삭제 여부를 compact하게 설정합니다.</p>
           </div>
         </div>
 
-        <p v-if="mailSuccessMessage" class="settings-success">{{ mailSuccessMessage }}</p>
-        <div v-if="mailSaveErrorMessage" class="error-box mail-policy-submit-error">{{ mailSaveErrorMessage }}</div>
-      </template>
-    </article>
+        <div v-if="mailLoading" class="empty-state mail-policy-state">
+          메일 보관 정책을 불러오는 중입니다.
+        </div>
+
+        <div v-else-if="mailForbidden" class="empty-state mail-policy-state">
+          <h3>접근 권한 없음</h3>
+          <p>{{ mailErrorMessage || '메일 보관 정책에 접근할 권한이 없습니다.' }}</p>
+        </div>
+
+        <div v-else-if="mailErrorMessage" class="mail-policy-state">
+          <div class="error-box">{{ mailErrorMessage }}</div>
+          <div class="admin-actions mail-policy-retry">
+            <button class="secondary-button" type="button" @click="loadMailPolicy">다시 시도</button>
+          </div>
+        </div>
+
+        <template v-else>
+          <div class="mail-policy-grid">
+            <div class="mail-policy-field">
+              <label class="mail-policy-label" for="mail-retention-years">보관 기간</label>
+              <div class="mail-policy-input-row">
+                <AppSelect
+                  id="mail-retention-years"
+                  class="mail-policy-select"
+                  :value="mailForm.retentionYears"
+                  @change="onRetentionYearsChange"
+                >
+                  <option v-for="year in yearOptions" :key="`year-${year}`" :value="year">
+                    {{ year }}년
+                  </option>
+                </AppSelect>
+
+                <AppSelect
+                  class="mail-policy-select"
+                  :value="mailForm.retentionMonths"
+                  @change="onRetentionMonthsChange"
+                >
+                  <option
+                    v-for="month in monthOptions"
+                    :key="`month-${month}`"
+                    :value="month"
+                    :disabled="isMonthOptionDisabled(month)"
+                  >
+                    {{ month }}개월
+                  </option>
+                </AppSelect>
+
+                <AppSelect
+                  class="mail-policy-select"
+                  :value="mailForm.retentionWeeks"
+                  @change="onRetentionWeeksChange"
+                >
+                  <option
+                    v-for="week in weekOptions"
+                    :key="`week-${week}`"
+                    :value="week"
+                    :disabled="isWeekOptionDisabled(week)"
+                  >
+                    {{ week }}주
+                  </option>
+                </AppSelect>
+              </div>
+              <div class="mail-policy-help-group">
+                <small class="mail-policy-help">메일 보관 기간을 년/개월/주 단위로 선택합니다.</small>
+                <small class="mail-policy-help">현재 보관 기간: {{ retentionPeriodText }}</small>
+              </div>
+              <div v-if="retentionDaysError" class="error-box mail-policy-field-error">{{ retentionDaysError }}</div>
+            </div>
+
+            <div class="mail-policy-field mail-policy-field--surface">
+              <span class="mail-policy-label">자동 삭제</span>
+              <div class="mail-policy-choice-group" role="radiogroup" aria-label="자동 삭제">
+                <button
+                  type="button"
+                  class="mail-policy-choice"
+                  :class="{ active: mailForm.autoDeleteEnabled }"
+                  :aria-pressed="mailForm.autoDeleteEnabled"
+                  @click="selectAutoDeleteOption(true)"
+                >
+                  사용
+                </button>
+                <button
+                  type="button"
+                  class="mail-policy-choice"
+                  :class="{ active: !mailForm.autoDeleteEnabled }"
+                  :aria-pressed="!mailForm.autoDeleteEnabled"
+                  @click="selectAutoDeleteOption(false)"
+                >
+                  사용 안 함
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <p v-if="mailSuccessMessage" class="settings-success">{{ mailSuccessMessage }}</p>
+          <div v-if="mailSaveErrorMessage" class="error-box mail-policy-submit-error">{{ mailSaveErrorMessage }}</div>
+        </template>
+      </article>
+    </div>
   </section>
 </template>
 
 <style scoped>
-.mail-policy-grid {
+.policy-card-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 16px 24px;
+  gap: 20px;
   align-items: start;
+}
+
+.policy-card {
+  height: fit-content;
+}
+
+.policy-summary-card {
+  display: grid;
+  gap: 10px;
+}
+
+.policy-summary-meta {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.policy-updated-at {
+  color: var(--primary-dark);
+  font-size: 16px;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+.policy-summary-note {
+  margin: 0;
+  color: var(--muted-foreground);
+  font-size: 13px;
+}
+
+.policy-section-group {
+  display: grid;
+  gap: 14px;
+}
+
+/* 정책 카드의 입력 필드를 균형 있게 묶어 좌우 밀도를 맞춘다. */
+.policy-field-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px 16px;
+}
+
+.policy-input-field {
+  min-width: 0;
+}
+
+.policy-subsection {
+  display: grid;
+  gap: 12px;
+  padding-top: 16px;
+  border-top: 1px solid var(--border);
+}
+
+.policy-toggle-row {
+  padding: 0;
+}
+
+.mail-policy-grid {
+  display: grid;
+  gap: 16px;
 }
 
 .mail-policy-state {
   margin-top: 8px;
+}
+
+.mail-policy-retry {
+  margin-top: 12px;
 }
 
 .mail-policy-field {
@@ -412,6 +488,11 @@ function flashSavedState(target) {
   min-width: 0;
 }
 
+.mail-policy-field--surface {
+  padding-top: 16px;
+  border-top: 1px solid var(--border);
+}
+
 .mail-policy-label {
   color: var(--foreground);
   font-size: 14px;
@@ -419,16 +500,14 @@ function flashSavedState(target) {
 }
 
 .mail-policy-input-row {
-  display: flex;
-  align-items: flex-start;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 10px;
-  flex-wrap: wrap;
 }
 
 .mail-policy-select {
-  width: 132px;
-  min-width: 120px;
-  max-width: 140px;
+  width: 100%;
+  min-width: 0;
   height: 40px;
   border: 1px solid var(--border);
   border-radius: 8px;
@@ -463,6 +542,11 @@ function flashSavedState(target) {
   cursor: not-allowed;
 }
 
+.mail-policy-help-group {
+  display: grid;
+  gap: 4px;
+}
+
 .mail-policy-help {
   color: var(--muted-foreground);
   font-size: 12px;
@@ -492,76 +576,6 @@ function flashSavedState(target) {
   border-color: var(--primary);
   background: color-mix(in srgb, var(--primary) 10%, white);
   color: var(--primary);
-}
-
-.mail-policy-meta {
-  margin-top: 20px;
-  padding-top: 16px;
-  border-top: 1px solid var(--border);
-  display: grid;
-  grid-template-columns: minmax(0, 1fr);
-  gap: 12px;
-}
-
-.mail-policy-meta-item {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  max-width: 240px;
-}
-
-.mail-policy-meta-label {
-  color: var(--muted-foreground);
-  font-size: 12px;
-  font-weight: 700;
-}
-
-.mail-policy-meta-value {
-  color: var(--foreground);
-  font-size: 15px;
-  font-weight: 700;
-  word-break: break-all;
-}
-
-.policy-summary-card {
-  display: grid;
-  gap: 10px;
-}
-
-.policy-summary-meta {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  flex-wrap: wrap;
-  justify-content: flex-end;
-}
-
-.policy-updated-at {
-  color: var(--primary-dark);
-  font-size: 16px;
-  font-weight: 800;
-  white-space: nowrap;
-}
-
-.policy-summary-note {
-  margin: 0;
-  color: var(--muted-foreground);
-  font-size: 13px;
-}
-
-.policy-section-group {
-  display: grid;
-  gap: 18px;
-}
-
-.policy-divider {
-  height: 1px;
-  background: var(--border);
-}
-
-.policy-section {
-  display: grid;
-  gap: 14px;
 }
 
 .settings-card-head.compact {
@@ -597,9 +611,15 @@ function flashSavedState(target) {
   max-width: 520px;
 }
 
+@media (max-width: 960px) {
+  .policy-card-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
 @media (max-width: 768px) {
-  .mail-policy-grid,
-  .mail-policy-meta {
+  .policy-field-grid,
+  .mail-policy-input-row {
     grid-template-columns: 1fr;
   }
 
@@ -607,21 +627,8 @@ function flashSavedState(target) {
     justify-content: flex-start;
   }
 
-  .mail-policy-input-row {
-    gap: 8px;
-  }
-
   .mail-policy-choice {
     width: auto;
-  }
-
-  .mail-policy-select {
-    flex: 1 1 140px;
-    max-width: none;
-  }
-
-  .mail-policy-meta-item {
-    max-width: none;
   }
 }
 </style>
