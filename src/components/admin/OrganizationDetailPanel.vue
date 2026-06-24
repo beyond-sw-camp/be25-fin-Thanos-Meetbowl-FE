@@ -5,47 +5,49 @@
       <span v-if="selectedNode">{{ subtitle }}</span>
     </div>
 
-    <div v-if="!selectedNode" class="organization-detail-panel__empty">
-      조직도에서 부서, 팀, 구성원을 선택하면 상세 정보가 표시됩니다.
+    <div class="organization-detail-panel__content">
+      <div v-if="!selectedNode" class="organization-detail-panel__empty">
+        조직도에서 부서, 팀, 구성원을 선택하면 상세 정보가 표시됩니다.
+      </div>
+
+      <template v-else>
+        <article class="organization-detail-panel__summary" :class="`is-${selectedNode.type}`">
+          <p class="organization-detail-panel__eyebrow">{{ summaryEyebrow }}</p>
+          <h3>{{ selectedNode.name }}</h3>
+          <p>{{ summaryDescription }}</p>
+        </article>
+
+        <dl class="organization-detail-panel__stats" v-if="summaryStats.length">
+          <div v-for="item in summaryStats" :key="item.label">
+            <dt>{{ item.label }}</dt>
+            <dd>{{ item.value }}</dd>
+          </div>
+        </dl>
+
+        <section v-if="teamList.length" class="organization-detail-panel__section">
+          <h4>하위 팀</h4>
+          <ul class="organization-detail-panel__list">
+            <li v-for="team in teamList" :key="team.key">
+              <span>{{ team.name }}</span>
+              <strong>{{ team.memberCount }}명</strong>
+            </li>
+          </ul>
+        </section>
+
+        <section v-if="memberList.length" class="organization-detail-panel__section">
+          <h4>{{ memberSectionTitle }}</h4>
+          <ul class="organization-detail-panel__list organization-detail-panel__list--members">
+            <li v-for="member in memberList" :key="member.key || member.userId">
+              <span>
+                <strong>{{ member.name }}</strong>
+                <small>{{ member.position || '-' }}</small>
+              </span>
+              <em v-if="member.email">{{ member.email }}</em>
+            </li>
+          </ul>
+        </section>
+      </template>
     </div>
-
-    <template v-else>
-      <article class="organization-detail-panel__summary" :class="`is-${selectedNode.type}`">
-        <p class="organization-detail-panel__eyebrow">{{ summaryEyebrow }}</p>
-        <h3>{{ selectedNode.name }}</h3>
-        <p>{{ summaryDescription }}</p>
-      </article>
-
-      <dl class="organization-detail-panel__stats" v-if="summaryStats.length">
-        <div v-for="item in summaryStats" :key="item.label">
-          <dt>{{ item.label }}</dt>
-          <dd>{{ item.value }}</dd>
-        </div>
-      </dl>
-
-      <section v-if="teamList.length" class="organization-detail-panel__section">
-        <h4>하위 팀</h4>
-        <ul class="organization-detail-panel__list">
-          <li v-for="team in teamList" :key="team.key">
-            <span>{{ team.name }}</span>
-            <strong>{{ team.memberCount }}명</strong>
-          </li>
-        </ul>
-      </section>
-
-      <section v-if="memberList.length" class="organization-detail-panel__section">
-        <h4>{{ memberSectionTitle }}</h4>
-        <ul class="organization-detail-panel__list organization-detail-panel__list--members">
-          <li v-for="member in memberList" :key="member.key || member.userId">
-            <span>
-              <strong>{{ member.name }}</strong>
-              <small>{{ member.position || '-' }}</small>
-            </span>
-            <em v-if="member.email">{{ member.email }}</em>
-          </li>
-        </ul>
-      </section>
-    </template>
   </section>
 </template>
 
@@ -152,27 +154,40 @@ const memberSectionTitle = computed(() => {
   --detail-row-height: 34px;
   min-height: 0;
   display: grid;
-  align-content: start;
+  grid-template-rows: auto minmax(0, 1fr);
   gap: var(--detail-panel-gap);
-  padding: var(--detail-panel-padding);
   background: #fbfcfe;
-  overflow-y: auto;
+  overflow: hidden;
 }
 
 .organization-detail-panel__head {
   display: grid;
+  align-content: center;
   gap: 3px;
+  min-height: var(--organization-panel-header-height, 62px);
+  padding: var(--organization-panel-header-padding-y, 10px) var(--organization-panel-header-padding-x, 14px);
+  border-bottom: 1px solid var(--border);
+  box-sizing: border-box;
 }
 
 .organization-detail-panel__head strong {
-  font-size: 16px;
+  font-size: 13px;
   line-height: 1.25;
 }
 
 .organization-detail-panel__head span {
   color: var(--muted-foreground);
-  font-size: 12px;
-  line-height: 1.35;
+  font-size: 11px;
+  line-height: 1.4;
+}
+
+.organization-detail-panel__content {
+  min-height: 0;
+  display: grid;
+  align-content: start;
+  gap: var(--detail-panel-gap);
+  padding: var(--detail-panel-padding);
+  overflow-y: auto;
 }
 
 .organization-detail-panel__summary {

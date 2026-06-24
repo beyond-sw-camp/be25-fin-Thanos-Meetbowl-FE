@@ -165,6 +165,11 @@ onBeforeUnmount(() => {
 <style scoped>
 :deep(.organization-full-chart-modal) {
   --organization-side-panel-width: v-bind(SIDE_PANEL_WIDTH);
+  --organization-panel-header-height: 62px;
+  --organization-panel-header-padding-x: 14px;
+  --organization-panel-header-padding-y: 10px;
+  --organization-panel-title-size: 13px;
+  --organization-panel-copy-size: 11px;
   position: fixed;
   inset: 16px;
   width: auto;
@@ -187,23 +192,25 @@ onBeforeUnmount(() => {
 
 .organization-full-chart__header {
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   justify-content: space-between;
   gap: 16px;
-  padding: 22px 24px 18px;
+  padding: 18px 20px 14px;
   border-bottom: 1px solid var(--border);
   background: #ffffff;
 }
 
 .organization-full-chart__header h2 {
   margin: 0;
-  font-size: 24px;
+  font-size: 22px;
+  line-height: 1.25;
 }
 
 .organization-full-chart__header p {
-  margin: 8px 0 0;
+  margin: 5px 0 0;
   color: var(--muted-foreground);
-  font-size: 14px;
+  font-size: 13px;
+  line-height: 1.4;
 }
 
 .organization-full-chart__header-actions {
@@ -240,6 +247,7 @@ onBeforeUnmount(() => {
   min-width: 0;
   display: grid;
   grid-template-columns: var(--organization-side-panel-width) minmax(0, 1fr) var(--organization-side-panel-width);
+  overflow: hidden;
 }
 
 .organization-full-chart__detail {
@@ -307,7 +315,7 @@ onBeforeUnmount(() => {
 
 @media (max-width: 640px) {
   .organization-full-chart__header {
-    padding: 18px 16px 14px;
+    padding: 16px 16px 12px;
   }
 
   .organization-full-chart__header h2 {

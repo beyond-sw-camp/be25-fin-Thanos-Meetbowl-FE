@@ -238,29 +238,33 @@ watch(
 .organization-chart-canvas__toolbar {
   display: flex;
   justify-content: space-between;
-  align-items: flex-start;
+  align-items: center;
   gap: 12px;
-  padding: 14px 16px 12px;
+  min-height: var(--organization-panel-header-height, 62px);
+  padding: var(--organization-panel-header-padding-y, 10px) var(--organization-panel-header-padding-x, 14px);
   border-bottom: 1px solid var(--border);
   background: #ffffff;
+  box-sizing: border-box;
 }
 
 .organization-chart-canvas__toolbar strong {
-  font-size: 14px;
+  font-size: var(--organization-panel-title-size, 13px);
   color: var(--org-text-strong);
+  line-height: 1.25;
 }
 
 .organization-chart-canvas__toolbar p {
-  margin: 4px 0 0;
+  margin: 3px 0 0;
   color: var(--org-text-muted);
-  font-size: 11px;
-  line-height: 1.45;
+  font-size: var(--organization-panel-copy-size, 11px);
+  line-height: 1.4;
 }
 
 .organization-chart-canvas__toolbar-actions {
   display: flex;
   align-items: center;
   gap: 8px;
+  align-self: stretch;
 }
 
 .organization-chart-canvas__zoom-controls {
@@ -640,7 +644,7 @@ watch(
 
 @media (max-width: 960px) {
   .organization-chart-canvas__toolbar {
-    padding: 12px 14px 10px;
+    padding: var(--organization-panel-header-padding-y, 10px) var(--organization-panel-header-padding-x, 14px);
   }
 
   .organization-chart-canvas__toolbar-actions {

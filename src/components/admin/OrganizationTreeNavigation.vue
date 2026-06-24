@@ -81,24 +81,28 @@ defineEmits(['select'])
   display: grid;
   grid-template-rows: auto minmax(0, 1fr);
   border-right: 1px solid var(--border);
-  background: linear-gradient(180deg, #fcfcfd 0%, #f8fafc 100%);
+  background: #f8fafc;
 }
 
 .organization-tree-navigation__head {
   display: grid;
-  gap: 4px;
-  padding: 14px 14px 10px;
+  align-content: center;
+  gap: 3px;
+  min-height: var(--organization-panel-header-height, 62px);
+  padding: var(--organization-panel-header-padding-y, 10px) var(--organization-panel-header-padding-x, 14px);
   border-bottom: 1px solid var(--border);
+  box-sizing: border-box;
 }
 
 .organization-tree-navigation__head strong {
-  font-size: 13px;
+  font-size: var(--organization-panel-title-size, 13px);
+  line-height: 1.25;
 }
 
 .organization-tree-navigation__head small {
   color: var(--muted-foreground);
-  font-size: 11px;
-  line-height: 1.45;
+  font-size: var(--organization-panel-copy-size, 11px);
+  line-height: 1.4;
 }
 
 .organization-tree-navigation__body {
