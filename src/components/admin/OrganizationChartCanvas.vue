@@ -258,13 +258,14 @@ watch(
 }
 
 .organization-chart-canvas__stage-shell {
-  width: 100%;
+  width: max-content;
+  min-width: 100%;
   display: grid;
-  justify-content: stretch;
+  justify-content: center;
 }
 
 .organization-chart-canvas__stage {
-  width: 100%;
+  width: max-content;
   display: grid;
   justify-items: center;
   gap: 28px;
@@ -288,24 +289,19 @@ watch(
 
 .organization-chart-canvas__departments {
   position: relative;
-  width: min(100%, 1120px);
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
-  align-items: start;
-  gap: 24px 28px;
+  display: flex;
+  align-items: flex-start;
+  gap: 24px;
   padding-top: 22px;
-}
-
-.organization-chart-canvas__departments::before {
-  content: none;
 }
 
 .organization-chart-canvas__department {
   position: relative;
-  min-width: 0;
+  width: 274px;
+  flex: 0 0 274px;
   display: grid;
   gap: 12px;
-  justify-items: stretch;
+  justify-items: center;
   padding-top: 22px;
 }
 
@@ -324,6 +320,8 @@ watch(
   display: flex;
   align-items: flex-start;
   gap: 14px;
+  justify-content: center;
+  width: 100%;
   padding-top: 16px;
 }
 
@@ -340,6 +338,7 @@ watch(
 .organization-chart-canvas__team-branch {
   min-width: 134px;
   max-width: 148px;
+  flex: 0 0 134px;
   display: grid;
   gap: 8px;
   align-content: start;
@@ -528,11 +527,6 @@ watch(
 
   .organization-chart-canvas__scroll {
     padding: 14px;
-  }
-
-  .organization-chart-canvas__departments {
-    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
-    gap: 20px;
   }
 
   .organization-chart-canvas__teams {
