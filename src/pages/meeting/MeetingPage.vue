@@ -1027,6 +1027,7 @@ import {
 import { Room, RoomEvent, Track, createLocalAudioTrack, createLocalVideoTrack } from 'livekit-client'
 import { useRoute, useRouter } from 'vue-router'
 import { API_BASE_URL, postJson } from '../../lib/api-client'
+import { getMeeting } from '../../lib/reservations'
 import {
   displayFinalizedCaptions,
   latestStreamingCaption,
@@ -1073,6 +1074,7 @@ const selectedAudioInput = ref('')
 const selectedAudioOutput = ref('')
 const selectedVideoInput = ref('')
 const loadingDevices = ref(false)
+const meetingTitleFromServer = ref('')
 const deviceStatus = ref('')
 const deviceError = ref(false)
 const testingAudio = ref(false)
@@ -1160,14 +1162,20 @@ const LOCAL_SPEECH_MEASUREMENT_SILENCE_MS = 160
 const LOCAL_SPEECH_TO_CAPTION_MATCH_WINDOW_MS = 15000
 const meetingTitle = computed(() => {
   const titleFromRoute = typeof route.query.title === 'string' ? route.query.title.trim() : ''
-  return titleFromRoute || 'Q2 캠페인 킥오프'
+  const titleFromConnection = String(meetingConnection.value?.title || '').trim()
+  return meetingTitleFromServer.value || titleFromConnection || titleFromRoute || ''
 })
 const meetingId = computed(() => String(route.params.meetingId || '').trim())
 const guestMeetingLink = computed(() => {
   if (!meetingId.value) return ''
   const path = guestMeetingRoute(meetingId.value)
   if (typeof window === 'undefined') return path
-  return new URL(path, window.location.origin).toString()
+  const url = new URL(path, window.location.origin)
+  const resolvedTitle = meetingTitle.value.trim()
+  if (resolvedTitle) {
+    url.searchParams.set('title', resolvedTitle)
+  }
+  return url.toString()
 })
 const isDedicatedMeetingWindow = computed(() => String(route.query.popup || '') === '1')
 const popupSessionId = computed(() => String(route.query.popupSession || '').trim())
@@ -2830,6 +2838,7 @@ async function connectMeetingRoom() {
   })
 
   meetingConnection.value = connection
+  meetingTitleFromServer.value = String(connection.title || '').trim()
   if (connection.participantName) {
     // 게스트의 기본 이름은 서버가 번호를 붙여 다시 정할 수 있으므로, 입장 직후 로컬 화면도 그 값으로 맞춘다.
     displayName.value = connection.participantName
@@ -2859,6 +2868,20 @@ async function connectMeetingRoom() {
   }
   meetingConnectionStatus.value = '회의 연결됨'
   pushSystemChat('회의에 입장했습니다.')
+}
+
+async function loadMeetingTitle() {
+  if (meetingTitleFromServer.value) return
+  const fallbackTitle = typeof route.query.title === 'string' ? route.query.title.trim() : ''
+  if (fallbackTitle) return
+  if (!auth.isAuthenticated || !meetingId.value) return
+
+  try {
+    const meeting = await getMeeting(meetingId.value)
+    meetingTitleFromServer.value = String(meeting?.title || '').trim()
+  } catch {
+    // 제목 조회는 부가 정보이므로 실패해도 회의 입장 흐름은 막지 않는다.
+  }
 }
 
 async function reportMeetingStarted() {
@@ -3459,6 +3482,7 @@ watch([meetingId, popupSessionId], () => {
 
 onMounted(() => {
   initializeDevices()
+  void loadMeetingTitle()
   navigator.mediaDevices?.addEventListener?.('devicechange', handleDeviceChange)
   window.addEventListener('beforeunload', handleBeforeUnload)
   window.addEventListener('resize', handleViewportResize)

@@ -61,6 +61,10 @@ export function openMeetingWindow(meetingId = '', options = {}) {
     returnTo: currentPath,
     popupSession: `${Date.now()}`,
   })
+  const resolvedTitle = String(options.title || '').trim()
+  if (resolvedTitle) {
+    popupQuery.set('title', resolvedTitle)
+  }
   const popupPath = `${path}?${popupQuery.toString()}`
   const features = [
     'popup=yes',
