@@ -1,5 +1,5 @@
 <script setup>
-import { computed, onMounted, reactive, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import Pagination from '../../components/common/Pagination.vue'
 import { getAdminAuditLogDetail, getAdminAuditLogs } from '../../lib/admin-audit-logs'
 import {
@@ -74,6 +74,11 @@ const filterForm = reactive({
   from: '',
   to: '',
 })
+const dateFilterDraft = reactive({
+  dateRange: 'last7Days',
+  from: '',
+  to: '',
+})
 
 const detailOpen = ref(false)
 const detailLoading = ref(false)
@@ -81,9 +86,12 @@ const detailError = ref('')
 const selectedLog = ref(null)
 const organizationReferenceMaps = ref(EMPTY_REFERENCE_MAPS)
 const organizationLookupLoading = ref(false)
+const datePopoverOpen = ref(false)
+const datePopoverRef = ref(null)
 
 const isAdmin = computed(() => auth.user?.role === 'ADMIN')
 const useCustomDateRange = computed(() => filterForm.dateRange === 'custom')
+const useCustomDateRangeDraft = computed(() => dateFilterDraft.dateRange === 'custom')
 const hasFilters = computed(() =>
   Boolean(
     filterForm.actionType ||
@@ -127,11 +135,25 @@ const additionalInfoItems = computed(() => {
 
   return items
 })
+const currentDateRangeLabel = computed(() => {
+  const option = DATE_RANGE_OPTIONS.find((item) => item.value === filterForm.dateRange)
+
+  if (filterForm.dateRange !== 'custom') return option?.label || '기간 선택'
+  if (!filterForm.from || !filterForm.to) return option?.label || '기간 선택'
+
+  return `${formatDateRangeSummary(filterForm.from)} - ${formatDateRangeSummary(filterForm.to)}`
+})
 
 onMounted(() => {
   applyDateRangePreset(filterForm.dateRange)
+  syncDateFilterDraft()
+  document.addEventListener('pointerdown', handleDocumentPointerDown)
   loadLogs()
   loadOrganizationReferenceMaps()
+})
+
+onBeforeUnmount(() => {
+  document.removeEventListener('pointerdown', handleDocumentPointerDown)
 })
 
 watch(pageNo, () => {
@@ -146,14 +168,6 @@ watch(pageSize, (value, previousValue) => {
   }
   loadLogs()
 })
-
-watch(
-  () => filterForm.dateRange,
-  (value, previousValue) => {
-    if (value === previousValue) return
-    applyDateRangePreset(value)
-  },
-)
 
 async function loadLogs() {
   if (!isAdmin.value) {
@@ -237,6 +251,7 @@ function resetFilters() {
   filterForm.result = ''
   filterForm.dateRange = 'last7Days'
   applyDateRangePreset(filterForm.dateRange)
+  syncDateFilterDraft()
   const shouldLoadImmediately = pageNo.value === 1 && pageSize.value === DEFAULT_PAGE_SIZE
 
   if (pageSize.value !== DEFAULT_PAGE_SIZE) {
@@ -320,18 +335,61 @@ function normalizeResultFilter(result) {
 }
 
 function applyDateRangePreset(value) {
+  applyDateRangePresetToTarget(filterForm, value)
+}
+
+function applyDateRangePresetToTarget(target, value) {
+  target.dateRange = value
+
   if (value === 'custom') {
-    if (!filterForm.from || !filterForm.to) {
+    if (!target.from || !target.to) {
       const range = createPresetDateRange('last7Days')
-      filterForm.from = range.from
-      filterForm.to = range.to
+      target.from = range.from
+      target.to = range.to
     }
     return
   }
 
   const range = createPresetDateRange(value)
-  filterForm.from = range.from
-  filterForm.to = range.to
+  target.from = range.from
+  target.to = range.to
+}
+
+function syncDateFilterDraft() {
+  dateFilterDraft.dateRange = filterForm.dateRange
+  dateFilterDraft.from = filterForm.from
+  dateFilterDraft.to = filterForm.to
+}
+
+function openDatePopover() {
+  syncDateFilterDraft()
+  datePopoverOpen.value = true
+}
+
+function closeDatePopover() {
+  datePopoverOpen.value = false
+}
+
+function selectDateRangeDraft(value) {
+  applyDateRangePresetToTarget(dateFilterDraft, value)
+}
+
+function applyDatePopover() {
+  filterForm.dateRange = dateFilterDraft.dateRange
+  filterForm.from = dateFilterDraft.from
+  filterForm.to = dateFilterDraft.to
+  closeDatePopover()
+}
+
+function cancelDatePopover() {
+  syncDateFilterDraft()
+  closeDatePopover()
+}
+
+function handleDocumentPointerDown(event) {
+  if (!datePopoverOpen.value) return
+  if (datePopoverRef.value?.contains(event.target)) return
+  cancelDatePopover()
 }
 
 function createPresetDateRange(preset) {
@@ -417,6 +475,15 @@ function toIsoUtc(value) {
 
   return date.toISOString()
 }
+
+function formatDateRangeSummary(value) {
+  if (!value) return ''
+
+  const [date, time = ''] = String(value).split('T')
+  if (!date) return ''
+
+  return time ? `${date} ${time}` : date
+}
 </script>
 
 <template>
@@ -475,16 +542,48 @@ function toIsoUtc(value) {
             </option>
           </select>
 
-          <select v-model="filterForm.dateRange" aria-label="기간 빠른 선택">
-            <option v-for="option in DATE_RANGE_OPTIONS" :key="option.value" :value="option.value">
-              {{ option.label }}
-            </option>
-          </select>
+          <div ref="datePopoverRef" class="date-filter-popover-wrap">
+            <button
+              type="button"
+              class="date-filter-trigger"
+              aria-label="기간 선택"
+              :aria-expanded="datePopoverOpen"
+              @click="datePopoverOpen ? cancelDatePopover() : openDatePopover()"
+            >
+              <span>{{ currentDateRangeLabel }}</span>
+              <small>{{ useCustomDateRange ? '직접 선택' : '빠른 선택' }}</small>
+            </button>
 
-          <template v-if="useCustomDateRange">
-            <input v-model="filterForm.from" type="datetime-local" aria-label="시작 기간" />
-            <input v-model="filterForm.to" type="datetime-local" aria-label="종료 기간" />
-          </template>
+            <div v-if="datePopoverOpen" class="date-filter-popover">
+              <div class="date-filter-option-list">
+                <button
+                  v-for="option in DATE_RANGE_OPTIONS"
+                  :key="option.value"
+                  type="button"
+                  :class="['date-filter-option', { active: dateFilterDraft.dateRange === option.value }]"
+                  @click="selectDateRangeDraft(option.value)"
+                >
+                  {{ option.label }}
+                </button>
+              </div>
+
+              <div v-if="useCustomDateRangeDraft" class="date-filter-custom-fields">
+                <label>
+                  <span>시작일</span>
+                  <input v-model="dateFilterDraft.from" type="datetime-local" aria-label="시작 기간" />
+                </label>
+                <label>
+                  <span>종료일</span>
+                  <input v-model="dateFilterDraft.to" type="datetime-local" aria-label="종료 기간" />
+                </label>
+              </div>
+
+              <div class="date-filter-popover-actions">
+                <button class="secondary-button" type="button" @click="cancelDatePopover">취소</button>
+                <button class="primary-button" type="button" @click="applyDatePopover">적용</button>
+              </div>
+            </div>
+          </div>
 
           <select v-model.number="pageSize" aria-label="페이지 크기">
             <option v-for="size in PAGE_SIZE_OPTIONS" :key="size" :value="size">
@@ -635,6 +734,7 @@ function toIsoUtc(value) {
 .admin-log-filter-form {
   width: 100%;
   display: flex;
+  flex-wrap: wrap;
   gap: 10px;
 }
 
@@ -648,6 +748,110 @@ function toIsoUtc(value) {
   background: white;
   padding: 0 12px;
   font: inherit;
+}
+
+.date-filter-popover-wrap {
+  position: relative;
+  flex: 1;
+  min-width: 0;
+}
+
+.date-filter-trigger {
+  width: 100%;
+  min-height: 38px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: white;
+  padding: 0 12px;
+  color: var(--foreground);
+  text-align: left;
+}
+
+.date-filter-trigger span,
+.date-filter-trigger small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.date-filter-trigger span {
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.date-filter-trigger small {
+  color: var(--muted-foreground);
+  font-size: 12px;
+}
+
+.date-filter-popover {
+  position: absolute;
+  top: calc(100% + 8px);
+  left: 0;
+  z-index: 15;
+  width: min(360px, calc(100vw - 48px));
+  display: grid;
+  gap: 14px;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: white;
+  box-shadow: 0 20px 50px rgba(15, 23, 42, 0.18);
+  padding: 14px;
+}
+
+.date-filter-option-list {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.date-filter-option {
+  min-height: 38px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: white;
+  padding: 0 12px;
+  color: var(--foreground);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.date-filter-option.active {
+  border-color: rgba(243, 115, 33, 0.45);
+  background: #fff7ed;
+  color: var(--primary-dark);
+}
+
+.date-filter-custom-fields {
+  display: grid;
+  gap: 10px;
+}
+
+.date-filter-custom-fields label {
+  display: grid;
+  gap: 6px;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--muted-foreground);
+}
+
+.date-filter-custom-fields input {
+  width: 100%;
+}
+
+.date-filter-popover-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.date-filter-popover-actions button {
+  flex: 0 0 auto;
+  min-width: 72px;
 }
 
 .admin-log-filter-form button {
@@ -972,6 +1176,16 @@ function toIsoUtc(value) {
 }
 
 @media (max-width: 959px) {
+  .admin-log-filter-form {
+    align-items: stretch;
+  }
+
+  .date-filter-popover {
+    right: 0;
+    left: auto;
+    width: min(360px, calc(100vw - 32px));
+  }
+
   .admin-log-footer {
     flex-direction: column;
     align-items: stretch;
