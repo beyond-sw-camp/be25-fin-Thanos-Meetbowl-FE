@@ -745,9 +745,17 @@ function formatDateRangeSummary(value) {
   height: 38px;
   border: 1px solid var(--border);
   border-radius: 8px;
-  background: white;
+  background: #fcfcfd;
   padding: 0 12px;
   font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--foreground);
+}
+
+.admin-log-filter-form input::placeholder,
+.admin-log-filter-form select {
+  color: var(--muted-foreground);
 }
 
 .date-filter-popover-wrap {
@@ -765,7 +773,7 @@ function formatDateRangeSummary(value) {
   gap: 12px;
   border: 1px solid var(--border);
   border-radius: 8px;
-  background: white;
+  background: #fcfcfd;
   padding: 0 12px;
   color: var(--foreground);
   text-align: left;
@@ -780,12 +788,13 @@ function formatDateRangeSummary(value) {
 
 .date-filter-trigger span {
   font-size: 13px;
-  font-weight: 600;
+  font-weight: 700;
 }
 
 .date-filter-trigger small {
   color: var(--muted-foreground);
-  font-size: 12px;
+  font-size: 11px;
+  font-weight: 600;
 }
 
 .date-filter-popover {
@@ -797,7 +806,7 @@ function formatDateRangeSummary(value) {
   display: grid;
   gap: 14px;
   border: 1px solid var(--border);
-  border-radius: 14px;
+  border-radius: 12px;
   background: white;
   box-shadow: 0 20px 50px rgba(15, 23, 42, 0.18);
   padding: 14px;
@@ -813,7 +822,7 @@ function formatDateRangeSummary(value) {
   min-height: 38px;
   border: 1px solid var(--border);
   border-radius: 10px;
-  background: white;
+  background: #fcfcfd;
   padding: 0 12px;
   color: var(--foreground);
   font-size: 13px;
@@ -834,13 +843,15 @@ function formatDateRangeSummary(value) {
 .date-filter-custom-fields label {
   display: grid;
   gap: 6px;
-  font-size: 12px;
+  font-size: 11px;
   font-weight: 700;
   color: var(--muted-foreground);
+  letter-spacing: 0.02em;
 }
 
 .date-filter-custom-fields input {
   width: 100%;
+  background: #fcfcfd;
 }
 
 .date-filter-popover-actions {
@@ -852,12 +863,16 @@ function formatDateRangeSummary(value) {
 .date-filter-popover-actions button {
   flex: 0 0 auto;
   min-width: 72px;
+  font-size: 13px;
+  font-weight: 700;
 }
 
 .admin-log-filter-form button {
   flex: 0 0 80px;
   height: 38px;
   border-radius: 8px;
+  font-size: 13px;
+  font-weight: 700;
 }
 
 .admin-log-table table {
@@ -993,10 +1008,11 @@ function formatDateRangeSummary(value) {
   min-width: 42px;
   min-height: 36px;
   padding: 0 14px;
-  border-radius: 10px;
-  background: white;
+  border-radius: 8px;
+  background: #fcfcfd;
   color: var(--foreground);
   font-weight: 700;
+  font-size: 13px;
   transition: background-color 0.15s ease, border-color 0.15s ease, transform 0.15s ease;
 }
 
@@ -1005,10 +1021,15 @@ function formatDateRangeSummary(value) {
   transform: translateY(-1px);
 }
 
+.admin-log-footer :deep(.pagination button:disabled) {
+  background: #f8fafc;
+  color: var(--muted-foreground);
+}
+
 .admin-log-footer :deep(.pagination span) {
   min-width: 54px;
   color: var(--foreground);
-  font-size: 14px;
+  font-size: 13px;
   font-weight: 700;
   text-align: center;
 }
