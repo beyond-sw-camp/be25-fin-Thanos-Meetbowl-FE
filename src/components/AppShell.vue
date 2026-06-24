@@ -42,14 +42,14 @@
         <button class="icon-button mobile-menu" type="button" @click="mobileOpen = true">☰</button>
         <div class="search-box">검색</div>
         <div class="top-actions">
-          <div class="dropdown-wrap">
+          <div ref="notificationDropdownRef" class="dropdown-wrap">
             <button class="icon-button notification-button" type="button" @click="toggleNotifications">
               <Bell :size="20" />
               <span v-if="notificationBadgeCount > 0" class="notification-badge">
                 {{ notificationBadgeCount > 99 ? '99+' : notificationBadgeCount }}
               </span>
             </button>
-            <div v-if="notificationsOpen" class="dropdown panel">
+            <div v-if="notificationsOpen" class="dropdown panel notification-panel">
               <div class="notification-header">
                 <p class="panel-title">알림</p>
                 <button
@@ -128,8 +128,8 @@
             </div>
           </div>
 
-          <div class="dropdown-wrap">
-            <button class="profile-button" type="button" @click="profileOpen = !profileOpen">
+          <div ref="profileDropdownRef" class="dropdown-wrap">
+            <button class="profile-button" type="button" @click="toggleProfile">
               <span class="avatar">{{ user?.avatar }}</span>
               <span class="profile-name">{{ user?.name }}</span>
             </button>
@@ -184,6 +184,8 @@ const auth = useAuthStore()
 const mobileOpen = ref(false)
 const notificationsOpen = ref(false)
 const profileOpen = ref(false)
+const notificationDropdownRef = ref(null)
+const profileDropdownRef = ref(null)
 
 const user = computed(() => auth.user)
 const homePath = computed(() => auth.homePath)
@@ -379,6 +381,7 @@ async function loadMoreNotifications() {
 }
 
 function toggleNotifications() {
+  profileOpen.value = false
   notificationsOpen.value = !notificationsOpen.value
   if (!notificationsOpen.value) return
 
@@ -388,6 +391,27 @@ function toggleNotifications() {
   }
 
   loadNotifications()
+}
+
+function toggleProfile() {
+  notificationsOpen.value = false
+  profileOpen.value = !profileOpen.value
+}
+
+function closeHeaderDropdowns() {
+  notificationsOpen.value = false
+  profileOpen.value = false
+}
+
+function handleDocumentPointerDown(event) {
+  const target = event.target
+
+  const clickedNotificationDropdown = notificationDropdownRef.value?.contains(target)
+  const clickedProfileDropdown = profileDropdownRef.value?.contains(target)
+
+  if (clickedNotificationDropdown || clickedProfileDropdown) return
+
+  closeHeaderDropdowns()
 }
 
 async function handleNotificationClick(item) {
@@ -415,6 +439,8 @@ async function handleMarkAllRead() {
 }
 
 onMounted(() => {
+  document.addEventListener('pointerdown', handleDocumentPointerDown)
+
   if (isAdmin.value) {
     refreshAdminNotificationCount().catch(() => {})
     return
@@ -435,6 +461,7 @@ onMounted(() => {
 })
 
 onBeforeUnmount(() => {
+  document.removeEventListener('pointerdown', handleDocumentPointerDown)
   notificationSource?.close()
 })
 
@@ -452,13 +479,33 @@ function isExpanded(item) {
 }
 
 async function handleLogout() {
-  profileOpen.value = false
+  closeHeaderDropdowns()
   await auth.logout()
   router.push('/login')
 }
 </script>
 
 <style scoped>
+.dropdown-wrap {
+  position: relative;
+}
+
+.dropdown {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  z-index: 20;
+}
+
+.notification-panel {
+  width: 310px;
+}
+
+.profile-panel {
+  width: 240px;
+  z-index: 21;
+}
+
 .notification-button {
   position: relative;
 }
