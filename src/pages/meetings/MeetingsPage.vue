@@ -199,6 +199,7 @@ const tabs = [{ key: 'all', label: '전체' }, { key: 'host', label: '내가 주
 // 다른 화면(대시보드 등)에서 ?tab= 으로 진입하면 해당 탭으로 시작한다(all/host/attendee/active).
 const tab = ref(['all', 'host', 'attendee', 'active'].includes(route.query.tab) ? route.query.tab : 'all')
 const range = ref('all')
+const excludeEnded = ref(false)
 // 기본 정렬: 최신순(scheduledAt 내림차순) — 최근/다가오는 회의가 위로.
 const sort = ref('latest')
 // 종료/취소된 회의 숨기기 체크박스 상태(기본: 전체 표시).
@@ -381,6 +382,53 @@ function openEdit(meeting) {
   modal.value = true
 }
 
+async function openMeetingDetail(meeting) {
+  detailMeeting.value = meeting
+  detailFull.value = null
+  detailError.value = ''
+  try {
+    const full = await getMeeting(meeting.meetingId)
+    detailFull.value = full
+    resolveNames([full.hostUserId, ...(full.attendees || []).map((attendee) => attendee.userId)])
+  } catch (error) {
+    detailError.value = error?.message || '회의 상세 정보를 불러오지 못했습니다.'
+  }
+}
+
+function closeMeetingDetail() {
+  detailMeeting.value = null
+  detailFull.value = null
+  detailError.value = ''
+  cancelling.value = false
+}
+
+function editFromDetail() {
+  if (!detailMeeting.value) return
+  openEdit(detailMeeting.value)
+}
+
+function enterFromDetail() {
+  if (!detailMeeting.value) return
+  enterMeeting(detailMeeting.value)
+}
+
+async function requestCancelMeeting(meeting) {
+  const target = meeting || detailMeeting.value
+  if (!target || cancelling.value || !canCancel(target)) return
+  if (!window.confirm(`'${target.title}' 회의를 취소하시겠습니까?`)) return
+
+  cancelling.value = true
+  detailError.value = ''
+  try {
+    await cancelMeeting(target.meetingId)
+    closeMeetingDetail()
+    await loadMeetings()
+  } catch (error) {
+    detailError.value = error?.message || '회의 취소에 실패했습니다.'
+  } finally {
+    cancelling.value = false
+  }
+}
 // 워크스페이스 달력에서 넘어온 editMeetingId를 찾아 수정 모달을 연다(내가 주최한 종료 전 회의만).
 function openMeetingFromQuery() {
   const editMeetingId = route.query.editMeetingId
@@ -415,63 +463,7 @@ function enterMeeting(meeting) {
     return
   }
   // 진행중/예정: 회의방 팝업. 시작 15분 전 이전이면 openMeetingWindow가 안내 후 막는다(중복 판정 제거).
-  openMeetingWindow(meeting.id, { scheduledAt: meeting.scheduledAt })
-}
-
-// 목록 행 클릭 → 상세 모달. GET /meetings/{id}로 전체 정보(참석자 전원·내용)를 받아 채운다.
-// 버튼 매트릭스(수정/취소/입장/회의록)는 detailMeeting을 공유 판정 함수에 넣은 computed로 결정한다.
-async function openMeetingDetail(meeting) {
-  detailMeeting.value = meeting
-  detailFull.value = null
-  detailError.value = ''
-  try {
-    const full = await getMeeting(meeting.meetingId)
-    detailFull.value = full
-    resolveNames([full.hostUserId, ...(full.attendees || []).map((attendee) => attendee.userId)])
-  } catch (error) {
-    detailError.value = error?.message || '회의 상세를 불러오지 못했습니다.'
-  }
-}
-
-function closeMeetingDetail() {
-  detailMeeting.value = null
-  detailFull.value = null
-  detailError.value = ''
-}
-
-// 상세 모달의 '수정'/'입장(또는 회의록)' — 모달을 닫고 기존 흐름을 재사용한다.
-function editFromDetail() {
-  const meeting = detailMeeting.value
-  closeMeetingDetail()
-  openEdit(meeting)
-}
-
-function enterFromDetail() {
-  const meeting = detailMeeting.value
-  closeMeetingDetail()
-  enterMeeting(meeting)
-}
-
-// 회의 취소(목록 행·상세 모달 공용) — 확인 다이얼로그 후 cancelMeeting API 호출, 성공 시 목록 갱신.
-// 모달이 열려 있었으면 닫고, 실패는 alert로 알린다(행에서 호출돼도 동일하게 동작).
-async function requestCancelMeeting(meeting) {
-  if (!meeting || cancelling.value) return
-  const confirmed = await requestConfirm({
-    title: '회의를 취소할까요?',
-    message: `'${meeting.title}' 회의를 취소하면 참석자에게 취소 알림이 전송됩니다.`,
-    confirmLabel: '회의 취소',
-  })
-  if (!confirmed) return
-  cancelling.value = true
-  try {
-    await cancelMeeting(meeting.meetingId)
-    if (detailMeeting.value) closeMeetingDetail()
-    await loadMeetings()
-  } catch (error) {
-    window.alert(error?.message || '회의 취소에 실패했습니다.')
-  } finally {
-    cancelling.value = false
-  }
+  openMeetingWindow(meeting.id, { scheduledAt: meeting.scheduledAt, title: meeting.title })
 }
 
 function handleWindowFocus() {

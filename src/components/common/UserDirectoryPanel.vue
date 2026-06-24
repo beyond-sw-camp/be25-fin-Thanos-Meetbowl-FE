@@ -260,6 +260,7 @@ async function openCreate() {
   successMessage.value = ''
   await loadOrganizationOptions()
   editForm.value = createEmptyForm()
+  editForm.value.affiliateId = auth.user?.affiliateId || availableAffiliates.value[0]?.affiliateId || ''
   editOpen.value = true
 }
 
@@ -502,7 +503,10 @@ function createFormFromUser(user) {
 function buildUserCreatePayload(targetForm) {
   return {
     loginId: targetForm.loginId.trim(),
-    ...buildSharedUserPayload(targetForm),
+    ...buildSharedUserPayload({
+      ...targetForm,
+      affiliateId: targetForm.affiliateId || auth.user?.affiliateId || availableAffiliates.value[0]?.affiliateId || '',
+    }),
     status: targetForm.status,
   }
 }

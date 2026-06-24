@@ -548,6 +548,41 @@ function openSelectedEvent(event) {
   openEventForm(event)
 }
 
+function upsertLocalEvent(payload) {
+  const nextEvent = normalizeEvent({
+    eventId: editingEventId.value || `local-event-${Date.now()}`,
+    source: 'PERSONAL',
+    ...payload,
+  })
+  const localExists = localEvents.value.some((event) => event.eventId === editingEventId.value)
+  localEvents.value = editingEventId.value && localExists
+    ? localEvents.value.map((event) => event.eventId === editingEventId.value ? nextEvent : event)
+    : [...localEvents.value, nextEvent]
+  events.value = editingEventId.value
+    ? events.value.map((event) => event.eventId === editingEventId.value ? nextEvent : event)
+    : [...events.value, nextEvent]
+}
+
+function mergeLocalEvents(baseEvents) {
+  const byId = new Map(baseEvents.map((event) => [eventKey(event), event]))
+  localEvents.value.forEach((event) => byId.set(eventKey(event), event))
+  return [...byId.values()]
+}
+
+function eventKey(event) {
+  return [
+    event.eventId || '',
+    event.source || '',
+    event.meetingId || '',
+    event.relatedMeetingId || '',
+    event.ownerUserId || '',
+    event.title || '',
+    event.startedAt || '',
+    event.endedAt || '',
+    event.description || '',
+  ].join(':')
+}
+
 function selectMemo(memoId) {
   activeMemoId.value = memoId
   const memo = memos.value.find((item) => item.memoId === memoId)

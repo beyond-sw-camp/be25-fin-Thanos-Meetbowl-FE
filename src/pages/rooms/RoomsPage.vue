@@ -347,6 +347,7 @@ function enterMeeting(targetMeetingId) {
   closeDetail()
   openMeetingWindow(normalizedMeetingId, {
     scheduledAt,
+    title: detailFull.value?.title || detail.value?.title || '',
   })
 }
 

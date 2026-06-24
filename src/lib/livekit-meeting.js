@@ -28,6 +28,7 @@ export async function resolveLiveKitConnection({
 
   const resolved = {
     meetingId,
+    title: connection.title || '',
     roomName: connection.roomName,
     url: connection.livekitUrl,
     token: connection.token,
