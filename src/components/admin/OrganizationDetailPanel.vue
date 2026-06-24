@@ -19,7 +19,7 @@
         <dl class="organization-detail-panel__stats" v-if="summaryStats.length">
           <div v-for="item in summaryStats" :key="item.label">
             <dt>{{ item.label }}</dt>
-            <dd>{{ item.value }}</dd>
+            <dd :class="item.valueClass" :title="item.title || item.value">{{ item.value }}</dd>
           </div>
         </dl>
 
@@ -48,7 +48,7 @@
                     <strong>{{ member.name }}</strong>
                     <small>{{ member.position || '-' }}</small>
                   </div>
-                  <em v-if="member.email">{{ member.email }}</em>
+                  <em v-if="member.email" :title="member.email">{{ member.email }}</em>
                 </div>
               </template>
 
@@ -57,7 +57,7 @@
                   <strong>{{ member.name }}</strong>
                   <small>{{ member.position || '-' }}</small>
                 </span>
-                <em v-if="member.email">{{ member.email }}</em>
+                <em v-if="member.email" :title="member.email">{{ member.email }}</em>
               </template>
             </li>
           </ul>
@@ -111,7 +111,12 @@ const summaryStats = computed(() => {
   if (props.selectedNode.type === 'member') {
     return [
       { label: '직급', value: props.selectedNode.position || '-' },
-      { label: '이메일', value: props.selectedNode.email || '-' },
+      {
+        label: '이메일',
+        value: props.selectedNode.email || '-',
+        valueClass: 'organization-detail-panel__stat-value organization-detail-panel__stat-value--email',
+        title: props.selectedNode.email || '-',
+      },
       { label: '소속 부서', value: props.selectedNode.departmentName || '-' },
       { label: '소속 팀', value: props.selectedNode.teamName || '-' },
     ]
@@ -134,7 +139,7 @@ const memberList = computed(() => {
   if (!props.selectedNode) return []
   if (props.selectedNode.type === 'department') return props.selectedNode.members || []
   if (props.selectedNode.type === 'team') return props.selectedNode.members || []
-  if (props.selectedNode.type === 'member') return [props.selectedNode]
+  // 구성원 개별 선택에서는 상단 상세 정보만 노출하고 하단 중복 목록은 숨긴다.
   return []
 })
 
@@ -189,11 +194,13 @@ const memberRowClass = computed(() =>
 
 .organization-detail-panel__content {
   min-height: 0;
+  min-width: 0;
   display: grid;
   align-content: start;
   gap: var(--detail-panel-gap);
   padding: var(--detail-panel-padding);
   overflow-y: auto;
+  overflow-x: hidden;
 }
 
 .organization-detail-panel__summary {
@@ -244,7 +251,7 @@ const memberRowClass = computed(() =>
 
 .organization-detail-panel__stats div {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-columns: minmax(68px, auto) minmax(0, 1fr);
   gap: 8px 10px;
   align-items: center;
   border: 1px solid var(--border);
@@ -263,12 +270,19 @@ const memberRowClass = computed(() =>
 
 .organization-detail-panel__stats dd {
   margin: 0;
+  min-width: 0;
   font-size: 13px;
   font-weight: 600;
   max-width: 100%;
-  overflow-wrap: anywhere;
+  overflow: hidden;
+  text-overflow: ellipsis;
   text-align: right;
   line-height: 1.3;
+  white-space: nowrap;
+}
+
+.organization-detail-panel__stat-value--email {
+  font-size: 11px;
 }
 
 .organization-detail-panel__section {
@@ -291,6 +305,7 @@ const memberRowClass = computed(() =>
 }
 
 .organization-detail-panel__list li {
+  min-width: 0;
   display: flex;
   justify-content: space-between;
   gap: 8px;
@@ -303,6 +318,7 @@ const memberRowClass = computed(() =>
 }
 
 .organization-detail-panel__row {
+  min-width: 0;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -346,6 +362,7 @@ const memberRowClass = computed(() =>
 .organization-detail-panel__member-main small,
 .organization-detail-panel__row-meta,
 .organization-detail-panel__list li em {
+  min-width: 0;
   color: var(--muted-foreground);
   font-size: 12px;
   font-style: normal;
