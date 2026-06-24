@@ -258,14 +258,13 @@ watch(
 }
 
 .organization-chart-canvas__stage-shell {
-  width: max-content;
-  min-width: 100%;
+  width: 100%;
   display: grid;
-  justify-content: center;
+  justify-content: stretch;
 }
 
 .organization-chart-canvas__stage {
-  width: max-content;
+  width: 100%;
   display: grid;
   justify-items: center;
   gap: 28px;
@@ -289,35 +288,31 @@ watch(
 
 .organization-chart-canvas__departments {
   position: relative;
-  display: flex;
-  align-items: flex-start;
-  gap: 24px;
+  width: min(100%, 1120px);
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+  align-items: start;
+  gap: 24px 28px;
   padding-top: 22px;
 }
 
 .organization-chart-canvas__departments::before {
-  content: '';
-  position: absolute;
-  top: 0;
-  left: 36px;
-  right: 36px;
-  height: 1px;
-  background: #d8e2ee;
+  content: none;
 }
 
 .organization-chart-canvas__department {
   position: relative;
-  width: max-content;
-  min-width: 156px;
+  min-width: 0;
   display: grid;
   gap: 12px;
   justify-items: stretch;
+  padding-top: 22px;
 }
 
 .organization-chart-canvas__department::before {
   content: '';
   position: absolute;
-  top: -22px;
+  top: 0;
   left: 50%;
   width: 1px;
   height: 22px;
@@ -393,6 +388,8 @@ watch(
 }
 
 .organization-chart-canvas__node--department {
+  width: 142px;
+  justify-self: center;
   min-height: 54px;
   display: grid;
   gap: 5px;
@@ -423,6 +420,7 @@ watch(
 }
 
 .organization-chart-canvas__node--team {
+  width: 132px;
   min-height: 38px;
   display: flex;
   align-items: center;
@@ -530,6 +528,15 @@ watch(
 
   .organization-chart-canvas__scroll {
     padding: 14px;
+  }
+
+  .organization-chart-canvas__departments {
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+    gap: 20px;
+  }
+
+  .organization-chart-canvas__teams {
+    gap: 12px;
   }
 }
 </style>
