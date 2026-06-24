@@ -226,12 +226,55 @@ const teamRows = computed(() =>
       return {
         ...team,
         departmentName: department?.name || '-',
+        departmentSortOrder: department?.sortOrder ?? null,
         affiliateName: findAffiliateName(department?.affiliateId),
         userCount: users.value.filter((user) => user.teamId === team.teamId).length,
       }
     })
-    .sort(compareBySortOrderThenName),
+    .sort((left, right) => {
+      const affiliateCompare = String(left.affiliateName || '').localeCompare(String(right.affiliateName || ''))
+      if (affiliateCompare !== 0) return affiliateCompare
+
+      const leftDepartmentOrder = Number.isFinite(Number(left.departmentSortOrder))
+        ? Number(left.departmentSortOrder)
+        : Number.MAX_SAFE_INTEGER
+      const rightDepartmentOrder = Number.isFinite(Number(right.departmentSortOrder))
+        ? Number(right.departmentSortOrder)
+        : Number.MAX_SAFE_INTEGER
+
+      if (leftDepartmentOrder !== rightDepartmentOrder) return leftDepartmentOrder - rightDepartmentOrder
+
+      const departmentCompare = String(left.departmentName || '').localeCompare(String(right.departmentName || ''))
+      if (departmentCompare !== 0) return departmentCompare
+
+      return compareBySortOrderThenName(left, right)
+    }),
 )
+
+const teamTableRows = computed(() => {
+  let currentDepartmentName = ''
+  let currentDepartmentStartIndex = -1
+
+  const rows = teamRows.value.map((team) => ({
+    ...team,
+    departmentRowspan: 0,
+    showDepartmentCell: false,
+  }))
+
+  rows.forEach((team, index) => {
+    if (team.departmentName !== currentDepartmentName) {
+      currentDepartmentName = team.departmentName
+      currentDepartmentStartIndex = index
+      team.showDepartmentCell = true
+      team.departmentRowspan = 1
+      return
+    }
+
+    rows[currentDepartmentStartIndex].departmentRowspan += 1
+  })
+
+  return rows
+})
 
 const positionRows = computed(() =>
   sortedPositions.value.map((position) => ({
@@ -654,6 +697,11 @@ function organizationTeamSummary(departmentId) {
   )
 }
 
+function departmentTeamSummary(departmentId) {
+  const names = (teamsByDepartmentId.value.get(departmentId) || []).map((team) => team.name).filter(Boolean)
+  return names.length ? names.join(' / ') : '-'
+}
+
 function memberPreviewLabel(userId) {
   const user = findUserById(userId)
   if (!user) return '-'
@@ -984,13 +1032,36 @@ function getDepartmentTreeData(departmentId) {
       </div>
 
       <div v-if="excelResult" class="card feedback-card excel-result-card">
-        <h2>엑셀 반영 결과</h2>
+        <div class="excel-result-card-head">
+          <h2>엑셀 반영 결과</h2>
+          <p>업로드된 조직 데이터 반영 내역입니다.</p>
+        </div>
         <div class="excel-result-grid">
-          <p>계열사 생성/수정: {{ excelResult.createdAffiliates }} / {{ excelResult.updatedAffiliates }}</p>
-          <p>부서 생성/수정: {{ excelResult.createdDepartments }} / {{ excelResult.updatedDepartments }}</p>
-          <p>팀 생성/수정: {{ excelResult.createdTeams }} / {{ excelResult.updatedTeams }}</p>
-          <p>직급 생성/수정: {{ excelResult.createdPositions }} / {{ excelResult.updatedPositions }}</p>
-          <p>회원 생성/수정: {{ excelResult.createdUsers }} / {{ excelResult.updatedUsers }}</p>
+          <div class="excel-result-item">
+            <strong>계열사</strong>
+            <p>생성/수정</p>
+            <span>{{ excelResult.createdAffiliates }} / {{ excelResult.updatedAffiliates }}</span>
+          </div>
+          <div class="excel-result-item">
+            <strong>부서</strong>
+            <p>생성/수정</p>
+            <span>{{ excelResult.createdDepartments }} / {{ excelResult.updatedDepartments }}</span>
+          </div>
+          <div class="excel-result-item">
+            <strong>팀</strong>
+            <p>생성/수정</p>
+            <span>{{ excelResult.createdTeams }} / {{ excelResult.updatedTeams }}</span>
+          </div>
+          <div class="excel-result-item">
+            <strong>직급</strong>
+            <p>생성/수정</p>
+            <span>{{ excelResult.createdPositions }} / {{ excelResult.updatedPositions }}</span>
+          </div>
+          <div class="excel-result-item">
+            <strong>회원</strong>
+            <p>생성/수정</p>
+            <span>{{ excelResult.createdUsers }} / {{ excelResult.updatedUsers }}</span>
+          </div>
         </div>
       </div>
 
@@ -1178,46 +1249,16 @@ function getDepartmentTreeData(departmentId) {
           </article>
         </section>
 
-        <div class="table-card admin-data-table organization-table">
-          <table>
-            <thead>
-              <tr>
-                <th>이름</th>
-                <th>인원</th>
-                <th>하위 팀</th>
-                <th>순서</th>
-                <th>액션</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr v-if="!departmentSummaries.length">
-                <td colspan="5"><div class="empty-state">등록된 부서가 없습니다.</div></td>
-              </tr>
-              <tr v-for="department in departmentSummaries" :key="department.departmentId">
-                <td>{{ department.name }}</td>
-                <td>{{ department.userCount }}명</td>
-                <td>{{ department.teamCount ? organizationTeamSummary(department.departmentId) : '-' }}</td>
-                <td>{{ department.sortOrder ?? '-' }}</td>
-                <td>
-                  <button class="icon-text" type="button" @click="openEditModal(department)">수정</button>
-                  <button class="icon-text danger-text" type="button" @click="changeStatus(department)">
-                    {{ department.status === 'ACTIVE' ? '비활성화' : '활성화' }}
-                  </button>
-                </td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
       </template>
 
 
       <template v-else-if="activeTab === 'department'">
-        <div class="table-card admin-data-table organization-table">
+        <div class="table-card admin-data-table organization-table organization-table-department">
           <table>
             <thead>
               <tr>
-                <th>이름</th>
                 <th>계열사</th>
+                <th>부서</th>
                 <th>인원</th>
                 <th>하위 팀</th>
                 <th>순서</th>
@@ -1228,11 +1269,17 @@ function getDepartmentTreeData(departmentId) {
               <tr v-if="!departmentRows.length">
                 <td colspan="6"><div class="empty-state">등록된 부서가 없습니다.</div></td>
               </tr>
-              <tr v-for="department in departmentRows" :key="department.departmentId">
-                <td>{{ department.name }}</td>
-                <td>{{ department.affiliateName }}</td>
+              <tr v-for="(department, index) in departmentRows" :key="department.departmentId">
+                <td
+                  v-if="index === 0"
+                  :rowspan="departmentRows.length"
+                  class="organization-shared-cell organization-affiliate-cell"
+                >
+                  {{ department.affiliateName }}
+                </td>
+                <td class="organization-department-cell organization-department-name-cell">{{ department.name }}</td>
                 <td>{{ department.userCount }}명</td>
-                <td>{{ organizationTeamSummary(department.departmentId) || department.teamSummary }}</td>
+                <td>{{ departmentTeamSummary(department.departmentId) }}</td>
                 <td>{{ department.sortOrder ?? '-' }}</td>
                 <td>
                   <button class="icon-text" type="button" @click="openEditModal(department)">수정</button>
@@ -1247,26 +1294,38 @@ function getDepartmentTreeData(departmentId) {
       </template>
 
       <template v-else-if="activeTab === 'team'">
-        <div class="table-card admin-data-table organization-table">
+        <div class="table-card admin-data-table organization-table organization-table-team">
           <table>
             <thead>
               <tr>
-                <th>이름</th>
                 <th>계열사</th>
                 <th>상위 부서</th>
+                <th>팀</th>
                 <th>인원</th>
                 <th>순서</th>
                 <th>액션</th>
               </tr>
             </thead>
             <tbody>
-              <tr v-if="!teamRows.length">
+              <tr v-if="!teamTableRows.length">
                 <td colspan="6"><div class="empty-state">등록된 팀이 없습니다.</div></td>
               </tr>
-              <tr v-for="team in teamRows" :key="team.teamId">
-                <td>{{ team.name }}</td>
-                <td>{{ team.affiliateName }}</td>
-                <td>{{ team.departmentName }}</td>
+              <tr v-for="(team, index) in teamTableRows" :key="team.teamId">
+                <td
+                  v-if="index === 0"
+                  :rowspan="teamTableRows.length"
+                  class="organization-shared-cell organization-affiliate-cell"
+                >
+                  {{ team.affiliateName }}
+                </td>
+                <td
+                  v-if="team.showDepartmentCell"
+                  :rowspan="team.departmentRowspan"
+                  class="organization-department-cell"
+                >
+                  {{ team.departmentName }}
+                </td>
+                <td class="organization-team-cell">{{ team.name }}</td>
                 <td>{{ team.userCount }}명</td>
                 <td>{{ team.sortOrder ?? '-' }}</td>
                 <td>
@@ -1282,7 +1341,7 @@ function getDepartmentTreeData(departmentId) {
       </template>
 
       <template v-else>
-        <div class="table-card admin-data-table organization-table">
+        <div class="table-card admin-data-table organization-table organization-table-position">
           <table>
             <thead>
               <tr>
@@ -1494,10 +1553,27 @@ function getDepartmentTreeData(departmentId) {
   gap: 12px;
 }
 
+.excel-result-card {
+  border: 1px solid var(--border);
+  background: linear-gradient(180deg, #ffffff 0%, #fcfcfd 100%);
+}
+
+.excel-result-card-head {
+  display: grid;
+  gap: 6px;
+}
+
 .excel-result-card h2,
 .excel-error-card h2 {
   margin: 0;
   font-size: 18px;
+}
+
+.excel-result-card-head p {
+  margin: 0;
+  color: var(--muted-foreground);
+  font-size: 13px;
+  line-height: 1.5;
 }
 
 .excel-result-grid {
@@ -1505,11 +1581,43 @@ function getDepartmentTreeData(departmentId) {
   gap: 10px;
 }
 
-.excel-result-grid p,
+.excel-result-item {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 4px 16px;
+  align-items: center;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: #fcfcfd;
+  padding: 14px 16px;
+}
+
+.excel-result-item strong {
+  color: var(--foreground);
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.excel-result-item p,
 .excel-error-summary {
   margin: 0;
   color: var(--muted-foreground);
+  font-size: 13px;
   line-height: 1.6;
+}
+
+.excel-result-item p {
+  grid-column: 1;
+}
+
+.excel-result-item span {
+  grid-column: 2;
+  grid-row: 1 / span 2;
+  color: var(--foreground);
+  font-size: 20px;
+  font-weight: 700;
+  line-height: 1;
+  white-space: nowrap;
 }
 
 .excel-error-list {
@@ -1754,6 +1862,120 @@ function getDepartmentTreeData(departmentId) {
 
 .organization-table td {
   vertical-align: top;
+}
+
+.organization-shared-cell {
+  vertical-align: middle !important;
+  background: #fcfcfd;
+  color: var(--foreground);
+  font-size: 13px;
+}
+
+.organization-affiliate-cell {
+  min-width: 108px;
+  width: 108px;
+}
+
+.organization-department-cell {
+  color: var(--foreground);
+}
+
+.organization-team-cell {
+  color: var(--foreground);
+  font-weight: 700;
+}
+
+.organization-department-name-cell {
+  font-weight: 700;
+}
+
+.organization-table-department table,
+.organization-table-team table {
+  table-layout: fixed;
+}
+
+.organization-table-department th:nth-child(1),
+.organization-table-department td:nth-child(1) {
+  width: 108px;
+}
+
+.organization-table-department th:nth-child(2),
+.organization-table-department td:nth-child(2) {
+  width: 164px;
+}
+
+.organization-table-department th:nth-child(3),
+.organization-table-department td:nth-child(3) {
+  width: 78px;
+}
+
+.organization-table-department th:nth-child(4),
+.organization-table-department td:nth-child(4) {
+  width: 320px;
+}
+
+.organization-table-department th:nth-child(5),
+.organization-table-department td:nth-child(5) {
+  width: 72px;
+}
+
+.organization-table-department th:nth-child(6),
+.organization-table-department td:nth-child(6) {
+  width: 128px;
+}
+
+.organization-table-team th:nth-child(1),
+.organization-table-team td:nth-child(1) {
+  width: 108px;
+}
+
+.organization-table-team th:nth-child(2),
+.organization-table-team td:nth-child(2) {
+  width: 148px;
+}
+
+.organization-table-team th:nth-child(3),
+.organization-table-team td:nth-child(3) {
+  width: 148px;
+}
+
+.organization-table-team th:nth-child(4),
+.organization-table-team td:nth-child(4) {
+  width: 86px;
+}
+
+.organization-table-team th:nth-child(5),
+.organization-table-team td:nth-child(5) {
+  width: 76px;
+}
+
+.organization-table-team th:nth-child(6),
+.organization-table-team td:nth-child(6) {
+  width: 140px;
+}
+
+.organization-table-position table {
+  table-layout: fixed;
+}
+
+.organization-table-position th:nth-child(1),
+.organization-table-position td:nth-child(1) {
+  width: 220px;
+}
+
+.organization-table-position th:nth-child(2),
+.organization-table-position td:nth-child(2) {
+  width: 84px;
+}
+
+.organization-table-position th:nth-child(3),
+.organization-table-position td:nth-child(3) {
+  width: 92px;
+}
+
+.organization-table-position th:nth-child(4),
+.organization-table-position td:nth-child(4) {
+  width: 140px;
 }
 
 /* 카드 푸터 스타일 */
@@ -2064,6 +2286,16 @@ function getDepartmentTreeData(departmentId) {
 }
 
 @media (max-width: 959px) {
+  .excel-result-item {
+    grid-template-columns: 1fr;
+    gap: 6px;
+  }
+
+  .excel-result-item span {
+    grid-column: 1;
+    grid-row: auto;
+  }
+
   .organization-header,
   .tab-actions {
     flex-direction: column;
