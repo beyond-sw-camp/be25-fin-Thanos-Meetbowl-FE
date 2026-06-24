@@ -39,13 +39,26 @@
             <li
               v-for="member in memberList"
               :key="member.key || member.userId"
-              class="organization-detail-panel__row organization-detail-panel__row--member"
+              class="organization-detail-panel__row"
+              :class="memberRowClass"
             >
-              <span class="organization-detail-panel__member-main">
-                <strong>{{ member.name }}</strong>
-                <small>{{ member.position || '-' }}</small>
-              </span>
-              <em v-if="member.email">{{ member.email }}</em>
+              <template v-if="isTeamSelection">
+                <div class="organization-detail-panel__member-card">
+                  <div class="organization-detail-panel__member-card-top">
+                    <strong>{{ member.name }}</strong>
+                    <small>{{ member.position || '-' }}</small>
+                  </div>
+                  <em v-if="member.email">{{ member.email }}</em>
+                </div>
+              </template>
+
+              <template v-else>
+                <span class="organization-detail-panel__member-main">
+                  <strong>{{ member.name }}</strong>
+                  <small>{{ member.position || '-' }}</small>
+                </span>
+                <em v-if="member.email">{{ member.email }}</em>
+              </template>
             </li>
           </ul>
         </section>
@@ -115,6 +128,8 @@ const teamList = computed(() =>
   props.selectedNode?.type === 'department' ? props.selectedNode.teams || [] : [],
 )
 
+const isTeamSelection = computed(() => props.selectedNode?.type === 'team')
+
 const memberList = computed(() => {
   if (!props.selectedNode) return []
   if (props.selectedNode.type === 'department') return props.selectedNode.members || []
@@ -128,6 +143,12 @@ const memberSectionTitle = computed(() => {
   if (props.selectedNode.type === 'department') return '구성원 요약'
   return '구성원'
 })
+
+const memberRowClass = computed(() =>
+  isTeamSelection.value
+    ? 'organization-detail-panel__row--member-card'
+    : 'organization-detail-panel__row--member',
+)
 </script>
 
 <style scoped>
@@ -287,6 +308,10 @@ const memberSectionTitle = computed(() => {
   justify-content: space-between;
 }
 
+.organization-detail-panel__row--member-card {
+  align-items: stretch;
+}
+
 .organization-detail-panel__team-name,
 .organization-detail-panel__member-main {
   min-width: 0;
@@ -332,6 +357,46 @@ const memberSectionTitle = computed(() => {
 .organization-detail-panel__row-meta {
   flex-shrink: 0;
   font-weight: 500;
+}
+
+.organization-detail-panel__member-card {
+  min-width: 0;
+  width: 100%;
+  display: grid;
+  gap: 4px;
+}
+
+.organization-detail-panel__member-card-top {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.organization-detail-panel__member-card-top strong {
+  min-width: 0;
+  font-size: 12px;
+  line-height: 1.25;
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.organization-detail-panel__member-card-top small {
+  flex-shrink: 0;
+  color: var(--muted-foreground);
+  font-size: 12px;
+  font-style: normal;
+  line-height: 1.25;
+  white-space: nowrap;
+}
+
+.organization-detail-panel__row--member-card em {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .organization-detail-panel__list li em {
