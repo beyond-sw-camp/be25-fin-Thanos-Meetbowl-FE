@@ -69,7 +69,7 @@
                 <section
                   v-for="team in department.teams"
                   :key="team.key"
-                  class="organization-chart-canvas__team-branch"
+                  class="organization-chart-canvas__team-column"
                 >
                   <button
                     :ref="bindNodeRef(team.key)"
@@ -82,11 +82,8 @@
                     <span>{{ team.memberCount }}명</span>
                   </button>
 
-                  <div
-                    class="organization-chart-canvas__member-list"
-                    :class="{ 'is-active': isSelectedTeam(team.key) }"
-                  >
-                    <!-- 직원은 팀 아래 세로 리스트로 고정해 부서별 묶음 구조를 한눈에 파악하게 한다. -->
+                  <div class="organization-chart-canvas__member-list" :class="{ 'is-active': isSelectedTeam(team.key) }">
+                    <!-- 팀원 row는 팀 카드 바로 아래에서만 세로로 쌓이게 유지한다. -->
                     <button
                       v-for="member in team.members"
                       :key="member.key"
@@ -335,13 +332,13 @@ watch(
   background: #d8e2ee;
 }
 
-.organization-chart-canvas__team-branch {
+.organization-chart-canvas__team-column {
   width: 132px;
   min-width: 132px;
   max-width: 132px;
   flex: 0 0 132px;
   display: grid;
-  gap: 8px;
+  gap: 6px;
   align-content: start;
 }
 
@@ -451,8 +448,8 @@ watch(
 .organization-chart-canvas__member-list {
   width: 100%;
   display: grid;
-  gap: 4px;
-  padding-top: 6px;
+  gap: 5px;
+  padding-top: 4px;
 }
 
 .organization-chart-canvas__member-row {
@@ -464,7 +461,7 @@ watch(
   gap: 8px;
   border: 1px solid var(--border);
   border-radius: 8px;
-  background: #ffffff;
+  background: linear-gradient(180deg, #ffffff 0%, #fcfcfd 100%);
   padding: 4px 8px;
   color: var(--foreground);
   text-align: left;
