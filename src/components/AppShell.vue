@@ -42,14 +42,19 @@
       <header class="topbar">
         <button class="icon-button mobile-menu" type="button" @click="mobileOpen = true">☰</button>
         <div class="top-actions">
-          <div class="dropdown-wrap">
-            <button class="icon-button notification-button" type="button" data-tour="notifications" @click="toggleNotifications">
+          <div ref="notificationDropdownRef" class="dropdown-wrap">
+            <button
+              class="icon-button notification-button"
+              type="button"
+              data-tour="notifications"
+              @click="toggleNotifications"
+            >
               <Bell :size="20" />
               <span v-if="notificationBadgeCount > 0" class="notification-badge">
                 {{ notificationBadgeCount > 99 ? '99+' : notificationBadgeCount }}
               </span>
             </button>
-            <div v-if="notificationsOpen" class="dropdown panel">
+            <div v-if="notificationsOpen" class="dropdown panel notification-panel">
               <div class="notification-header">
                 <p class="panel-title">알림</p>
                 <button
@@ -128,8 +133,8 @@
             </div>
           </div>
 
-          <div ref="profileMenuRoot" class="dropdown-wrap">
-            <button class="profile-button" type="button" @click="toggleProfileMenu">
+          <div ref="profileDropdownRef" class="dropdown-wrap">
+            <button class="profile-button" type="button" @click="toggleProfile">
               <span class="avatar">{{ user?.avatar }}</span>
               <span class="profile-name">{{ user?.name }}</span>
             </button>
@@ -162,7 +167,6 @@
     </main>
 
     <FloatingChatbot v-if="showFloatingChatbot" />
-
     <OnboardingTour v-if="tutorialOpen" @finish="closeTutorial" />
   </div>
 </template>
@@ -199,7 +203,8 @@ const navResetKey = ref(0)
 const notificationsOpen = ref(false)
 const profileOpen = ref(false)
 const tutorialOpen = ref(false)
-const profileMenuRoot = ref(null)
+const notificationDropdownRef = ref(null)
+const profileDropdownRef = ref(null)
 
 const user = computed(() => auth.user)
 const homePath = computed(() => auth.homePath)
@@ -395,7 +400,13 @@ async function loadMoreNotifications() {
   }
 }
 
+function closeHeaderDropdowns() {
+  notificationsOpen.value = false
+  profileOpen.value = false
+}
+
 function toggleNotifications() {
+  profileOpen.value = false
   notificationsOpen.value = !notificationsOpen.value
   if (!notificationsOpen.value) return
 
@@ -407,14 +418,19 @@ function toggleNotifications() {
   loadNotifications()
 }
 
-function toggleProfileMenu() {
+function toggleProfile() {
+  notificationsOpen.value = false
   profileOpen.value = !profileOpen.value
 }
 
 function handleDocumentPointerDown(event) {
-  if (!profileOpen.value) return
-  if (profileMenuRoot.value?.contains(event.target)) return
-  profileOpen.value = false
+  const target = event.target
+  const clickedNotificationDropdown = notificationDropdownRef.value?.contains(target)
+  const clickedProfileDropdown = profileDropdownRef.value?.contains(target)
+
+  if (clickedNotificationDropdown || clickedProfileDropdown) return
+
+  closeHeaderDropdowns()
 }
 
 async function handleNotificationClick(item) {
@@ -442,6 +458,8 @@ async function handleMarkAllRead() {
 }
 
 onMounted(() => {
+  document.addEventListener('pointerdown', handleDocumentPointerDown, true)
+
   if (isAdmin.value) {
     refreshAdminNotificationCount().catch(() => {})
     return
@@ -465,7 +483,6 @@ onMounted(() => {
       }
     },
   })
-  document.addEventListener('pointerdown', handleDocumentPointerDown, true)
 })
 
 onBeforeUnmount(() => {
@@ -507,13 +524,33 @@ function closeTutorial() {
 }
 
 async function handleLogout() {
-  profileOpen.value = false
+  closeHeaderDropdowns()
   await auth.logout()
   router.push('/login')
 }
 </script>
 
 <style scoped>
+.dropdown-wrap {
+  position: relative;
+}
+
+.dropdown {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  z-index: 20;
+}
+
+.notification-panel {
+  width: 310px;
+}
+
+.profile-panel {
+  width: 240px;
+  z-index: 21;
+}
+
 .notification-button {
   position: relative;
 }

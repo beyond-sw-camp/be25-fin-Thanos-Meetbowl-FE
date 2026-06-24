@@ -1,0 +1,443 @@
+<template>
+  <section class="organization-detail-panel" :class="{ 'is-drawer': drawer }" aria-live="polite">
+    <div class="organization-detail-panel__head">
+      <strong>상세 정보</strong>
+      <span v-if="selectedNode">{{ subtitle }}</span>
+    </div>
+
+    <div class="organization-detail-panel__content">
+      <div v-if="!selectedNode" class="organization-detail-panel__empty">
+        조직도에서 부서, 팀, 구성원을 선택하면 상세 정보가 표시됩니다.
+      </div>
+
+      <template v-else>
+        <article class="organization-detail-panel__summary" :class="`is-${selectedNode.type}`">
+          <p class="organization-detail-panel__eyebrow">{{ summaryEyebrow }}</p>
+          <h3>{{ selectedNode.name }}</h3>
+        </article>
+
+        <dl class="organization-detail-panel__stats" v-if="summaryStats.length">
+          <div v-for="item in summaryStats" :key="item.label">
+            <dt>{{ item.label }}</dt>
+            <dd :class="item.valueClass" :title="item.title || item.value">{{ item.value }}</dd>
+          </div>
+        </dl>
+
+        <section v-if="teamList.length" class="organization-detail-panel__section">
+          <h4>하위 팀</h4>
+          <ul class="organization-detail-panel__list">
+            <li v-for="team in teamList" :key="team.key" class="organization-detail-panel__row organization-detail-panel__row--team">
+              <span class="organization-detail-panel__team-name">{{ team.name }}</span>
+              <strong class="organization-detail-panel__row-meta">{{ team.memberCount }}명</strong>
+            </li>
+          </ul>
+        </section>
+
+        <section v-if="memberList.length" class="organization-detail-panel__section">
+          <h4>{{ memberSectionTitle }}</h4>
+          <ul class="organization-detail-panel__list organization-detail-panel__list--members">
+            <li
+              v-for="member in memberList"
+              :key="member.key || member.userId"
+              class="organization-detail-panel__row"
+              :class="memberRowClass"
+            >
+              <template v-if="isTeamSelection">
+                <div class="organization-detail-panel__member-card">
+                  <div class="organization-detail-panel__member-card-top">
+                    <strong>{{ member.name }}</strong>
+                    <small>{{ member.position || '-' }}</small>
+                  </div>
+                  <em v-if="member.email" :title="member.email">{{ member.email }}</em>
+                </div>
+              </template>
+
+              <template v-else>
+                <span class="organization-detail-panel__member-main">
+                  <strong>{{ member.name }}</strong>
+                  <small>{{ member.position || '-' }}</small>
+                </span>
+                <em v-if="member.email" :title="member.email">{{ member.email }}</em>
+              </template>
+            </li>
+          </ul>
+        </section>
+      </template>
+    </div>
+  </section>
+</template>
+
+<script setup>
+import { computed } from 'vue'
+
+const props = defineProps({
+  selectedNode: { type: Object, default: null },
+  drawer: { type: Boolean, default: false },
+})
+
+const subtitle = computed(() => {
+  if (!props.selectedNode) return ''
+  if (props.selectedNode.type === 'department') return '부서 상세 정보'
+  if (props.selectedNode.type === 'team') return '팀 상세 정보'
+  if (props.selectedNode.type === 'member') return '구성원 상세 정보'
+  return '전체 조직 개요'
+})
+
+const summaryEyebrow = computed(() => {
+  if (!props.selectedNode) return ''
+  if (props.selectedNode.type === 'department') return 'Department'
+  if (props.selectedNode.type === 'team') return 'Team'
+  if (props.selectedNode.type === 'member') return 'Member'
+  return 'Organization'
+})
+
+const summaryStats = computed(() => {
+  if (!props.selectedNode) return []
+
+  if (props.selectedNode.type === 'department') {
+    return [
+      { label: '총 구성원 수', value: `${props.selectedNode.memberCount}명` },
+      { label: '하위 팀 수', value: `${props.selectedNode.teamCount}개` },
+    ]
+  }
+
+  if (props.selectedNode.type === 'team') {
+    return [
+      { label: '상위 부서', value: props.selectedNode.departmentName || '-' },
+      { label: '팀 인원 수', value: `${props.selectedNode.memberCount}명` },
+    ]
+  }
+
+  if (props.selectedNode.type === 'member') {
+    return [
+      { label: '직급', value: props.selectedNode.position || '-' },
+      {
+        label: '이메일',
+        value: props.selectedNode.email || '-',
+        valueClass: 'organization-detail-panel__stat-value organization-detail-panel__stat-value--email',
+        title: props.selectedNode.email || '-',
+      },
+      { label: '소속 부서', value: props.selectedNode.departmentName || '-' },
+      { label: '소속 팀', value: props.selectedNode.teamName || '-' },
+    ]
+  }
+
+  return [
+    { label: '부서 수', value: `${props.selectedNode.departmentCount}개` },
+    { label: '팀 수', value: `${props.selectedNode.teamCount}개` },
+    { label: '구성원 수', value: `${props.selectedNode.memberCount}명` },
+  ]
+})
+
+const teamList = computed(() =>
+  props.selectedNode?.type === 'department' ? props.selectedNode.teams || [] : [],
+)
+
+const isTeamSelection = computed(() => props.selectedNode?.type === 'team')
+
+const memberList = computed(() => {
+  if (!props.selectedNode) return []
+  if (props.selectedNode.type === 'department') return props.selectedNode.members || []
+  if (props.selectedNode.type === 'team') return props.selectedNode.members || []
+  // 구성원 개별 선택에서는 상단 상세 정보만 노출하고 하단 중복 목록은 숨긴다.
+  return []
+})
+
+const memberSectionTitle = computed(() => {
+  if (!props.selectedNode) return ''
+  if (props.selectedNode.type === 'department') return '구성원 요약'
+  return '구성원'
+})
+
+const memberRowClass = computed(() =>
+  isTeamSelection.value
+    ? 'organization-detail-panel__row--member-card'
+    : 'organization-detail-panel__row--member',
+)
+</script>
+
+<style scoped>
+.organization-detail-panel {
+  --detail-panel-gap: 8px;
+  --detail-section-gap: 7px;
+  --detail-section-separation: 6px;
+  --detail-panel-padding: 12px;
+  --detail-card-padding: 10px 11px;
+  --detail-row-padding: 6px 9px;
+  --detail-row-height: 32px;
+  min-height: 0;
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  gap: var(--detail-panel-gap);
+  background: #fbfcfe;
+  overflow: hidden;
+}
+
+.organization-detail-panel__head {
+  display: grid;
+  align-content: center;
+  gap: 3px;
+  height: var(--organization-panel-header-height, 62px);
+  padding: var(--organization-panel-header-padding-y, 10px) var(--organization-panel-header-padding-x, 14px);
+  border-bottom: 1px solid var(--border);
+  box-sizing: border-box;
+  overflow: hidden;
+}
+
+.organization-detail-panel__head strong {
+  font-size: 13px;
+  line-height: 1.25;
+}
+
+.organization-detail-panel__head span {
+  color: var(--muted-foreground);
+  font-size: 11px;
+  line-height: 1.4;
+}
+
+.organization-detail-panel__content {
+  min-height: 0;
+  min-width: 0;
+  display: grid;
+  align-content: start;
+  gap: var(--detail-panel-gap);
+  padding: var(--detail-panel-padding);
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+
+.organization-detail-panel__summary {
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: #ffffff;
+  padding: var(--detail-card-padding);
+  box-shadow: none;
+}
+
+.organization-detail-panel__summary.is-department {
+  border-left: 3px solid var(--primary);
+}
+
+.organization-detail-panel__summary.is-team {
+  background: #ffffff;
+}
+
+.organization-detail-panel__summary.is-member {
+  background: #ffffff;
+}
+
+.organization-detail-panel__summary p,
+.organization-detail-panel__summary h3 {
+  margin: 0;
+}
+
+.organization-detail-panel__eyebrow {
+  color: var(--primary-dark);
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.organization-detail-panel__summary h3 {
+  margin-top: 3px;
+  font-size: 14px;
+  line-height: 1.25;
+  overflow-wrap: anywhere;
+}
+
+.organization-detail-panel__stats {
+  display: grid;
+  gap: 5px;
+  margin: 0;
+}
+
+.organization-detail-panel__stats div {
+  display: grid;
+  grid-template-columns: minmax(68px, auto) minmax(0, 1fr);
+  gap: 8px 10px;
+  align-items: center;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: #ffffff;
+  min-height: var(--detail-row-height);
+  padding: var(--detail-row-padding);
+}
+
+.organization-detail-panel__stats dt {
+  color: var(--muted-foreground);
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1.3;
+}
+
+.organization-detail-panel__stats dd {
+  margin: 0;
+  min-width: 0;
+  font-size: 12px;
+  font-weight: 600;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  text-align: right;
+  line-height: 1.3;
+  white-space: nowrap;
+}
+
+.organization-detail-panel__stat-value--email {
+  font-size: 10px;
+}
+
+.organization-detail-panel__section {
+  display: grid;
+  gap: var(--detail-section-gap);
+  margin-top: var(--detail-section-separation);
+}
+
+.organization-detail-panel__section h4 {
+  margin: 0;
+  font-size: 11px;
+  line-height: 1.35;
+}
+
+.organization-detail-panel__list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 6px;
+}
+
+.organization-detail-panel__list li {
+  min-width: 0;
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  align-items: center;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: #ffffff;
+  min-height: var(--detail-row-height);
+  padding: var(--detail-row-padding);
+}
+
+.organization-detail-panel__row {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.organization-detail-panel__row--member-card {
+  align-items: stretch;
+}
+
+.organization-detail-panel__team-name,
+.organization-detail-panel__member-main {
+  min-width: 0;
+  flex: 1;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--foreground);
+  font-size: 11px;
+}
+
+.organization-detail-panel__team-name {
+  font-weight: 500;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.organization-detail-panel__member-main {
+  justify-content: space-between;
+}
+
+.organization-detail-panel__member-main strong {
+  font-size: 11px;
+  line-height: 1.25;
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.organization-detail-panel__member-main small,
+.organization-detail-panel__row-meta,
+.organization-detail-panel__list li em {
+  min-width: 0;
+  color: var(--muted-foreground);
+  font-size: 11px;
+  font-style: normal;
+  line-height: 1.25;
+  white-space: nowrap;
+}
+
+.organization-detail-panel__member-main small,
+.organization-detail-panel__row-meta {
+  flex-shrink: 0;
+  font-weight: 500;
+}
+
+.organization-detail-panel__member-card {
+  min-width: 0;
+  width: 100%;
+  display: grid;
+  gap: 4px;
+}
+
+.organization-detail-panel__member-card-top {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.organization-detail-panel__member-card-top strong {
+  min-width: 0;
+  font-size: 11px;
+  line-height: 1.25;
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.organization-detail-panel__member-card-top small {
+  flex-shrink: 0;
+  color: var(--muted-foreground);
+  font-size: 11px;
+  font-style: normal;
+  line-height: 1.25;
+  white-space: nowrap;
+}
+
+.organization-detail-panel__row--member-card em {
+  max-width: 100%;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
+.organization-detail-panel__list li em {
+  max-width: 48%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.organization-detail-panel__empty {
+  border: 1px dashed var(--border);
+  border-radius: 10px;
+  background: #f8fafc;
+  padding: 11px 10px;
+  color: var(--muted-foreground);
+  font-size: 11px;
+  line-height: 1.4;
+}
+
+.organization-detail-panel.is-drawer {
+  padding: 0;
+  background: transparent;
+}
+</style>
