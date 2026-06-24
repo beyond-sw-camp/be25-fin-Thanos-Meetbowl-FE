@@ -26,9 +26,9 @@
         <section v-if="teamList.length" class="organization-detail-panel__section">
           <h4>하위 팀</h4>
           <ul class="organization-detail-panel__list">
-            <li v-for="team in teamList" :key="team.key">
-              <span class="organization-detail-panel__inline-main">{{ team.name }}</span>
-              <strong>{{ team.memberCount }}명</strong>
+            <li v-for="team in teamList" :key="team.key" class="organization-detail-panel__row organization-detail-panel__row--team">
+              <span class="organization-detail-panel__team-name">{{ team.name }}</span>
+              <strong class="organization-detail-panel__row-meta">{{ team.memberCount }}명</strong>
             </li>
           </ul>
         </section>
@@ -36,8 +36,12 @@
         <section v-if="memberList.length" class="organization-detail-panel__section">
           <h4>{{ memberSectionTitle }}</h4>
           <ul class="organization-detail-panel__list organization-detail-panel__list--members">
-            <li v-for="member in memberList" :key="member.key || member.userId">
-              <span class="organization-detail-panel__inline-main">
+            <li
+              v-for="member in memberList"
+              :key="member.key || member.userId"
+              class="organization-detail-panel__row organization-detail-panel__row--member"
+            >
+              <span class="organization-detail-panel__member-main">
                 <strong>{{ member.name }}</strong>
                 <small>{{ member.position || '-' }}</small>
               </span>
@@ -277,8 +281,16 @@ const memberSectionTitle = computed(() => {
   padding: var(--detail-row-padding);
 }
 
-.organization-detail-panel__inline-main {
+.organization-detail-panel__row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.organization-detail-panel__team-name,
+.organization-detail-panel__member-main {
   min-width: 0;
+  flex: 1;
   display: inline-flex;
   align-items: center;
   gap: 6px;
@@ -286,7 +298,18 @@ const memberSectionTitle = computed(() => {
   font-size: 12px;
 }
 
-.organization-detail-panel__inline-main strong {
+.organization-detail-panel__team-name {
+  font-weight: 500;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.organization-detail-panel__member-main {
+  justify-content: space-between;
+}
+
+.organization-detail-panel__member-main strong {
   font-size: 12px;
   line-height: 1.25;
   font-weight: 600;
@@ -295,13 +318,20 @@ const memberSectionTitle = computed(() => {
   white-space: nowrap;
 }
 
-.organization-detail-panel__inline-main small,
+.organization-detail-panel__member-main small,
+.organization-detail-panel__row-meta,
 .organization-detail-panel__list li em {
   color: var(--muted-foreground);
   font-size: 12px;
   font-style: normal;
   line-height: 1.25;
   white-space: nowrap;
+}
+
+.organization-detail-panel__member-main small,
+.organization-detail-panel__row-meta {
+  flex-shrink: 0;
+  font-weight: 500;
 }
 
 .organization-detail-panel__list li em {
