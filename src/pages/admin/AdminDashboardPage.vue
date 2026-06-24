@@ -123,11 +123,13 @@ const usageChartInnerHeight = computed(() =>
 )
 function createChartYTicks(maxValue) {
   const tickCount = Math.min(Math.max(maxValue, 2), 5)
-  return Array.from({ length: tickCount + 1 }, (_, index) => {
+  const rawTicks = Array.from({ length: tickCount + 1 }, (_, index) => {
     const value = Math.round((maxValue / tickCount) * (tickCount - index))
     const y = chartPadding.top + (usageChartInnerHeight.value * index) / tickCount
     return { value, y }
   })
+
+  return rawTicks.filter((tick, index) => index === 0 || tick.value !== rawTicks[index - 1].value)
 }
 function createChartPoints(items, maxValue, valueKey = 'reservationCount') {
   if (!items.length) return []
@@ -143,8 +145,8 @@ function createChartPoints(items, maxValue, valueKey = 'reservationCount') {
       x,
       y,
       label: formatHour(item.slotStartAt),
-      emphasized: index === 0 || index === items.length - 1 || index % 2 === 1,
-      showValue: index === 0 || index === items.length - 1 || index % 4 === 0 || item[valueKey] === maxValue,
+      emphasized: true,
+      showValue: index === 0 || index === items.length - 1 || item[valueKey] === maxValue,
     }
   })
 }
@@ -416,7 +418,9 @@ const kpis = computed(() => {
     {
       label: '최근 관리자 작업',
       value: recentAuditLogs.value.length,
-      sub: recentAuditLogs.value[0] ? `${recentAuditLogs.value[0].actorName} · ${recentAuditLogs.value[0].actionType}` : '최근 이력 없음',
+      sub: recentAuditLogs.value[0]
+        ? `${recentAuditLogs.value[0].actorName} · ${recentAuditLogs.value[0].actionType}`
+        : '최근 이력 없음',
     },
   ]
 })

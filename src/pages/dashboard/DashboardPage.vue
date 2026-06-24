@@ -97,7 +97,7 @@ export default defineComponent({
     })
 
     const personalSchedules = computed(() =>
-      workspaceEvents.value
+      dedupeWorkspaceEvents(workspaceEvents.value)
         .slice()
         .sort((a, b) => compareByEpochAsc(a.startedAt, b.startedAt))
         .slice(0, 5)
@@ -110,6 +110,29 @@ export default defineComponent({
           badgeTone: event.source === 'MEETING' ? 'navy' : 'primary',
         })),
     )
+
+    function dedupeWorkspaceEvents(events) {
+      const seen = new Set()
+      const unique = []
+      for (const event of events || []) {
+        const key = [
+          event.sourceId || '',
+          event.eventId || '',
+          event.source || '',
+          event.meetingId || '',
+          event.relatedMeetingId || '',
+          event.ownerUserId || '',
+          event.title || '',
+          event.startedAt || '',
+          event.endedAt || '',
+          event.description || '',
+        ].join(':')
+        if (seen.has(key)) continue
+        seen.add(key)
+        unique.push(event)
+      }
+      return unique
+    }
 
     const todayLabel = computed(() => {
       const [year, month, day] = todayKst().split('-')
@@ -170,7 +193,10 @@ export default defineComponent({
 
     const openSelectedMeeting = () => {
       if (selected.value?.status !== 'live') return
-      openMeetingWindow(selected.value.id, { scheduledAt: selected.value.scheduledAtMs })
+      openMeetingWindow(selected.value.id, {
+        scheduledAt: selected.value.scheduledAtMs,
+        title: selected.value.title,
+      })
     }
 
     return {
@@ -196,14 +222,18 @@ export default defineComponent({
         </RouterLink>
       </div>
       <div class="split-grid">
-        <article class="card tall">
+        <article class="card tall dashboard-timeline-card">
           <div class="card-head"><div><h2>오늘의 회의 타임라인</h2><p>내가 참여·생성한 회의 · {{ todayLabel }}</p></div><RouterLink to="/app/meetings">전체 회의</RouterLink></div>
           <button v-for="meeting in todays" :key="meeting.id" class="timeline-row" :class="{ selected: selectedId === meeting.id }" @click="selectedId = meeting.id">
-            <span>{{ meeting.startClock }}</span>
+            <span class="timeline-time">{{ meeting.startClock }}</span>
             <i :class="meeting.status"></i>
-            <strong>{{ meeting.title }}</strong>
-            <em>{{ meeting.room }}</em>
-            <small>{{ meeting.role === 'host' ? '주최' : '참석' }}</small>
+            <div class="timeline-copy">
+              <strong>{{ meeting.title }}</strong>
+              <div class="timeline-meta">
+                <em>{{ meeting.room }}</em>
+                <small>{{ meeting.role === 'host' ? '주최' : '참석' }}</small>
+              </div>
+            </div>
           </button>
           <p v-if="loadError" class="empty-text">회의 정보를 불러오지 못했습니다.</p>
           <p v-else-if="!todays.length" class="empty-text">오늘 예정된 회의가 없습니다.</p>
