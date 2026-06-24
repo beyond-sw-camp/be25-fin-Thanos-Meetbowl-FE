@@ -289,7 +289,7 @@ async function deleteSelected() {
   const ids = [...selected.value]
   await Promise.all(ids.map((id) => tab.value === 'trash' ? permanentlyDeleteMail(id) : moveMailToTrash(id)))
   await loadMails()
-  showToast('메일 삭제 완료', `${ids.length}개 메일을 삭제했습니다.`)
+  showToast('삭제 완료', `${ids.length}개의 메일을 정리했어요.`)
 }
 
 async function deleteOne(mailId) {
@@ -306,7 +306,7 @@ async function deleteOne(mailId) {
   else await moveMailToTrash(mailId)
   open.value = null
   await loadMails()
-  showToast('메일 삭제 완료', '선택한 메일을 삭제했습니다.')
+  showToast('삭제 완료', '선택한 메일을 정리했어요.')
 }
 
 async function restoreOne(mailId) {
@@ -319,7 +319,7 @@ async function backupSelected() {
   const ids = [...selected.value]
   await backupMails(ids)
   selected.value = new Set()
-  showToast('메일 백업 완료', `${ids.length}개 메일을 백업했습니다.`)
+  showToast('백업 완료', `${ids.length}개의 메일을 백업했어요.`)
 }
 
 async function backupMail(mailId) {
