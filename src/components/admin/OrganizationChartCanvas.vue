@@ -240,11 +240,12 @@ watch(
   justify-content: space-between;
   align-items: center;
   gap: 12px;
-  min-height: var(--organization-panel-header-height, 62px);
+  height: var(--organization-panel-header-height, 62px);
   padding: var(--organization-panel-header-padding-y, 10px) var(--organization-panel-header-padding-x, 14px);
   border-bottom: 1px solid var(--border);
   background: #ffffff;
   box-sizing: border-box;
+  overflow: hidden;
 }
 
 .organization-chart-canvas__toolbar strong {

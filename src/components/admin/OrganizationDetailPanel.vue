@@ -177,10 +177,11 @@ const memberRowClass = computed(() =>
   display: grid;
   align-content: center;
   gap: 3px;
-  min-height: var(--organization-panel-header-height, 62px);
+  height: var(--organization-panel-header-height, 62px);
   padding: var(--organization-panel-header-padding-y, 10px) var(--organization-panel-header-padding-x, 14px);
   border-bottom: 1px solid var(--border);
   box-sizing: border-box;
+  overflow: hidden;
 }
 
 .organization-detail-panel__head strong {
