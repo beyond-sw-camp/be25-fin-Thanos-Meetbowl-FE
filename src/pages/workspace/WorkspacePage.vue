@@ -39,7 +39,7 @@
           <div v-for="(week, index) in weekNames" :key="week" :class="{ sun: index === 0, sat: index === 6 }">{{ week }}</div>
         </div>
         <div class="calendar-grid">
-          <button v-for="cell in cells" :key="cell.key" type="button" class="calendar-cell" :class="{ muted: !cell.inMonth, today: cell.key === todayKey, selected: selected === cell.key, sun: cell.weekday === 0, sat: cell.weekday === 6 }" @click="selected = cell.key">
+          <button v-for="cell in cells" :key="cell.key" type="button" class="calendar-cell" :class="{ muted: !cell.inMonth, today: cell.key === todayKey, selected: selected === cell.key, sun: cell.weekday === 0, sat: cell.weekday === 6 }" @click="selectCalendarDate(cell)">
             <div class="calendar-date-row">
               <span>{{ cell.day }}</span>
               <small v-if="eventsByDate[cell.key]?.length">{{ eventsByDate[cell.key].length }}</small>
@@ -76,7 +76,7 @@
             <div class="workspace-colleague-row">
               <span class="workspace-check">✓</span>
               <span>{{ userName(subscription.targetUserId) }}</span>
-              <button type="button" class="danger-text" @click.stop="removeSubscription(subscription.subscriptionId)">해제</button>
+              <button type="button" class="workspace-subscription-remove" @click.stop="removeSubscription(subscription.subscriptionId)"><UserMinus :size="14" /> 구독 해제</button>
             </div>
           </div>
           <button type="button" class="dashed-button" @click="subscriptionOpen = true">동료 구독 추가</button>
@@ -86,12 +86,17 @@
 
     <div v-else-if="activeTab === 'memo'" class="workspace-memo-grid">
       <aside class="card workspace-memo-list">
-        <div class="workspace-panel-head"><h2>최근 메모</h2><button type="button" @click="createNewMemo"><Plus :size="14" /></button></div>
+        <div class="workspace-panel-head workspace-memo-head"><h2>최근 메모</h2><button type="button" aria-label="새 메모" @click="createNewMemo"><Plus :size="14" /></button></div>
+        <label class="workspace-inline-search workspace-memo-search">
+          <Search :size="14" />
+          <input v-model="memoKeyword" placeholder="개인 메모 검색">
+        </label>
         <button v-for="memo in pagedMemos" :key="memo.memoId" type="button" class="workspace-memo-item" :class="{ active: activeMemoId === memo.memoId }" @click="selectMemo(memo.memoId)">
           <strong>{{ memo.title }}</strong>
           <span>{{ memo.content.split('\n')[0] || '내용 없음' }}</span>
           <small>{{ displayDate(memo.updatedAt || memo.createdAt) }}</small>
         </button>
+        <div v-if="filteredMemos.length === 0" class="empty-state workspace-compact-empty">검색된 메모가 없습니다.</div>
         <Pagination v-model="memoPage" :total-pages="memoTotalPages" />
       </aside>
       <article class="card workspace-memo-editor">
@@ -111,14 +116,17 @@
       <div class="workspace-panel-head">
         <h2>백업한 메일</h2>
         <span class="badge primary">총 {{ backups.length }}건</span>
-        <input v-model="backupKeyword" placeholder="백업 자료 검색">
+        <label class="workspace-inline-search workspace-backup-search">
+          <Search :size="14" />
+          <input v-model="backupKeyword" placeholder="백업 메일 검색">
+        </label>
       </div>
       <div v-for="backup in backups" :key="backup.backupId" class="workspace-mail-row">
         <RouterLink :to="'/app/backup/' + backup.backupId">
           <span class="workspace-file-icon mail"><Mail :size="17" /></span>
           <span>
           <strong>{{ backup.title }}</strong>
-            <small>{{ backup.sourceType }} · {{ displayDate(backup.backedUpAt) }} · {{ backup.summary }}</small>
+            <small>{{ backup.sourceType }} · {{ displayDate(backup.backedUpAt) }} · {{ compactText(backup.summary) }}</small>
           </span>
         </RouterLink>
         <button type="button" class="workspace-backup-release" @click="releaseBackup(backup)">해제</button>
@@ -132,7 +140,7 @@
         <span class="badge primary">{{ favoriteMinuteItems.length }}건</span>
       </div>
       <div v-for="minute in favoriteMinuteItems" :key="minute.id" class="workspace-minute-row">
-        <RouterLink to="/app/minutes">
+        <RouterLink :to="`/app/minutes/${minute.meetingId}`">
           <span class="workspace-file-icon minutes"><FileText :size="17" /></span>
           <span>
             <strong>{{ minute.title }}</strong>
@@ -141,7 +149,8 @@
         </RouterLink>
         <button type="button" title="즐겨찾기 해제" @click="removeFavoriteMinute(minute.id)"><BookmarkCheck :size="16" /> 해제</button>
       </div>
-      <div v-if="favoriteMinuteItems.length === 0" class="empty-state">내 회의록에서 별표를 누르면 이곳에 표시됩니다.</div>
+      <div v-if="minutesLoading" class="empty-state">회의록을 불러오는 중입니다.</div>
+      <div v-else-if="favoriteMinuteItems.length === 0" class="empty-state">내 회의록에서 별표를 누르면 이곳에 표시됩니다.</div>
     </article>
 
     <article v-else class="card workspace-panel">
@@ -260,14 +269,16 @@
         <span>{{ toast.message }}</span>
       </div>
     </div>
+    <ConfirmDialog v-if="confirmDialog" v-bind="confirmDialog" @cancel="cancelConfirm" @confirm="acceptConfirm" />
   </section>
 </template>
 
 <script setup>
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
-import { useRouter } from 'vue-router'
-import { BookmarkCheck, CalendarDays, Download, FileText, Folder, Info, Mail, MoreHorizontal, Plus, StickyNote, Trash2, Upload, X } from '@lucide/vue'
+import { useRoute, useRouter } from 'vue-router'
+import { BookmarkCheck, CalendarDays, Download, FileText, Folder, Info, Mail, MoreHorizontal, Plus, Search, StickyNote, Trash2, Upload, UserMinus, X } from '@lucide/vue'
 import Pagination from '../../components/common/Pagination.vue'
+import ConfirmDialog from '../../components/common/ConfirmDialog.vue'
 import {
   createMemo,
   createWorkspaceEvent,
@@ -292,7 +303,6 @@ import { previewKind, resolveBlobFileName, saveBlob } from '../../lib/file-actio
 import { getUserSummary, searchUsers } from '../../lib/users'
 import { formatKstDateTime, formatKstTime } from '../../utils/dateTime'
 import { workspaceDateKey, workspaceMonthCells, workspaceNow } from '../../data/workspaceData'
-import { minutes as mockMinutes } from '../../data/mockData'
 import {
   fallbackWorkspaceBackups,
   fallbackWorkspaceCalendar,
@@ -301,9 +311,11 @@ import {
   fallbackUserSearch,
   withFallback,
 } from '../../data/mailWorkspaceFallbacks'
-import { onMinuteFavoritesChanged, readMinuteFavorites, toggleMinuteFavorite } from '../../lib/minute-favorites'
+import { listMinutes, removeMinutesFavorite } from '../../lib/minutes'
+import { useConfirmDialog } from '../../composables/useConfirmDialog'
 
 const router = useRouter()
+const route = useRoute()
 const tabs = [
   { id: 'calendar', label: '일정', icon: CalendarDays },
   { id: 'memo', label: '개인 메모장', icon: StickyNote },
@@ -314,7 +326,7 @@ const tabs = [
 const workspaceToday = new Date(workspaceNow().replace(' ', 'T'))
 const monthNames = ['1월', '2월', '3월', '4월', '5월', '6월', '7월', '8월', '9월', '10월', '11월', '12월']
 const weekNames = ['일', '월', '화', '수', '목', '금', '토']
-const activeTab = ref('calendar')
+const activeTab = ref(tabs.some((tab) => tab.id === route.query.tab) ? route.query.tab : 'calendar')
 const cursor = ref(workspaceToday)
 const selected = ref(workspaceDateKey(workspaceToday))
 const filter = ref('all')
@@ -324,6 +336,7 @@ const subscriptions = ref([])
 const userMap = ref(new Map())
 const memos = ref([])
 const activeMemoId = ref('')
+const memoKeyword = ref('')
 // 메모는 한 페이지에 5개씩 보여주고 나머지는 페이지네이션으로 넘긴다.
 const MEMO_PAGE_SIZE = 5
 const memoPage = ref(1)
@@ -355,8 +368,10 @@ const selectedUserId = ref('')
 const errorMessage = ref('')
 const toasts = ref([])
 const todayKey = workspaceDateKey(workspaceToday)
-const minuteFavorites = ref(readMinuteFavorites())
-let stopFavoriteSync = null
+const minuteItems = ref([])
+const minutesLoading = ref(false)
+const { confirmDialog, requestConfirm, cancelConfirm, acceptConfirm } = useConfirmDialog()
+let backupSearchTimer = null
 
 const cells = computed(() => workspaceMonthCells(cursor.value.getFullYear(), cursor.value.getMonth()).map((date) => ({
   date,
@@ -377,19 +392,28 @@ const eventsByDate = computed(() => {
 })
 const selectedEvents = computed(() => (eventsByDate.value[selected.value] || []).slice().sort((a, b) => String(a.startedAt).localeCompare(String(b.startedAt))))
 const activeMemo = computed(() => memos.value.find((memo) => memo.memoId === activeMemoId.value))
-const memoTotalPages = computed(() => Math.max(1, Math.ceil(memos.value.length / MEMO_PAGE_SIZE)))
+const filteredMemos = computed(() => {
+  const keyword = memoKeyword.value.trim().toLowerCase()
+  if (!keyword) return memos.value
+  return memos.value.filter((memo) => `${memo.title} ${memo.content}`.toLowerCase().includes(keyword))
+})
+const memoTotalPages = computed(() => Math.max(1, Math.ceil(filteredMemos.value.length / MEMO_PAGE_SIZE)))
 const pagedMemos = computed(() => {
   const start = (memoPage.value - 1) * MEMO_PAGE_SIZE
-  return memos.value.slice(start, start + MEMO_PAGE_SIZE)
+  return filteredMemos.value.slice(start, start + MEMO_PAGE_SIZE)
 })
 // 메모 삭제 등으로 페이지 수가 줄면 현재 페이지가 범위를 벗어날 수 있어 마지막 페이지로 보정한다.
 watch(memoTotalPages, (total) => {
   if (memoPage.value > total) memoPage.value = total
 })
-const favoriteMinuteItems = computed(() => mockMinutes.filter((minute) => minuteFavorites.value[minute.id]))
+const favoriteMinuteItems = computed(() => minuteItems.value.filter((minute) => minute.favorite))
 
 watch(cursor, loadCalendar)
-watch(backupKeyword, () => loadBackups())
+watch(memoKeyword, () => { memoPage.value = 1 })
+watch(backupKeyword, () => {
+  clearTimeout(backupSearchTimer)
+  backupSearchTimer = setTimeout(loadBackups, 250)
+})
 watch(userKeyword, async () => {
   if (!userKeyword.value.trim()) {
     await loadUserCandidates('')
@@ -400,15 +424,12 @@ watch(userKeyword, async () => {
 
 onMounted(async () => {
   document.addEventListener('mousedown', closeSubscriptionSearchOnOutside)
-  stopFavoriteSync = onMinuteFavoritesChanged((next) => {
-    minuteFavorites.value = next
-  })
-  await Promise.all([loadCalendar(), loadSubscriptions(), loadMemos(), loadBackups(), loadDriveFiles()])
+  await Promise.all([loadCalendar(), loadSubscriptions(), loadMemos(), loadBackups(), loadDriveFiles(), loadMinutes()])
 })
 
 onUnmounted(() => {
   document.removeEventListener('mousedown', closeSubscriptionSearchOnOutside)
-  stopFavoriteSync?.()
+  clearTimeout(backupSearchTimer)
   clearDrivePreviewUrl()
 })
 
@@ -436,12 +457,26 @@ async function loadMemos() {
 }
 
 async function loadBackups() {
-  const loaded = await withFallback(
-    () => (backupKeyword.value.trim() ? searchBackups(backupKeyword.value.trim()) : getBackups()),
-    () => fallbackWorkspaceBackups(backupKeyword.value),
-  )
-  const next = loaded.length ? loaded : fallbackWorkspaceBackups(backupKeyword.value)
-  backups.value = next.filter((backup) => !releasedBackupIds.value.has(backup.backupId))
+  try {
+    const loaded = backupKeyword.value.trim()
+      ? await searchBackups(backupKeyword.value.trim())
+      : await getBackups()
+    backups.value = (loaded || []).filter((backup) => !releasedBackupIds.value.has(backup.backupId))
+  } catch {
+    backups.value = fallbackWorkspaceBackups(backupKeyword.value)
+      .filter((backup) => !releasedBackupIds.value.has(backup.backupId))
+  }
+}
+
+async function loadMinutes() {
+  minutesLoading.value = true
+  try {
+    minuteItems.value = (await listMinutes()).map(normalizeWorkspaceMinute)
+  } catch {
+    minuteItems.value = []
+  } finally {
+    minutesLoading.value = false
+  }
 }
 
 async function loadDriveFiles() {
@@ -464,6 +499,11 @@ function moveMonth(offset) {
 function goToday() {
   cursor.value = new Date(workspaceToday)
   selected.value = todayKey
+}
+
+function selectCalendarDate(cell) {
+  selected.value = cell.key
+  openEventForm()
 }
 
 function openEventForm(event = null) {
@@ -558,6 +598,12 @@ async function saveActiveMemo() {
 
 async function deleteActiveMemo() {
   if (!memoDraft.value.memoId) return
+  const confirmed = await requestConfirm({
+    title: '개인 메모를 삭제할까요?',
+    message: `'${memoDraft.value.title}' 메모는 삭제 후 복구할 수 없습니다.`,
+    confirmLabel: '메모 삭제',
+  })
+  if (!confirmed) return
   await deleteMemo(memoDraft.value.memoId)
   memos.value = memos.value.filter((memo) => memo.memoId !== memoDraft.value.memoId)
   selectMemo(memos.value[0]?.memoId || '')
@@ -565,6 +611,12 @@ async function deleteActiveMemo() {
 }
 
 async function releaseBackup(backup) {
+  const confirmed = await requestConfirm({
+    title: '백업을 해제할까요?',
+    message: `'${backup.title}'을 개인 워크스페이스 백업 목록에서 제거합니다.`,
+    confirmLabel: '백업 해제',
+  })
+  if (!confirmed) return
   try {
     await removeBackupBookmark(backup.backupId)
   } finally {
@@ -575,8 +627,16 @@ async function releaseBackup(backup) {
   showToast('백업 해제 완료', backup.title)
 }
 
-function removeFavoriteMinute(minuteId) {
-  minuteFavorites.value = toggleMinuteFavorite(minuteId)
+async function removeFavoriteMinute(minuteId) {
+  const minute = minuteItems.value.find((item) => item.id === minuteId)
+  const confirmed = await requestConfirm({
+    title: '회의록 즐겨찾기를 해제할까요?',
+    message: `'${minute?.title || '선택한 회의록'}'을 개인 워크스페이스에서 제거합니다. 회의록 원본은 삭제되지 않습니다.`,
+    confirmLabel: '즐겨찾기 해제',
+  })
+  if (!confirmed) return
+  await removeMinutesFavorite(minuteId)
+  minuteItems.value = minuteItems.value.map((minute) => minute.id === minuteId ? { ...minute, favorite: false } : minute)
 }
 
 function readStoredReleasedBackupIds() {
@@ -636,6 +696,13 @@ async function uploadPersonalFiles(fileList) {
 }
 
 async function removeDriveFile(fileId) {
+  const file = driveFiles.value.find((item) => item.fileId === fileId)
+  const confirmed = await requestConfirm({
+    title: '파일을 삭제할까요?',
+    message: `'${file?.originalFileName || '선택한 파일'}'은 삭제 후 복구할 수 없습니다.`,
+    confirmLabel: '파일 삭제',
+  })
+  if (!confirmed) return
   await deleteDriveFile(fileId)
   driveActionFileId.value = ''
   if (drivePreviewFile.value?.fileId === fileId) closeDrivePreview()
@@ -749,6 +816,13 @@ function closeSubscriptionSearchOnOutside(event) {
 }
 
 async function removeSubscription(subscriptionId) {
+  const subscription = subscriptions.value.find((item) => item.subscriptionId === subscriptionId)
+  const confirmed = await requestConfirm({
+    title: '동료 일정 구독을 해제할까요?',
+    message: `${userName(subscription?.targetUserId)}님의 일정이 더 이상 내 달력에 표시되지 않습니다.`,
+    confirmLabel: '구독 해제',
+  })
+  if (!confirmed) return
   await unsubscribeCalendar(subscriptionId)
   await loadSubscriptions()
   await loadCalendar()
@@ -766,6 +840,28 @@ function userName(userId) {
 
 function displayDate(value) {
   return formatKstDateTime(value)
+}
+
+function compactText(value) {
+  return String(value || '').replace(/\s+/g, ' ').trim()
+}
+
+function normalizeWorkspaceMinute(raw) {
+  const startedAt = raw.meetingStartedAt || null
+  const endedAt = raw.meetingEndedAt || null
+  const durationMinutes = startedAt && endedAt
+    ? Math.max(1, Math.round((new Date(endedAt) - new Date(startedAt)) / 60000))
+    : 0
+  return {
+    id: raw.minutesId,
+    meetingId: raw.meetingId,
+    title: raw.meetingTitle || '회의록',
+    date: startedAt ? displayDate(startedAt) : '-',
+    duration: durationMinutes ? `${durationMinutes}분` : '-',
+    attendees: Number(raw.attendeeCount || 0),
+    reviewer: raw.reviewerName || raw.reviewerDepartment || '-',
+    favorite: Boolean(raw.favorite),
+  }
 }
 
 function formatSize(bytes) {

@@ -3,10 +3,11 @@
     v-if="!open"
     type="button"
     class="chatbot-floating-button"
-    aria-label="AI 챗봇 열기"
+    :aria-label="hasCompletedResponse ? 'AI 챗봇 응답 완료, 열기' : 'AI 챗봇 열기'"
     @click="openChatbot"
   >
     <MessageSquare :size="22" />
+    <span v-if="hasCompletedResponse" class="chatbot-complete-indicator" aria-hidden="true"></span>
   </button>
 
   <div v-else class="chatbot-floating-layer">
@@ -79,9 +80,11 @@ const question = ref('')
 const loading = ref(false)
 const errorMessage = ref('')
 const messageScroll = ref(null)
+const hasCompletedResponse = ref(false)
 
 async function openChatbot() {
   open.value = true
+  hasCompletedResponse.value = false
   await scrollToBottom()
 }
 
@@ -107,6 +110,7 @@ async function sendQuestion() {
       sources: response.sources || [],
       model: response.model,
     })
+    if (!open.value) hasCompletedResponse.value = true
   } catch (error) {
     errorMessage.value = error?.message || '챗봇 답변을 생성하지 못했습니다.'
   } finally {
@@ -118,6 +122,7 @@ async function sendQuestion() {
 function clearThread() {
   messages.value = []
   errorMessage.value = ''
+  hasCompletedResponse.value = false
 }
 
 function handleComposerEnter(event) {

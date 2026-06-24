@@ -1,4 +1,4 @@
-import { deleteJson, getBlob, getJson, patchJson, postForm, postJson } from './api-client'
+import { deleteJson, getBlob, getJson, patchJson, postForm, postJson } from './api-client.js'
 
 export function getSharedWorkspaces() {
   return getJson('/shared-workspaces')

@@ -52,6 +52,7 @@
     @close="closeCompose"
     @send="sendDraft"
   />
+  <ConfirmDialog v-if="confirmDialog" v-bind="confirmDialog" @cancel="cancelConfirm" @confirm="acceptConfirm" />
   <div class="toast-stack" aria-live="polite">
     <div v-for="toast in toasts" :key="toast.id" class="toast-card">
       <strong>{{ toast.title }}</strong>
@@ -64,6 +65,7 @@
 import { computed, onMounted, ref, watch } from 'vue'
 import { Archive, PenSquare, RefreshCw, Search, Trash2 } from '@lucide/vue'
 import Pagination from '../../components/common/Pagination.vue'
+import ConfirmDialog from '../../components/common/ConfirmDialog.vue'
 import ComposeModal from '../../components/mail/ComposeModal.vue'
 import MailDetail from '../../components/mail/MailDetail.vue'
 import MailList from '../../components/mail/MailList.vue'
@@ -82,6 +84,7 @@ import {
 import { getUserSummary, searchUsers } from '../../lib/users'
 import { formatKstDateTime } from '../../utils/dateTime'
 import { fallbackMailPage, fallbackUserSearch } from '../../data/mailWorkspaceFallbacks'
+import { useConfirmDialog } from '../../composables/useConfirmDialog'
 
 const mailTemplates = [
   { id: 'meeting', label: '회의 요청', subject: '[회의 요청] {주제} 일정 협의', body: '안녕하세요,\n\n아래와 같이 회의를 요청드립니다.\n\n- 안건: \n- 일시: YYYY-MM-DD HH:MM\n- 장소: \n- 참석자: \n\n참석 가능 여부 회신 부탁드립니다.\n\n감사합니다.' },
@@ -118,6 +121,7 @@ const selected = ref(new Set())
 const loading = ref(false)
 const errorMessage = ref('')
 const toasts = ref([])
+const { confirmDialog, requestConfirm, cancelConfirm, acceptConfirm } = useConfirmDialog()
 const pageSize = 15
 
 const pageItems = computed(() => {
@@ -237,6 +241,7 @@ function toggleOne(id) {
 async function openMail(mail) {
   try {
     if (isFallbackMail(mail)) {
+      if (!mail.read && tab.value === 'inbox') mail.read = true
       open.value = mail
       return
     }
@@ -271,7 +276,15 @@ function isFallbackMail(mail) {
 }
 
 async function deleteSelected() {
-  if (!window.confirm(`${selected.value.size}개 메일을 ${tab.value === 'trash' ? '영구 삭제' : '삭제'}하시겠습니까?`)) return
+  const permanently = tab.value === 'trash'
+  const confirmed = await requestConfirm({
+    title: permanently ? '메일을 영구 삭제할까요?' : '메일을 삭제할까요?',
+    message: permanently
+      ? `선택한 ${selected.value.size}개 메일은 영구 삭제되며 복구할 수 없습니다.`
+      : `선택한 ${selected.value.size}개 메일을 휴지통으로 이동합니다.`,
+    confirmLabel: permanently ? '영구 삭제' : '삭제',
+  })
+  if (!confirmed) return
   const ids = [...selected.value]
   const localIds = ids.filter((id) => isLocalMailId(id))
   await Promise.all(ids.map((id) => isLocalMailId(id) ? Promise.resolve() : tab.value === 'trash' ? permanentlyDeleteMail(id) : moveMailToTrash(id)))
@@ -283,7 +296,15 @@ async function deleteSelected() {
 }
 
 async function deleteOne(mailId) {
-  if (!window.confirm(`'${open.value?.subject || '선택한 메일'}' 메일을 ${open.value?.trashed || tab.value === 'trash' ? '영구 삭제' : '삭제'}하시겠습니까?`)) return
+  const permanently = Boolean(open.value?.trashed || tab.value === 'trash')
+  const confirmed = await requestConfirm({
+    title: permanently ? '메일을 영구 삭제할까요?' : '메일을 삭제할까요?',
+    message: permanently
+      ? `'${open.value?.subject || '선택한 메일'}'은 영구 삭제되며 복구할 수 없습니다.`
+      : `'${open.value?.subject || '선택한 메일'}'을 휴지통으로 이동합니다.`,
+    confirmLabel: permanently ? '영구 삭제' : '삭제',
+  })
+  if (!confirmed) return
   if (!isLocalMailId(mailId)) {
     if (open.value?.trashed || tab.value === 'trash') await permanentlyDeleteMail(mailId)
     else await moveMailToTrash(mailId)

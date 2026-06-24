@@ -8,6 +8,7 @@
       <div class="shared-header-actions">
         <button type="button" class="ghost-button icon-action" @click="openCreate"><FolderKanban :size="16" /> 프로젝트 생성</button>
         <button type="button" class="ghost-button icon-action" :disabled="!activeSpaceId" @click="openMemberManage"><Plus :size="15" /> 멤버 관리</button>
+        <button v-if="isActiveSpaceOwner" type="button" class="danger-button small" @click="removeActiveSpace"><Trash2 :size="15" /> 프로젝트 삭제</button>
         <button type="button" class="primary-button small" :disabled="!activeSpaceId" @click="openUpload"><Upload :size="15" /> 파일 업로드</button>
       </div>
     </header>
@@ -152,8 +153,8 @@
     <div v-if="createOpen" class="modal-backdrop" @click="createOpen = false">
       <form class="write-modal shared-create-modal" @submit.prevent="createSpace" @click.stop>
         <header><h2>프로젝트 생성</h2><button type="button" @click="createOpen = false">닫기</button></header>
-        <label>이름<input v-model="spaceDraft.name" placeholder="예: Q3 신제품 TF"></label>
-        <section class="shared-member-invite">
+        <label class="shared-create-field">이름<input v-model="spaceDraft.name" placeholder="예: Q3 신제품 TF"></label>
+        <section class="shared-member-invite shared-create-field">
           <div class="shared-member-section-title">
             <strong>프로젝트 멤버</strong>
             <small>{{ createSelectedMembers.length }}명 선택</small>
@@ -265,16 +266,19 @@
         <span>{{ toast.message }}</span>
       </div>
     </div>
+    <ConfirmDialog v-if="confirmDialog" v-bind="confirmDialog" @cancel="cancelConfirm" @confirm="acceptConfirm" />
   </section>
 </template>
 
 <script setup>
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { Download, FileSpreadsheet, FileText, FileType2, FolderKanban, Info, MoreHorizontal, Plus, Search, Trash2, Upload, X } from '@lucide/vue'
+import ConfirmDialog from '../../components/common/ConfirmDialog.vue'
 import {
   changeSharedWorkspaceAudience,
   addSharedWorkspaceFileVersion,
   createSharedWorkspace,
+  deleteSharedWorkspace,
   deleteSharedWorkspaceFile,
   downloadSharedWorkspaceFile,
   getSharedWorkspaceFileVersions,
@@ -297,6 +301,11 @@ import {
   fallbackUserSearch,
   withFallback,
 } from '../../data/mailWorkspaceFallbacks'
+import { useAuthStore } from '../../stores/auth'
+import { useConfirmDialog } from '../../composables/useConfirmDialog'
+
+const auth = useAuthStore()
+const { confirmDialog, requestConfirm, cancelConfirm, acceptConfirm } = useConfirmDialog()
 
 const spaces = ref([])
 const activeSpaceId = ref('')
@@ -338,6 +347,7 @@ const errorMessage = ref('')
 const toasts = ref([])
 
 const activeSpace = computed(() => spaces.value.find((space) => space.workspaceId === activeSpaceId.value))
+const isActiveSpaceOwner = computed(() => Boolean(activeSpace.value?.ownerUserId && activeSpace.value.ownerUserId === auth.user?.userId))
 const filteredFiles = computed(() => files.value.filter((file) => !keyword.value.trim() || file.originalFileName.toLowerCase().includes(keyword.value.trim().toLowerCase())))
 const memberRows = computed(() => members.value.map((member) => {
   const user = userMap.value.get(member.userId) || {}
@@ -614,6 +624,12 @@ async function downloadFile(file) {
 
 async function removeFile(file) {
   if (!activeSpaceId.value || !file?.fileId) return
+  const confirmed = await requestConfirm({
+    title: '공유 파일을 삭제할까요?',
+    message: `'${file.originalFileName}'은 프로젝트에서 삭제되며 복구할 수 없습니다.`,
+    confirmLabel: '파일 삭제',
+  })
+  if (!confirmed) return
   await deleteSharedWorkspaceFile(activeSpaceId.value, file.fileId)
   fileActionFileId.value = ''
   if (openDoc.value?.fileId === file.fileId) closeDrawer()
@@ -722,6 +738,12 @@ function closeInviteSearchOnOutside(event) {
 }
 
 async function removeMember(userId) {
+  const confirmed = await requestConfirm({
+    title: '프로젝트 멤버를 삭제할까요?',
+    message: `${userLabel(userId)}님은 이 프로젝트의 공유 자료에 접근할 수 없게 됩니다.`,
+    confirmLabel: '멤버 삭제',
+  })
+  if (!confirmed) return
   try {
     await removeSharedWorkspaceMember(activeSpaceId.value, userId)
     await selectSpace(activeSpaceId.value)
@@ -729,6 +751,27 @@ async function removeMember(userId) {
     members.value = members.value.filter((member) => member.userId !== userId)
   }
   showToast('멤버 삭제 완료', '공유 프로젝트 멤버를 삭제했습니다.')
+}
+
+async function removeActiveSpace() {
+  if (!activeSpace.value || !isActiveSpaceOwner.value) return
+  const target = activeSpace.value
+  const confirmed = await requestConfirm({
+    title: '공유 프로젝트를 삭제할까요?',
+    message: `'${target.name}' 프로젝트와 연결된 자료가 목록에서 제거됩니다. 이 작업은 생성자만 실행할 수 있습니다.`,
+    confirmLabel: '프로젝트 삭제',
+  })
+  if (!confirmed) return
+
+  await deleteSharedWorkspace(target.workspaceId)
+  spaces.value = spaces.value.filter((space) => space.workspaceId !== target.workspaceId)
+  filesBySpace.value.delete(target.workspaceId)
+  activeSpaceId.value = ''
+  files.value = []
+  members.value = []
+  closeDrawer()
+  if (spaces.value[0]) await selectSpace(spaces.value[0].workspaceId)
+  showToast('프로젝트 삭제 완료', target.name)
 }
 
 function addMockMember(userId) {
