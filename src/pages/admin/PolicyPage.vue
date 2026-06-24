@@ -411,6 +411,10 @@ function flashSavedState(target) {
   align-items: stretch;
 }
 
+.policy-card-grid > .settings-card + .settings-card {
+  margin-top: 0;
+}
+
 .policy-card {
   align-self: stretch;
   display: flex;
