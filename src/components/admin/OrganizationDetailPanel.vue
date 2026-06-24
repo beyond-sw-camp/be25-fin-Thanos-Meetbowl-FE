@@ -14,7 +14,6 @@
         <article class="organization-detail-panel__summary" :class="`is-${selectedNode.type}`">
           <p class="organization-detail-panel__eyebrow">{{ summaryEyebrow }}</p>
           <h3>{{ selectedNode.name }}</h3>
-          <p>{{ summaryDescription }}</p>
         </article>
 
         <dl class="organization-detail-panel__stats" v-if="summaryStats.length">
@@ -28,7 +27,7 @@
           <h4>하위 팀</h4>
           <ul class="organization-detail-panel__list">
             <li v-for="team in teamList" :key="team.key">
-              <span>{{ team.name }}</span>
+              <span class="organization-detail-panel__inline-main">{{ team.name }}</span>
               <strong>{{ team.memberCount }}명</strong>
             </li>
           </ul>
@@ -38,7 +37,7 @@
           <h4>{{ memberSectionTitle }}</h4>
           <ul class="organization-detail-panel__list organization-detail-panel__list--members">
             <li v-for="member in memberList" :key="member.key || member.userId">
-              <span>
+              <span class="organization-detail-panel__inline-main">
                 <strong>{{ member.name }}</strong>
                 <small>{{ member.position || '-' }}</small>
               </span>
@@ -73,24 +72,6 @@ const summaryEyebrow = computed(() => {
   if (props.selectedNode.type === 'team') return 'Team'
   if (props.selectedNode.type === 'member') return 'Member'
   return 'Organization'
-})
-
-const summaryDescription = computed(() => {
-  if (!props.selectedNode) return ''
-
-  if (props.selectedNode.type === 'department') {
-    return `${props.selectedNode.teamCount}개의 팀과 ${props.selectedNode.memberCount}명의 구성원이 속해 있습니다.`
-  }
-
-  if (props.selectedNode.type === 'team') {
-    return `${props.selectedNode.departmentName || '-'} 산하 팀이며 ${props.selectedNode.memberCount}명의 구성원이 있습니다.`
-  }
-
-  if (props.selectedNode.type === 'member') {
-    return `${props.selectedNode.departmentName || '-'} / ${props.selectedNode.teamName || '-'} 소속 구성원입니다.`
-  }
-
-  return `부서 ${props.selectedNode.departmentCount}개, 팀 ${props.selectedNode.teamCount}개, 구성원 ${props.selectedNode.memberCount}명으로 구성되어 있습니다.`
 })
 
 const summaryStats = computed(() => {
@@ -149,9 +130,9 @@ const memberSectionTitle = computed(() => {
 .organization-detail-panel {
   --detail-panel-gap: 8px;
   --detail-panel-padding: 12px;
-  --detail-card-padding: 11px;
-  --detail-row-padding: 7px 9px;
-  --detail-row-height: 34px;
+  --detail-card-padding: 10px 11px;
+  --detail-row-padding: 6px 9px;
+  --detail-row-height: 32px;
   min-height: 0;
   display: grid;
   grid-template-rows: auto minmax(0, 1fr);
@@ -194,7 +175,7 @@ const memberSectionTitle = computed(() => {
   border: 1px solid var(--border);
   border-radius: 10px;
   background: #ffffff;
-  padding: 12px 13px;
+  padding: var(--detail-card-padding);
   box-shadow: none;
 }
 
@@ -224,17 +205,10 @@ const memberSectionTitle = computed(() => {
 }
 
 .organization-detail-panel__summary h3 {
-  margin-top: 4px;
-  font-size: 17px;
-  line-height: 1.3;
+  margin-top: 3px;
+  font-size: 15px;
+  line-height: 1.25;
   overflow-wrap: anywhere;
-}
-
-.organization-detail-panel__summary p:last-child {
-  margin-top: 5px;
-  color: var(--muted-foreground);
-  font-size: 12px;
-  line-height: 1.4;
 }
 
 .organization-detail-panel__stats {
@@ -258,14 +232,14 @@ const memberSectionTitle = computed(() => {
 .organization-detail-panel__stats dt {
   color: var(--muted-foreground);
   font-size: 12px;
-  font-weight: 700;
+  font-weight: 600;
   line-height: 1.3;
 }
 
 .organization-detail-panel__stats dd {
   margin: 0;
   font-size: 13px;
-  font-weight: 700;
+  font-weight: 600;
   max-width: 100%;
   overflow-wrap: anywhere;
   text-align: right;
@@ -303,37 +277,47 @@ const memberSectionTitle = computed(() => {
   padding: var(--detail-row-padding);
 }
 
-.organization-detail-panel__list li span {
+.organization-detail-panel__inline-main {
   min-width: 0;
-  display: grid;
-  gap: 2px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
   color: var(--foreground);
   font-size: 12px;
 }
 
-.organization-detail-panel__list li span strong {
+.organization-detail-panel__inline-main strong {
   font-size: 12px;
-  line-height: 1.35;
-  overflow-wrap: anywhere;
+  line-height: 1.25;
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
-.organization-detail-panel__list li span small,
+.organization-detail-panel__inline-main small,
 .organization-detail-panel__list li em {
   color: var(--muted-foreground);
-  font-size: 11px;
+  font-size: 12px;
   font-style: normal;
-  overflow-wrap: anywhere;
-  line-height: 1.35;
+  line-height: 1.25;
+  white-space: nowrap;
+}
+
+.organization-detail-panel__list li em {
+  max-width: 48%;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .organization-detail-panel__empty {
   border: 1px dashed var(--border);
   border-radius: 10px;
   background: #f8fafc;
-  padding: 13px 11px;
+  padding: 11px 10px;
   color: var(--muted-foreground);
-  font-size: 12px;
-  line-height: 1.45;
+  font-size: 11px;
+  line-height: 1.4;
 }
 
 .organization-detail-panel.is-drawer {
