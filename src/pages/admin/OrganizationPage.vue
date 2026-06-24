@@ -44,6 +44,7 @@ import {
 import { getOrganizationUserSummary } from '../../lib/user-directory'
 import { useAuthStore } from '../../stores/auth'
 import ModalShell from '../../components/common/ModalShell.vue'
+import OrganizationFullChartModal from '../../components/admin/OrganizationFullChartModal.vue'
 import { Download, Upload, Info, ExternalLink, ChevronRight } from '@lucide/vue'
 
 const auth = useAuthStore()
@@ -83,6 +84,7 @@ const excelDownloading = ref(false)
 const excelUploading = ref(false)
 const uploadFileInput = ref(null)
 const pendingUploadFile = ref(null)
+const fullChartOpen = ref(false)
 
 const affiliates = ref([])
 const departments = ref([])
@@ -621,6 +623,7 @@ function normalizeUser(item) {
   return {
     userId: item?.userId || '',
     name: item?.name || '-',
+    email: item?.email || '',
     affiliateId: item?.affiliateId || '',
     departmentId: item?.departmentId || '',
     teamId: item?.teamId || '',
@@ -906,6 +909,11 @@ function isXlsxFile(file) {
 function canCreateInCurrentTab() {
   return activeTab.value === 'department' || activeTab.value === 'team' || activeTab.value === 'position'
 }
+
+const fullChartAffiliateName = computed(() => {
+  if (sortedAffiliates.value.length === 1) return sortedAffiliates.value[0]?.name || '전체 조직'
+  return '전체 조직'
+})
 
 const visibleExcelValidationErrors = computed(() =>
   // 오류가 많을 때는 처음 10건만 먼저 보여 주고, 나머지는 펼쳐서 확인하게 한다.
@@ -1241,7 +1249,7 @@ function getDepartmentTreeData(departmentId) {
             <div v-else class="empty-state-inline">표시할 조직도가 없습니다.</div>
             
             <div class="card-footer">
-              <button class="footer-link-btn" type="button" @click="switchTab('organization')">
+              <button class="footer-link-btn" type="button" @click="fullChartOpen = true">
                 <span>전체 조직도 보기</span>
                 <ExternalLink class="footer-link-icon" :size="14" />
               </button>
@@ -1513,6 +1521,16 @@ function getDepartmentTreeData(departmentId) {
           </template>
         </article>
       </div>
+
+      <OrganizationFullChartModal
+        v-if="fullChartOpen"
+        :affiliate-name="fullChartAffiliateName"
+        :departments="departments"
+        :teams="teams"
+        :users="users"
+        :positions="positions"
+        @close="fullChartOpen = false"
+      />
     </template>
   </section>
 </template>
