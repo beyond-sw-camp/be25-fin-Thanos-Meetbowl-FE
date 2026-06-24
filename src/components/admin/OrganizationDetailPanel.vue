@@ -145,47 +145,54 @@ const memberSectionTitle = computed(() => {
 
 <style scoped>
 .organization-detail-panel {
+  --detail-panel-gap: 8px;
+  --detail-panel-padding: 12px;
+  --detail-card-padding: 11px;
+  --detail-row-padding: 7px 9px;
+  --detail-row-height: 34px;
   min-height: 0;
   display: grid;
   align-content: start;
-  gap: 8px;
-  padding: 13px;
+  gap: var(--detail-panel-gap);
+  padding: var(--detail-panel-padding);
   background: #fbfcfe;
   overflow-y: auto;
 }
 
 .organization-detail-panel__head {
   display: grid;
-  gap: 4px;
+  gap: 3px;
 }
 
 .organization-detail-panel__head strong {
-  font-size: 15px;
+  font-size: 16px;
+  line-height: 1.25;
 }
 
 .organization-detail-panel__head span {
   color: var(--muted-foreground);
-  font-size: 11px;
+  font-size: 12px;
+  line-height: 1.35;
 }
 
 .organization-detail-panel__summary {
   border: 1px solid var(--border);
-  border-radius: 12px;
+  border-radius: 10px;
   background: #ffffff;
-  padding: 12px;
-  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
+  padding: 12px 13px;
+  box-shadow: none;
 }
 
 .organization-detail-panel__summary.is-department {
-  border-left: 4px solid var(--primary);
+  border-left: 3px solid var(--primary);
 }
 
 .organization-detail-panel__summary.is-team {
-  background: #fcfcfd;
+  background: #ffffff;
 }
 
 .organization-detail-panel__summary.is-member {
-  background: #fffaf5;
+  background: #ffffff;
 }
 
 .organization-detail-panel__summary p,
@@ -195,67 +202,70 @@ const memberSectionTitle = computed(() => {
 
 .organization-detail-panel__eyebrow {
   color: var(--primary-dark);
-  font-size: 11px;
+  font-size: 10px;
   font-weight: 800;
-  letter-spacing: 0.08em;
+  letter-spacing: 0.06em;
   text-transform: uppercase;
 }
 
 .organization-detail-panel__summary h3 {
-  margin-top: 6px;
-  font-size: 16px;
-  line-height: 1.35;
+  margin-top: 4px;
+  font-size: 17px;
+  line-height: 1.3;
   overflow-wrap: anywhere;
 }
 
 .organization-detail-panel__summary p:last-child {
-  margin-top: 6px;
+  margin-top: 5px;
   color: var(--muted-foreground);
   font-size: 12px;
-  line-height: 1.45;
+  line-height: 1.4;
 }
 
 .organization-detail-panel__stats {
   display: grid;
-  gap: 6px;
+  gap: 5px;
   margin: 0;
 }
 
 .organization-detail-panel__stats div {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
-  gap: 8px 12px;
+  gap: 8px 10px;
   align-items: center;
   border: 1px solid var(--border);
-  border-radius: 10px;
+  border-radius: 8px;
   background: #ffffff;
-  min-height: 34px;
-  padding: 8px 10px;
+  min-height: var(--detail-row-height);
+  padding: var(--detail-row-padding);
 }
 
 .organization-detail-panel__stats dt {
   color: var(--muted-foreground);
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 700;
+  line-height: 1.3;
 }
 
 .organization-detail-panel__stats dd {
   margin: 0;
-  font-size: 12px;
+  font-size: 13px;
   font-weight: 700;
   max-width: 100%;
   overflow-wrap: anywhere;
   text-align: right;
+  line-height: 1.3;
 }
 
 .organization-detail-panel__section {
   display: grid;
-  gap: 6px;
+  gap: 5px;
 }
 
 .organization-detail-panel__section h4 {
   margin: 0;
   font-size: 12px;
+  line-height: 1.35;
 }
 
 .organization-detail-panel__list {
@@ -263,24 +273,25 @@ const memberSectionTitle = computed(() => {
   margin: 0;
   padding: 0;
   display: grid;
-  gap: 6px;
+  gap: 5px;
 }
 
 .organization-detail-panel__list li {
   display: flex;
   justify-content: space-between;
-  gap: 10px;
-  align-items: flex-start;
+  gap: 8px;
+  align-items: center;
   border: 1px solid var(--border);
-  border-radius: 10px;
+  border-radius: 8px;
   background: #ffffff;
-  padding: 8px 10px;
+  min-height: var(--detail-row-height);
+  padding: var(--detail-row-padding);
 }
 
 .organization-detail-panel__list li span {
   min-width: 0;
   display: grid;
-  gap: 3px;
+  gap: 2px;
   color: var(--foreground);
   font-size: 12px;
 }
@@ -297,16 +308,17 @@ const memberSectionTitle = computed(() => {
   font-size: 11px;
   font-style: normal;
   overflow-wrap: anywhere;
+  line-height: 1.35;
 }
 
 .organization-detail-panel__empty {
   border: 1px dashed var(--border);
-  border-radius: 12px;
+  border-radius: 10px;
   background: #f8fafc;
-  padding: 14px 12px;
+  padding: 13px 11px;
   color: var(--muted-foreground);
   font-size: 12px;
-  line-height: 1.5;
+  line-height: 1.45;
 }
 
 .organization-detail-panel.is-drawer {
