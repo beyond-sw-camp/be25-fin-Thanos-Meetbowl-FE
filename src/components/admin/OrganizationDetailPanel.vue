@@ -395,8 +395,8 @@ const memberRowClass = computed(() =>
 
 .organization-detail-panel__row--member-card em {
   max-width: 100%;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  white-space: normal;
+  overflow-wrap: anywhere;
 }
 
 .organization-detail-panel__list li em {
