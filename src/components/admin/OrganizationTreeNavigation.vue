@@ -2,7 +2,7 @@
   <aside class="organization-tree-navigation" aria-label="조직 탐색 패널">
     <div class="organization-tree-navigation__head">
       <strong>조직 탐색</strong>
-      <small>부서와 팀을 빠르게 선택해 중앙 조직도와 상세 정보를 함께 확인합니다.</small>
+      <small>부서와 팀을 빠르게 선택합니다.</small>
     </div>
 
     <div v-if="chartData.isEmpty" class="organization-tree-navigation__empty">

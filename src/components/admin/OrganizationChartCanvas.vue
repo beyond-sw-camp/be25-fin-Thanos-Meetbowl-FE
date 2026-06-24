@@ -134,7 +134,7 @@
 <script setup>
 import { computed, nextTick, ref, watch } from 'vue'
 
-const DEFAULT_SCALE = 0.9
+const DEFAULT_SCALE = 0.95
 const MIN_SCALE = 0.8
 const MAX_SCALE = 1.05
 const SCALE_STEP = 0.05
@@ -218,6 +218,7 @@ watch(
   --org-canvas-background: #fcfcfd;
   --org-text-strong: #1f2937;
   --org-text-muted: #6b7280;
+  --org-canvas-side-padding: 8px;
   --org-root-border: #f97316;
   --org-root-background: #fff7ed;
   --org-department-border: #fdba74;
@@ -286,7 +287,7 @@ watch(
   min-height: 0;
   min-width: 0;
   overflow: auto;
-  padding: 14px 16px 18px;
+  padding: 14px var(--org-canvas-side-padding) 18px;
   background: var(--org-canvas-background);
 }
 
@@ -295,6 +296,7 @@ watch(
   min-width: 100%;
   display: grid;
   justify-content: center;
+  padding-inline: var(--org-canvas-side-padding);
   padding-bottom: 16px;
 }
 
@@ -654,7 +656,7 @@ watch(
   }
 
   .organization-chart-canvas__scroll {
-    padding: 14px;
+    padding: 14px var(--org-canvas-side-padding);
   }
 
   .organization-chart-canvas__teams {

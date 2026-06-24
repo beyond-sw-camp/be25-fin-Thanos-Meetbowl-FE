@@ -233,7 +233,7 @@ const memberRowClass = computed(() =>
 
 .organization-detail-panel__eyebrow {
   color: var(--primary-dark);
-  font-size: 10px;
+  font-size: 9px;
   font-weight: 800;
   letter-spacing: 0.06em;
   text-transform: uppercase;
@@ -241,7 +241,7 @@ const memberRowClass = computed(() =>
 
 .organization-detail-panel__summary h3 {
   margin-top: 3px;
-  font-size: 15px;
+  font-size: 14px;
   line-height: 1.25;
   overflow-wrap: anywhere;
 }
@@ -266,7 +266,7 @@ const memberRowClass = computed(() =>
 
 .organization-detail-panel__stats dt {
   color: var(--muted-foreground);
-  font-size: 12px;
+  font-size: 11px;
   font-weight: 600;
   line-height: 1.3;
 }
@@ -274,7 +274,7 @@ const memberRowClass = computed(() =>
 .organization-detail-panel__stats dd {
   margin: 0;
   min-width: 0;
-  font-size: 13px;
+  font-size: 12px;
   font-weight: 600;
   max-width: 100%;
   overflow: hidden;
@@ -285,7 +285,7 @@ const memberRowClass = computed(() =>
 }
 
 .organization-detail-panel__stat-value--email {
-  font-size: 11px;
+  font-size: 10px;
 }
 
 .organization-detail-panel__section {
@@ -296,7 +296,7 @@ const memberRowClass = computed(() =>
 
 .organization-detail-panel__section h4 {
   margin: 0;
-  font-size: 12px;
+  font-size: 11px;
   line-height: 1.35;
 }
 
@@ -340,7 +340,7 @@ const memberRowClass = computed(() =>
   align-items: center;
   gap: 6px;
   color: var(--foreground);
-  font-size: 12px;
+  font-size: 11px;
 }
 
 .organization-detail-panel__team-name {
@@ -355,7 +355,7 @@ const memberRowClass = computed(() =>
 }
 
 .organization-detail-panel__member-main strong {
-  font-size: 12px;
+  font-size: 11px;
   line-height: 1.25;
   font-weight: 600;
   overflow: hidden;
@@ -368,7 +368,7 @@ const memberRowClass = computed(() =>
 .organization-detail-panel__list li em {
   min-width: 0;
   color: var(--muted-foreground);
-  font-size: 12px;
+  font-size: 11px;
   font-style: normal;
   line-height: 1.25;
   white-space: nowrap;
@@ -397,7 +397,7 @@ const memberRowClass = computed(() =>
 
 .organization-detail-panel__member-card-top strong {
   min-width: 0;
-  font-size: 12px;
+  font-size: 11px;
   line-height: 1.25;
   font-weight: 600;
   overflow: hidden;
@@ -408,7 +408,7 @@ const memberRowClass = computed(() =>
 .organization-detail-panel__member-card-top small {
   flex-shrink: 0;
   color: var(--muted-foreground);
-  font-size: 12px;
+  font-size: 11px;
   font-style: normal;
   line-height: 1.25;
   white-space: nowrap;
