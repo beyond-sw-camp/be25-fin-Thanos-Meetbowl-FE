@@ -199,7 +199,6 @@ const tabs = [{ key: 'all', label: '전체' }, { key: 'host', label: '내가 주
 // 다른 화면(대시보드 등)에서 ?tab= 으로 진입하면 해당 탭으로 시작한다(all/host/attendee/active).
 const tab = ref(['all', 'host', 'attendee', 'active'].includes(route.query.tab) ? route.query.tab : 'all')
 const range = ref('all')
-const excludeEnded = ref(false)
 // 기본 정렬: 최신순(scheduledAt 내림차순) — 최근/다가오는 회의가 위로.
 const sort = ref('latest')
 // 종료/취소된 회의 숨기기 체크박스 상태(기본: 전체 표시).
