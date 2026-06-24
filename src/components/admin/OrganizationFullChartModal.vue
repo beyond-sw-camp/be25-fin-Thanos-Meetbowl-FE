@@ -189,7 +189,7 @@ onBeforeUnmount(() => {
   gap: 16px;
   padding: 22px 24px 18px;
   border-bottom: 1px solid var(--border);
-  background: linear-gradient(180deg, #ffffff 0%, #fcfcfd 100%);
+  background: #ffffff;
 }
 
 .organization-full-chart__header h2 {

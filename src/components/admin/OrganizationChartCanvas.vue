@@ -196,6 +196,21 @@ watch(
 
 <style scoped>
 .organization-chart-canvas {
+  --org-line-color: #cbd5e1;
+  --org-canvas-background: #fcfcfd;
+  --org-text-strong: #1f2937;
+  --org-text-muted: #6b7280;
+  --org-root-border: #f97316;
+  --org-root-background: #fff7ed;
+  --org-department-border: #fdba74;
+  --org-department-background: #fffdf9;
+  --org-team-border: #fed7aa;
+  --org-team-background: #ffffff;
+  --org-member-border: #e5e7eb;
+  --org-member-background: #ffffff;
+  --org-hover-background: #fffaf5;
+  --org-selected-background: #fff7ed;
+  --org-selected-border: #ea580c;
   min-height: 0;
   min-width: 0;
   display: grid;
@@ -209,17 +224,17 @@ watch(
   gap: 12px;
   padding: 14px 16px 12px;
   border-bottom: 1px solid var(--border);
-  background: rgba(255, 255, 255, 0.94);
-  backdrop-filter: blur(10px);
+  background: #ffffff;
 }
 
 .organization-chart-canvas__toolbar strong {
   font-size: 14px;
+  color: var(--org-text-strong);
 }
 
 .organization-chart-canvas__toolbar p {
   margin: 4px 0 0;
-  color: var(--muted-foreground);
+  color: var(--org-text-muted);
   font-size: 11px;
   line-height: 1.45;
 }
@@ -238,7 +253,7 @@ watch(
 
 .organization-chart-canvas__zoom-controls span {
   min-width: 42px;
-  color: var(--muted-foreground);
+  color: var(--org-text-muted);
   font-size: 11px;
   font-weight: 700;
   text-align: center;
@@ -248,10 +263,8 @@ watch(
   min-height: 0;
   min-width: 0;
   overflow: auto;
-  padding: 16px;
-  background:
-    radial-gradient(circle at top left, rgba(243, 115, 33, 0.08), transparent 20%),
-    linear-gradient(180deg, #ffffff 0%, #fbfcfe 100%);
+  padding: 14px 16px 18px;
+  background: var(--org-canvas-background);
 }
 
 .organization-chart-canvas__stage-shell {
@@ -259,29 +272,30 @@ watch(
   min-width: 100%;
   display: grid;
   justify-content: center;
+  padding-bottom: 16px;
 }
 
 .organization-chart-canvas__stage {
   width: max-content;
   display: grid;
   justify-items: center;
-  gap: 28px;
+  gap: 24px;
   transform-origin: top center;
 }
 
 .organization-chart-canvas__root-wrap {
   position: relative;
-  padding-bottom: 4px;
+  padding-bottom: 8px;
 }
 
 .organization-chart-canvas__root-wrap::after {
   content: '';
   position: absolute;
   left: 50%;
-  bottom: -22px;
+  bottom: -16px;
   width: 1px;
-  height: 22px;
-  background: #d8e2ee;
+  height: 16px;
+  background: var(--org-line-color);
 }
 
 .organization-chart-canvas__departments {
@@ -289,7 +303,17 @@ watch(
   display: flex;
   align-items: flex-start;
   gap: 24px;
-  padding-top: 22px;
+  padding-top: 16px;
+}
+
+.organization-chart-canvas__departments::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 137px;
+  right: 137px;
+  height: 1px;
+  background: var(--org-line-color);
 }
 
 .organization-chart-canvas__department {
@@ -297,9 +321,9 @@ watch(
   width: 274px;
   flex: 0 0 274px;
   display: grid;
-  gap: 12px;
+  gap: 10px;
   justify-items: center;
-  padding-top: 22px;
+  padding-top: 16px;
 }
 
 .organization-chart-canvas__department::before {
@@ -308,8 +332,8 @@ watch(
   top: 0;
   left: 50%;
   width: 1px;
-  height: 22px;
-  background: #d8e2ee;
+  height: 16px;
+  background: var(--org-line-color);
 }
 
 .organization-chart-canvas__teams {
@@ -319,7 +343,7 @@ watch(
   gap: 14px;
   justify-content: center;
   width: 100%;
-  padding-top: 16px;
+  padding-top: 14px;
 }
 
 .organization-chart-canvas__teams::before {
@@ -328,11 +352,22 @@ watch(
   top: 0;
   left: 50%;
   width: 1px;
-  height: 16px;
-  background: #d8e2ee;
+  height: 14px;
+  background: var(--org-line-color);
+}
+
+.organization-chart-canvas__teams::after {
+  content: '';
+  position: absolute;
+  top: 14px;
+  left: 66px;
+  right: 66px;
+  height: 1px;
+  background: var(--org-line-color);
 }
 
 .organization-chart-canvas__team-column {
+  position: relative;
   width: 132px;
   min-width: 132px;
   max-width: 132px;
@@ -342,36 +377,53 @@ watch(
   align-content: start;
 }
 
-.organization-chart-canvas__node {
-  border: 1px solid var(--border);
-  border-radius: 12px;
-  background: #ffffff;
-  color: var(--foreground);
-  text-align: left;
-  box-shadow: 0 8px 20px rgba(15, 23, 42, 0.04);
-  transition: border-color 0.15s ease, box-shadow 0.15s ease, background-color 0.15s ease;
+.organization-chart-canvas__team-column::before {
+  content: '';
+  position: absolute;
+  top: -14px;
+  left: 50%;
+  width: 1px;
+  height: 14px;
+  background: var(--org-line-color);
 }
 
-.organization-chart-canvas__node:hover,
+.organization-chart-canvas__node {
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: #ffffff;
+  color: var(--org-text-strong);
+  text-align: left;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
+  transition: border-color 0.15s ease, background-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.organization-chart-canvas__node:hover {
+  background: var(--org-hover-background);
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.08);
+}
+
 .organization-chart-canvas__node.is-active {
-  border-color: rgba(243, 115, 33, 0.45);
-  background: #fff7ed;
-  box-shadow: 0 10px 22px rgba(243, 115, 33, 0.1);
+  border-color: var(--org-selected-border);
+  background: var(--org-selected-background);
+  box-shadow: 0 0 0 1px rgba(249, 115, 22, 0.08);
 }
 
 .organization-chart-canvas__node:focus-visible {
-  outline: 2px solid rgba(243, 115, 33, 0.32);
+  outline: 2px solid rgba(249, 115, 22, 0.24);
   outline-offset: 2px;
 }
 
 .organization-chart-canvas__node--root {
-  min-width: 240px;
-  min-height: 44px;
+  min-width: 220px;
+  min-height: 42px;
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 12px;
-  padding: 10px 14px;
+  padding: 9px 14px;
+  border-width: 2px;
+  border-color: var(--org-root-border);
+  background: var(--org-root-background);
 }
 
 .organization-chart-canvas__node--root strong {
@@ -379,19 +431,20 @@ watch(
 }
 
 .organization-chart-canvas__node--root small {
-  color: var(--muted-foreground);
+  color: var(--org-text-muted);
   font-size: 12px;
   white-space: nowrap;
 }
 
 .organization-chart-canvas__node--department {
-  width: 142px;
+  width: 140px;
   justify-self: center;
-  min-height: 54px;
+  min-height: 50px;
   display: grid;
-  gap: 5px;
+  gap: 4px;
   padding: 8px 10px;
-  border-top: 3px solid var(--primary);
+  border-color: var(--org-department-border);
+  background: var(--org-department-background);
 }
 
 .organization-chart-canvas__department-main {
@@ -411,20 +464,21 @@ watch(
 
 .organization-chart-canvas__node--department span,
 .organization-chart-canvas__node--department small {
-  color: var(--muted-foreground);
+  color: var(--org-text-muted);
   font-size: 10px;
   white-space: nowrap;
 }
 
 .organization-chart-canvas__node--team {
   width: 100%;
-  min-height: 38px;
+  min-height: 36px;
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 8px;
-  padding: 6px 10px;
-  background: #fcfcfd;
+  padding: 6px 9px;
+  border-color: var(--org-team-border);
+  background: var(--org-team-background);
 }
 
 .organization-chart-canvas__node--team strong,
@@ -441,43 +495,58 @@ watch(
 }
 
 .organization-chart-canvas__node--team span {
-  color: var(--muted-foreground);
+  color: var(--org-text-muted);
   white-space: nowrap;
 }
 
 .organization-chart-canvas__member-list {
+  position: relative;
   width: 100%;
   display: grid;
   gap: 5px;
-  padding-top: 4px;
+  padding-top: 8px;
+}
+
+/* 팀 카드와 팀원 목록은 하나의 세로 축으로만 이어지게 유지한다. */
+.organization-chart-canvas__member-list::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 50%;
+  width: 1px;
+  height: 8px;
+  background: var(--org-line-color);
 }
 
 .organization-chart-canvas__member-row {
   width: 100%;
-  min-height: 30px;
+  min-height: 29px;
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 8px;
-  border: 1px solid var(--border);
+  border: 1px solid var(--org-member-border);
   border-radius: 8px;
-  background: linear-gradient(180deg, #ffffff 0%, #fcfcfd 100%);
+  background: var(--org-member-background);
   padding: 4px 8px;
-  color: var(--foreground);
+  color: var(--org-text-strong);
   text-align: left;
-  box-shadow: 0 4px 12px rgba(15, 23, 42, 0.03);
+  box-shadow: none;
   transition: border-color 0.15s ease, background-color 0.15s ease, box-shadow 0.15s ease;
 }
 
-.organization-chart-canvas__member-row:hover,
+.organization-chart-canvas__member-row:hover {
+  border-color: #d1d5db;
+  background: #fffaf7;
+}
+
 .organization-chart-canvas__member-row.is-active {
-  border-color: rgba(243, 115, 33, 0.35);
-  background: #fff7ed;
-  box-shadow: 0 6px 14px rgba(243, 115, 33, 0.08);
+  border-color: var(--org-selected-border);
+  background: var(--org-selected-background);
 }
 
 .organization-chart-canvas__member-row:focus-visible {
-  outline: 2px solid rgba(243, 115, 33, 0.28);
+  outline: 2px solid rgba(249, 115, 22, 0.24);
   outline-offset: 1px;
 }
 
@@ -495,7 +564,7 @@ watch(
 }
 
 .organization-chart-canvas__member-row span {
-  color: var(--muted-foreground);
+  color: var(--org-text-muted);
   white-space: nowrap;
 }
 
@@ -503,9 +572,9 @@ watch(
 .organization-chart-canvas__empty {
   border: 1px dashed var(--border);
   border-radius: 10px;
-  background: #f8fafc;
+  background: #ffffff;
   padding: 10px 12px;
-  color: var(--muted-foreground);
+  color: var(--org-text-muted);
   font-size: 11px;
   text-align: center;
 }
