@@ -412,7 +412,7 @@ function flashSavedState(target) {
 }
 
 .policy-card {
-  height: 100%;
+  align-self: stretch;
   display: flex;
   flex-direction: column;
 }
