@@ -3,10 +3,10 @@ import { computed, defineComponent, onMounted, ref } from 'vue'
 import { openMeetingWindow } from '../../lib/meeting-route'
 import { useAuthStore } from '../../stores/auth'
 import { getMeetings, getRooms } from '../../lib/reservations'
+import { getWorkspaceCalendar } from '../../lib/workspace'
 import { useUserNames } from '../../composables/useUserNames'
 import { compareByEpochAsc, todayKst, utcToKstClock, utcToKstDate } from '../../utils/dateTime'
-// 메일·회의록·개인 일정 카드는 이번 작업 범위 밖이라 아직 목업 데이터를 쓴다.
-import { mails, minutes, myMeetings } from '../../data/mockData'
+import { mails, minutes } from '../../data/mockData'
 
 const statusLabel = {
   live: '진행 중',
@@ -22,9 +22,11 @@ export default defineComponent({
     const { nameMap, resolveNames } = useUserNames()
 
     const rawMeetings = ref([])
+    const workspaceEvents = ref([])
     const rooms = ref([])
     const selectedId = ref('')
     const loadError = ref(false)
+    const scheduleLoadError = ref(false)
 
     const roomNameMap = computed(() => {
       const map = {}
@@ -91,6 +93,21 @@ export default defineComponent({
       return target.status === 'upcoming' || target.status === 'live' ? target : null
     })
 
+    const personalSchedules = computed(() =>
+      workspaceEvents.value
+        .slice()
+        .sort((a, b) => compareByEpochAsc(a.startedAt, b.startedAt))
+        .slice(0, 5)
+        .map((event) => ({
+          id: event.eventId,
+          title: event.title,
+          timeLabel: `${utcToKstDate(event.startedAt)} ${utcToKstClock(event.startedAt)} - ${utcToKstClock(event.endedAt)}`,
+          description: event.description || '',
+          badgeLabel: event.source === 'MEETING' ? '회의' : '개인',
+          badgeTone: event.source === 'MEETING' ? 'navy' : 'primary',
+        })),
+    )
+
     const todayLabel = computed(() => {
       const [year, month, day] = todayKst().split('-')
       return `${year}년 ${Number(month)}월 ${Number(day)}일`
@@ -105,6 +122,7 @@ export default defineComponent({
 
     async function load() {
       loadError.value = false
+      scheduleLoadError.value = false
       try {
         const [meetingData, roomData] = await Promise.all([
           getMeetings({ role: 'all' }),
@@ -125,6 +143,16 @@ export default defineComponent({
         rawMeetings.value = []
         loadError.value = true
       }
+
+      const today = todayKst()
+      const from = new Date(`${today}T00:00:00+09:00`).toISOString()
+      const to = new Date(`${today}T24:00:00+09:00`).toISOString()
+      try {
+        workspaceEvents.value = await getWorkspaceCalendar(from, to)
+      } catch {
+        workspaceEvents.value = []
+        scheduleLoadError.value = true
+      }
     }
     onMounted(load)
 
@@ -139,10 +167,11 @@ export default defineComponent({
       selectedId,
       selected,
       kpis,
-      myMeetings,
+      personalSchedules,
       todayLabel,
       statusLabel,
       loadError,
+      scheduleLoadError,
       openSelectedMeeting,
     }
   },
@@ -183,7 +212,9 @@ export default defineComponent({
             <p v-else class="empty-text">예정된 회의가 없습니다.</p>
           </article>
           <article class="card"><div class="card-head"><h2>개인 일정</h2></div>
-            <ul class="compact-list"><li v-for="meeting in myMeetings.slice(0, 5)" :key="meeting.id"><strong>{{ meeting.title }}</strong><span>{{ meeting.start }}</span></li></ul>
+            <ul v-if="personalSchedules.length" class="compact-list dashboard-schedule-list"><li v-for="event in personalSchedules" :key="event.id"><div class="dashboard-schedule-row"><div class="dashboard-schedule-main"><strong>{{ event.title }}</strong><span>{{ event.timeLabel }}</span></div><span :class="['badge', event.badgeTone]">{{ event.badgeLabel }}</span></div><small v-if="event.description" class="dashboard-schedule-note">{{ event.description }}</small></li></ul>
+            <p v-else-if="scheduleLoadError" class="empty-text">일정 정보를 불러오지 못했습니다.</p>
+            <p v-else class="empty-text">표시할 개인 일정이 없습니다.</p>
           </article>
         </aside>
       </div>

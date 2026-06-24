@@ -57,6 +57,7 @@ test('getAdminDashboardSummary uses the stored access token in Authorization hea
               inUseMeetingRoomCount: 2,
               availableMeetingRoomCount: 4,
               timeSlotUsage: [],
+              timeSlotOccupancyUsage: [],
               siteBuildingUsage: [],
             },
           },

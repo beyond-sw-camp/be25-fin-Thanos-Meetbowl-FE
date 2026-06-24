@@ -10,6 +10,10 @@
         <button v-for="item in tabs" :key="item.key" class="chip" :class="{ active: tab === item.key }" @click="changeTab(item.key)">{{ item.label }}</button>
       </div>
       <div class="meeting-filter-controls">
+        <label class="meeting-filter-checkbox">
+          <input v-model="excludeEnded" type="checkbox">
+          종료·취소된 회의 제외
+        </label>
         <select v-model="range"><option value="all">전체 기간</option><option value="3m">최근 3개월</option><option value="6m">최근 6개월</option></select>
         <select v-model="sort"><option value="latest">최신순</option><option value="oldest">오래된순</option></select>
         <span>총 {{ filtered.length }}건</span>
@@ -136,6 +140,7 @@ const tab = ref(['all', 'host', 'attendee', 'active'].includes(route.query.tab) 
 const range = ref('all')
 // 기본 정렬: 가까운 날짜순(scheduledAt 오름차순) — 다가오는 회의가 위로.
 const sort = ref('oldest')
+const excludeEnded = ref(false)
 const pageNo = ref(1)
 const pageSize = 10
 
@@ -218,6 +223,9 @@ const filtered = computed(() => {
   if (tab.value === 'active') {
     list = list.filter((meeting) => meeting.status === 'upcoming' || meeting.status === 'live')
   }
+  if (excludeEnded.value) {
+    list = list.filter((meeting) => meeting.status !== 'ended' && meeting.status !== 'cancelled')
+  }
   list.sort((a, b) => (sort.value === 'latest' ? b.scheduledAtMs - a.scheduledAtMs : a.scheduledAtMs - b.scheduledAtMs))
   return list
 })
@@ -282,6 +290,10 @@ watch([tab, range], () => {
   loadMeetings()
 })
 
+watch(excludeEnded, () => {
+  pageNo.value = 1
+})
+
 // 워크스페이스에서 회의 수정으로 직접 진입하는 쿼리 변화를 감시한다.
 watch(() => route.query.editMeetingId, openMeetingFromQuery)
 
@@ -299,6 +311,53 @@ function openEdit(meeting) {
   modalMode.value = 'edit'
   editingMeeting.value = { meetingId: meeting.meetingId }
   modal.value = true
+}
+
+async function openMeetingDetail(meeting) {
+  detailMeeting.value = meeting
+  detailFull.value = null
+  detailError.value = ''
+  try {
+    const full = await getMeeting(meeting.meetingId)
+    detailFull.value = full
+    resolveNames([full.hostUserId, ...(full.attendees || []).map((attendee) => attendee.userId)])
+  } catch (error) {
+    detailError.value = error?.message || '회의 상세 정보를 불러오지 못했습니다.'
+  }
+}
+
+function closeMeetingDetail() {
+  detailMeeting.value = null
+  detailFull.value = null
+  detailError.value = ''
+  cancelling.value = false
+}
+
+function editFromDetail() {
+  if (!detailMeeting.value) return
+  openEdit(detailMeeting.value)
+}
+
+function enterFromDetail() {
+  if (!detailMeeting.value) return
+  enterMeeting(detailMeeting.value)
+}
+
+async function cancelFromDetail() {
+  if (!detailMeeting.value || cancelling.value || !canCancel(detailMeeting.value)) return
+  if (!window.confirm(`'${detailMeeting.value.title}' 회의를 취소하시겠습니까?`)) return
+
+  cancelling.value = true
+  detailError.value = ''
+  try {
+    await cancelMeeting(detailMeeting.value.meetingId)
+    closeMeetingDetail()
+    await loadMeetings()
+  } catch (error) {
+    detailError.value = error?.message || '회의 취소에 실패했습니다.'
+  } finally {
+    cancelling.value = false
+  }
 }
 
 // 워크스페이스 달력에서 넘어온 editMeetingId를 찾아 수정 모달을 연다(내가 주최한 종료 전 회의만).
@@ -324,8 +383,10 @@ async function onSaved() {
 function enterMeeting(meeting) {
   // 취소된 회의는 입장/회의록 대상이 아니다(버튼도 숨기지만 방어적으로 막는다).
   if (meeting.status === 'cancelled') return
-  if (meeting.status === 'ended') router.push(`/app/minutes/${meeting.id}`)
-  else openMeetingWindow(meeting.id, { scheduledAt: meeting.scheduledAtMs })
+  if (meeting.status === 'ended') {
+    router.push(`/app/minutes/${meeting.id}`)
+    return
+  }
 
   const blockedMessage = getMeetingJoinBlockedMessage(meeting.scheduledAt)
   if (blockedMessage) {
@@ -375,5 +436,18 @@ function handleVisibilityChange() {
   color: var(--muted-foreground);
   font-size: 13px;
   align-self: center;
+}
+.meeting-filter-checkbox {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--muted-foreground);
+  font-size: 13px;
+  font-weight: 600;
+}
+.meeting-filter-checkbox input {
+  width: 16px;
+  height: 16px;
+  accent-color: var(--primary);
 }
 </style>
