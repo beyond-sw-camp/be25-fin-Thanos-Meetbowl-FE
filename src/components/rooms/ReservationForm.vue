@@ -16,12 +16,12 @@
       </div>
       <label>
         회의실
-        <select v-model="form.roomId">
+        <AppSelect v-model="form.roomId">
           <option v-if="allowRemote" value="">회의실 없음 (원격)</option>
           <option v-for="room in rooms" :key="room.roomId" :value="room.roomId" :disabled="!room.isAvailable">
             {{ room.name }}{{ room.isAvailable ? '' : ' (사용 제한)' }}
           </option>
-        </select>
+        </AppSelect>
       </label>
     </template>
     <div class="form-row two">
@@ -43,7 +43,7 @@
 
     <label>
       회의록 검토자
-      <select v-model="form.reviewerUserId">
+      <AppSelect v-model="form.reviewerUserId">
         <option value="">검토자 미지정</option>
         <option
           v-for="attendee in reviewerOptions"
@@ -52,7 +52,7 @@
         >
           {{ attendee.name }}
         </option>
-      </select>
+      </AppSelect>
       <small>참석자 중 회의록을 검토할 1명을 지정합니다.</small>
     </label>
 
@@ -63,6 +63,7 @@
 
 <script setup>
 import { computed } from 'vue'
+import AppSelect from '../common/AppSelect.vue'
 import UserSearchPicker from './UserSearchPicker.vue'
 
 const props = defineProps({

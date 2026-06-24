@@ -10,8 +10,12 @@
         <button v-for="item in tabs" :key="item.key" class="chip" :class="{ active: tab === item.key }" @click="changeTab(item.key)">{{ item.label }}</button>
       </div>
       <div class="meeting-filter-controls">
-        <select v-model="range"><option value="all">전체 기간</option><option value="3m">최근 3개월</option><option value="6m">최근 6개월</option></select>
-        <select v-model="sort"><option value="latest">최신순</option><option value="oldest">오래된순</option></select>
+        <label class="meeting-filter-checkbox">
+          <input v-model="excludeEnded" type="checkbox">
+          종료·취소된 회의 제외
+        </label>
+        <AppSelect v-model="range"><option value="all">전체 기간</option><option value="3m">최근 3개월</option><option value="6m">최근 6개월</option></AppSelect>
+        <AppSelect v-model="sort"><option value="latest">최신순</option><option value="oldest">오래된순</option></AppSelect>
         <span>총 {{ filtered.length }}건</span>
       </div>
     </div>
@@ -141,6 +145,7 @@
 <script setup>
 
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import AppSelect from '../../components/common/AppSelect.vue'
 import { useRoute, useRouter } from 'vue-router'
 import Pagination from '../../components/common/Pagination.vue'
 import ModalShell from '../../components/common/ModalShell.vue'
@@ -280,6 +285,9 @@ const filtered = computed(() => {
   if (tab.value === 'active') {
     list = list.filter((meeting) => meeting.status === 'upcoming' || meeting.status === 'live')
   }
+  if (excludeEnded.value) {
+    list = list.filter((meeting) => meeting.status !== 'ended' && meeting.status !== 'cancelled')
+  }
   list.sort((a, b) => (sort.value === 'latest' ? b.scheduledAtMs - a.scheduledAtMs : a.scheduledAtMs - b.scheduledAtMs))
   return list
 })
@@ -344,6 +352,10 @@ watch([tab, range], () => {
   loadMeetings()
 })
 
+watch(excludeEnded, () => {
+  pageNo.value = 1
+})
+
 // 워크스페이스에서 회의 수정으로 직접 진입하는 쿼리 변화를 감시한다.
 watch(() => route.query.editMeetingId, openMeetingFromQuery)
 
@@ -386,9 +398,14 @@ async function onSaved() {
 function enterMeeting(meeting) {
   // 취소된 회의는 입장/회의록 대상이 아니다(버튼도 숨기지만 방어적으로 막는다).
   if (meeting.status === 'cancelled') return
-  // 종료 회의는 해당 회의의 회의록으로 이동한다(/app/minutes/:meetingId).
   if (meeting.status === 'ended') {
     router.push(`/app/minutes/${meeting.id}`)
+    return
+  }
+
+  const blockedMessage = getMeetingJoinBlockedMessage(meeting.scheduledAt)
+  if (blockedMessage) {
+    window.alert(blockedMessage)
     return
   }
   // 진행중/예정: 회의방 팝업. 시작 15분 전 이전이면 openMeetingWindow가 안내 후 막는다(중복 판정 제거).
@@ -483,6 +500,19 @@ function handleVisibilityChange() {
   color: var(--muted-foreground);
   font-size: 13px;
   align-self: center;
+}
+.meeting-filter-checkbox {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--muted-foreground);
+  font-size: 13px;
+  font-weight: 600;
+}
+.meeting-filter-checkbox input {
+  width: 16px;
+  height: 16px;
+  accent-color: var(--primary);
 }
 /* 입장 대기(참석자, 시작 15분 이상 남음): 비활성 입장 버튼 + 안내 문구. */
 .modal-actions .primary-button:disabled,

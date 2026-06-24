@@ -50,6 +50,7 @@ const routes = [
       { path: 'app/rooms', component: RoomsPage, meta: { role: 'USER' } },
       { path: 'app/my-reservations', component: MyReservationsPage, meta: { role: 'USER' } },
       { path: 'app/my-attending', component: MyAttendingPage, meta: { role: 'USER' } },
+      { path: 'app/my-attendingsms', redirect: '/app/my-attending', meta: { role: 'USER' } },
       { path: 'app/meetings', component: MeetingsPage, meta: { role: 'USER' } },
       { path: 'app/livekit-test', component: LiveKitTestPage, meta: { role: 'USER' } },
       { path: 'app/mail', component: MailPage, meta: { role: 'USER' } },
@@ -132,6 +133,16 @@ router.beforeEach((to) => {
   if (to.meta.public) {
     if (to.path === '/login' && auth.isAuthenticated) return auth.postLoginPath
     return true
+  }
+  if (!auth.isAuthenticated && to.path.startsWith('/app/meeting/')) {
+    const meetingId = String(to.params.meetingId || '').trim()
+    if (meetingId) {
+      return {
+        path: `/guest/meeting/${meetingId}`,
+        query: to.query,
+        hash: to.hash,
+      }
+    }
   }
   if (!auth.isAuthenticated) return '/login'
   if (auth.requiresInitialPasswordChange) {

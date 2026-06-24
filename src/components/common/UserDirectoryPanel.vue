@@ -1,5 +1,6 @@
 <script setup>
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import AppSelect from './AppSelect.vue'
 import {
   createAdminUser,
   deleteAdminUser,
@@ -751,57 +752,57 @@ function formatActionError(error, fallbackMessage) {
           <div class="form-row two">
             <label>
               권한
-              <select v-model="editForm.role">
+              <AppSelect v-model="editForm.role">
                 <option value="USER">USER</option>
                 <option value="ADMIN">ADMIN</option>
-              </select>
+              </AppSelect>
             </label>
             <label v-if="!isEditMode">
               상태
-              <select v-model="editForm.status">
+              <AppSelect v-model="editForm.status">
                 <option value="ACTIVE">활성</option>
                 <option value="INACTIVE">비활성</option>
-              </select>
+              </AppSelect>
             </label>
           </div>
           <div class="form-row two">
             <label>
               계열사
-              <select v-model="editForm.affiliateId" :disabled="organizationLoading">
+              <AppSelect v-model="editForm.affiliateId" :disabled="organizationLoading">
                 <option value="">선택 안 함</option>
                 <option v-for="affiliate in availableAffiliates" :key="affiliate.affiliateId" :value="affiliate.affiliateId">
                   {{ affiliate.name }}
                 </option>
-              </select>
+              </AppSelect>
             </label>
             <label>
               부서
-              <select v-model="editForm.departmentId" :disabled="organizationLoading">
+              <AppSelect v-model="editForm.departmentId" :disabled="organizationLoading">
                 <option value="">선택 안 함</option>
                 <option v-for="department in availableDepartments" :key="department.departmentId" :value="department.departmentId">
                   {{ department.name }}
                 </option>
-              </select>
+              </AppSelect>
             </label>
           </div>
           <div class="form-row two">
             <label>
               팀
-              <select v-model="editForm.teamId" :disabled="organizationLoading">
+              <AppSelect v-model="editForm.teamId" :disabled="organizationLoading">
                 <option value="">선택 안 함</option>
                 <option v-for="team in availableTeams" :key="team.teamId" :value="team.teamId">
                   {{ team.name }}
                 </option>
-              </select>
+              </AppSelect>
             </label>
             <label>
               직책
-              <select v-model="editForm.positionId" :disabled="organizationLoading">
+              <AppSelect v-model="editForm.positionId" :disabled="organizationLoading">
                 <option value="">선택 안 함</option>
                 <option v-for="position in availablePositions" :key="position.positionId" :value="position.positionId">
                   {{ position.name }}
                 </option>
-              </select>
+              </AppSelect>
             </label>
           </div>
           <div class="form-row two">
