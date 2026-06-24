@@ -303,14 +303,6 @@ import { previewKind, resolveBlobFileName, saveBlob } from '../../lib/file-actio
 import { getUserSummary, searchUsers } from '../../lib/users'
 import { formatKstDateTime, formatKstTime } from '../../utils/dateTime'
 import { workspaceDateKey, workspaceMonthCells, workspaceNow } from '../../data/workspaceData'
-import {
-  fallbackWorkspaceBackups,
-  fallbackWorkspaceCalendar,
-  fallbackWorkspaceDriveFiles,
-  fallbackWorkspaceMemos,
-  fallbackUserSearch,
-  withFallback,
-} from '../../data/mailWorkspaceFallbacks'
 import { listMinutes, removeMinutesFavorite } from '../../lib/minutes'
 import { useConfirmDialog } from '../../composables/useConfirmDialog'
 
@@ -331,7 +323,6 @@ const cursor = ref(workspaceToday)
 const selected = ref(workspaceDateKey(workspaceToday))
 const filter = ref('all')
 const events = ref([])
-const localEvents = ref([])
 const subscriptions = ref([])
 const userMap = ref(new Map())
 const memos = ref([])
@@ -343,8 +334,6 @@ const memoPage = ref(1)
 const memoDraft = ref({ memoId: '', title: '', content: '' })
 const backups = ref([])
 const backupKeyword = ref('')
-const LOCAL_RELEASED_BACKUP_IDS_KEY = 'meetbowl.workspace.releasedBackupIds'
-const releasedBackupIds = ref(readStoredReleasedBackupIds())
 const driveFiles = ref([])
 const driveInput = ref(null)
 const driveUploading = ref(false)
@@ -438,10 +427,10 @@ async function loadCalendar() {
   const to = new Date(from)
   to.setDate(from.getDate() + 42)
   try {
-    events.value = mergeLocalEvents((await getWorkspaceCalendar(from.toISOString(), to.toISOString())).map(normalizeEvent))
-    if (!events.value.length) events.value = mergeLocalEvents(fallbackWorkspaceCalendar().map(normalizeEvent))
-  } catch {
-    events.value = mergeLocalEvents(fallbackWorkspaceCalendar().map(normalizeEvent))
+    events.value = (await getWorkspaceCalendar(from.toISOString(), to.toISOString())).map(normalizeEvent)
+  } catch (error) {
+    events.value = []
+    errorMessage.value = error?.message || '일정을 불러오지 못했습니다.'
   }
 }
 
@@ -451,8 +440,12 @@ async function loadSubscriptions() {
 }
 
 async function loadMemos() {
-  memos.value = await withFallback(() => getMemos(), () => fallbackWorkspaceMemos())
-  if (!memos.value.length) memos.value = fallbackWorkspaceMemos()
+  try {
+    memos.value = await getMemos()
+  } catch (error) {
+    memos.value = []
+    errorMessage.value = error?.message || '개인 메모를 불러오지 못했습니다.'
+  }
   if (!activeMemoId.value && memos.value[0]) selectMemo(memos.value[0].memoId)
 }
 
@@ -461,10 +454,10 @@ async function loadBackups() {
     const loaded = backupKeyword.value.trim()
       ? await searchBackups(backupKeyword.value.trim())
       : await getBackups()
-    backups.value = (loaded || []).filter((backup) => !releasedBackupIds.value.has(backup.backupId))
-  } catch {
-    backups.value = fallbackWorkspaceBackups(backupKeyword.value)
-      .filter((backup) => !releasedBackupIds.value.has(backup.backupId))
+    backups.value = loaded || []
+  } catch (error) {
+    backups.value = []
+    errorMessage.value = error?.message || '백업 메일을 불러오지 못했습니다.'
   }
 }
 
@@ -480,8 +473,12 @@ async function loadMinutes() {
 }
 
 async function loadDriveFiles() {
-  driveFiles.value = await withFallback(() => getDriveFiles(), () => fallbackWorkspaceDriveFiles())
-  if (!driveFiles.value.length) driveFiles.value = fallbackWorkspaceDriveFiles()
+  try {
+    driveFiles.value = await getDriveFiles()
+  } catch (error) {
+    driveFiles.value = []
+    errorMessage.value = error?.message || '개인 드라이브를 불러오지 못했습니다.'
+  }
 }
 
 function normalizeEvent(event) {
@@ -533,8 +530,9 @@ async function saveEvent() {
   try {
     if (editingEventId.value) await updateWorkspaceEvent(editingEventId.value, payload)
     else await createWorkspaceEvent(payload)
-  } catch {
-    upsertLocalEvent(payload)
+  } catch (error) {
+    showToast('일정 저장 실패', error?.message || '일정을 저장하지 못했습니다.')
+    return
   }
   eventOpen.value = false
   editingEventId.value = ''
@@ -548,27 +546,6 @@ function openSelectedEvent(event) {
     return
   }
   openEventForm(event)
-}
-
-function upsertLocalEvent(payload) {
-  const nextEvent = normalizeEvent({
-    eventId: editingEventId.value || `local-event-${Date.now()}`,
-    source: 'PERSONAL',
-    ...payload,
-  })
-  const localExists = localEvents.value.some((event) => event.eventId === editingEventId.value)
-  localEvents.value = editingEventId.value && localExists
-    ? localEvents.value.map((event) => event.eventId === editingEventId.value ? nextEvent : event)
-    : [...localEvents.value, nextEvent]
-  events.value = editingEventId.value
-    ? events.value.map((event) => event.eventId === editingEventId.value ? nextEvent : event)
-    : [...events.value, nextEvent]
-}
-
-function mergeLocalEvents(baseEvents) {
-  const byId = new Map(baseEvents.map((event) => [event.eventId, event]))
-  localEvents.value.forEach((event) => byId.set(event.eventId, event))
-  return [...byId.values()]
 }
 
 function selectMemo(memoId) {
@@ -617,13 +594,8 @@ async function releaseBackup(backup) {
     confirmLabel: '백업 해제',
   })
   if (!confirmed) return
-  try {
-    await removeBackupBookmark(backup.backupId)
-  } finally {
-    releasedBackupIds.value = new Set(releasedBackupIds.value).add(backup.backupId)
-    persistReleasedBackupIds()
-    backups.value = backups.value.filter((item) => item.backupId !== backup.backupId)
-  }
+  await removeBackupBookmark(backup.backupId)
+  backups.value = backups.value.filter((item) => item.backupId !== backup.backupId)
   showToast('백업 해제 완료', backup.title)
 }
 
@@ -637,33 +609,6 @@ async function removeFavoriteMinute(minuteId) {
   if (!confirmed) return
   await removeMinutesFavorite(minuteId)
   minuteItems.value = minuteItems.value.map((minute) => minute.id === minuteId ? { ...minute, favorite: false } : minute)
-}
-
-function readStoredReleasedBackupIds() {
-  return new Set(readStoredJson(LOCAL_RELEASED_BACKUP_IDS_KEY, []))
-}
-
-function persistReleasedBackupIds() {
-  writeStoredJson(LOCAL_RELEASED_BACKUP_IDS_KEY, [...releasedBackupIds.value])
-}
-
-function readStoredJson(key, fallback) {
-  try {
-    if (typeof window === 'undefined') return fallback
-    const raw = window.localStorage.getItem(key)
-    return raw ? JSON.parse(raw) : fallback
-  } catch {
-    return fallback
-  }
-}
-
-function writeStoredJson(key, value) {
-  try {
-    if (typeof window === 'undefined') return
-    window.localStorage.setItem(key, JSON.stringify(value))
-  } catch {
-    // 로컬 보관 상태 저장 실패는 화면 동작을 막지 않는다.
-  }
 }
 
 async function uploadPersonalFiles(fileList) {
@@ -778,17 +723,18 @@ function clearDrivePreviewUrl() {
 async function addSubscription(userId = selectedUserId.value) {
   if (!userId) return
   selectedUserId.value = userId
-  let mocked = false
-  await subscribeCalendar(userId).catch(() => {
-    subscriptions.value = [...subscriptions.value, { subscriptionId: `mock-sub-${Date.now()}`, targetUserId: userId }]
-    mocked = true
-  })
+  try {
+    await subscribeCalendar(userId)
+  } catch (error) {
+    showToast('동료 구독 실패', error?.message || '동료 일정을 구독하지 못했습니다.')
+    return
+  }
   subscriptionOpen.value = false
   selectedUserId.value = ''
   userKeyword.value = ''
   userCandidates.value = []
   subscriptionSearchOpen.value = false
-  if (!mocked) await loadSubscriptions()
+  await loadSubscriptions()
   await loadCalendar()
   showToast('동료 구독 추가', '동료 일정을 구독했습니다.')
 }
@@ -799,7 +745,7 @@ function selectSubscriptionUser(user) {
 }
 
 async function loadUserCandidates(keyword) {
-  const data = await withFallback(() => searchUsers({ keyword, size: 8 }), () => fallbackUserSearch({ keyword, size: 8 }))
+  const data = await searchUsers({ keyword, size: 8 }).catch(() => ({ items: [] }))
   const subscribedIds = new Set(subscriptions.value.map((subscription) => subscription.targetUserId))
   userCandidates.value = (data.items || []).filter((user) => !subscribedIds.has(user.userId))
 }

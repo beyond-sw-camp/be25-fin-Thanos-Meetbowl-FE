@@ -48,6 +48,7 @@
     :initial-draft="composeDraft"
     :initial-recipients="composeRecipients"
     :recipient-search="searchRecipientUsers"
+    :self-recipient="selfRecipient"
     :templates="mailTemplates"
     @close="closeCompose"
     @send="sendDraft"
@@ -84,8 +85,15 @@ import {
 } from '../../lib/mail'
 import { getUserSummary, searchUsers } from '../../lib/users'
 import { formatKstDateTime } from '../../utils/dateTime'
-import { fallbackMailPage, fallbackUserSearch } from '../../data/mailWorkspaceFallbacks'
 import { useConfirmDialog } from '../../composables/useConfirmDialog'
+import { useAuthStore } from '../../stores/auth'
+
+const auth = useAuthStore()
+const selfRecipient = computed(() => auth.user ? {
+  ...auth.user,
+  userId: auth.user.userId,
+  name: auth.user.name || auth.user.loginId,
+} : null)
 
 const mailTemplates = [
   { id: 'meeting', label: '회의 요청', subject: '[회의 요청] {주제} 일정 협의', body: '안녕하세요,\n\n아래와 같이 회의를 요청드립니다.\n\n- 안건: \n- 일시: YYYY-MM-DD HH:MM\n- 장소: \n- 참석자: \n\n참석 가능 여부 회신 부탁드립니다.\n\n감사합니다.' },
@@ -100,14 +108,7 @@ const tabs = [
   { id: 'trash', label: '휴지통' },
 ]
 
-const LOCAL_SENT_MAILS_KEY = 'meetbowl.mail.localSentMails'
-const LOCAL_TRASH_MAILS_KEY = 'meetbowl.mail.localTrashMails'
-const LOCAL_DELETED_MAIL_IDS_KEY = 'meetbowl.mail.deletedMailIds'
-
 const mailList = ref([])
-const localSentMails = ref(readStoredLocalSentMails())
-const localTrashMails = ref(readStoredLocalTrashMails())
-const deletedMailIds = ref(readStoredDeletedMailIds())
 const tab = ref('inbox')
 const open = ref(null)
 const compose = ref(false)
@@ -156,34 +157,20 @@ async function loadMails() {
     const data = q.value.trim()
       ? await searchMails(q.value.trim(), { page: pageNo.value, size: pageSize })
       : await listMails(tab.value, { page: pageNo.value, size: pageSize })
-    if (data.items?.length) await applyMailPage(data)
-    else await applyMailPage(fallbackCurrentMailPage())
+    await applyMailPage(data)
   } catch (error) {
-    await applyMailPage(fallbackCurrentMailPage())
-    errorMessage.value = ''
+    await applyMailPage({ items: [], page: 1, size: pageSize, totalElements: 0, totalPages: 1 })
+    errorMessage.value = error?.message || '메일을 불러오지 못했습니다.'
   } finally {
     loading.value = false
   }
 }
 
 async function applyMailPage(data) {
-  const items = tab.value === 'sent' && !q.value.trim()
-    ? [...localSentMails.value, ...(data.items || [])]
-    : tab.value === 'trash' && !q.value.trim()
-      ? [...localTrashMails.value, ...(data.items || [])]
-    : data.items || []
-  mailList.value = await enrichMails(items.filter((mail) => !deletedMailIds.value.has(mail.mailId)))
+  const items = data.items || []
+  mailList.value = await enrichMails(items)
   totalPages.value = Math.max(1, data.totalPages || Math.ceil(mailList.value.length / pageSize) || 1)
-  totalElements.value = (data.totalElements || 0)
-    + (tab.value === 'sent' && !q.value.trim() ? localSentMails.value.length : 0)
-    + (tab.value === 'trash' && !q.value.trim() ? localTrashMails.value.length : 0)
-    || mailList.value.length
-}
-
-function fallbackCurrentMailPage() {
-  return q.value.trim()
-    ? fallbackMailPage('search', { page: pageNo.value, size: pageSize, keyword: q.value })
-    : fallbackMailPage(tab.value, { page: pageNo.value, size: pageSize })
+  totalElements.value = data.totalElements || mailList.value.length
 }
 
 async function enrichMails(items) {
@@ -204,7 +191,7 @@ async function searchRecipientUsers(options) {
   try {
     return await searchUsers(options)
   } catch {
-    return fallbackUserSearch(options)
+    return { items: [], page: 1, size: options?.size || 8, totalElements: 0, totalPages: 1 }
   }
 }
 
@@ -213,7 +200,9 @@ function normalizeMail(mail, sender) {
     ...mail,
     senderName: sender?.name || mail.senderName || '',
     senderMeta: [sender?.department, sender?.team, sender?.position].filter(Boolean).join(' · ') || mail.senderMeta || '',
+    senderEmail: sender?.email || mail.senderEmail || '',
     displayDate: mail.requestedAt ? formatKstDateTime(mail.requestedAt) : '',
+    displayDateTime: mail.requestedAt ? formatKstDateTime(mail.requestedAt, { second: '2-digit' }) : '',
   }
 }
 
@@ -240,25 +229,40 @@ function toggleOne(id) {
 }
 
 async function openMail(mail) {
+  const wasRead = Boolean(mail.read)
   try {
-    if (isFallbackMail(mail)) {
-      if (!mail.read && tab.value === 'inbox') mail.read = true
-      open.value = mail
-      return
-    }
     const detail = await getMail(mail.mailId)
-    open.value = normalizeMail(mergeMailDetail(mail, detail), {
+    if (tab.value === 'inbox') mail.read = true
+    const recipients = await enrichRecipients(detail.recipientUserIds || mail.recipientUserIds || [])
+    open.value = normalizeMail({
+      ...mergeMailDetail(mail, detail),
+      recipients,
+      read: tab.value === 'inbox' ? true : detail.read,
+    }, {
       name: mail.senderName,
       department: mail.senderMeta,
     })
     if (!detail.read && tab.value === 'inbox') {
       await changeMailRead(mail.mailId, true)
-      mail.read = true
     }
   } catch (error) {
-    open.value = mail
-    errorMessage.value = ''
+    mail.read = wasRead
+    open.value = null
+    errorMessage.value = error?.message || '메일 상세를 불러오지 못했습니다.'
   }
+}
+
+async function enrichRecipients(userIds) {
+  const ids = [...new Set((userIds || []).filter(Boolean))]
+  return Promise.all(ids.map(async (userId) => {
+    const user = await getUserSummary(userId).catch(() => null)
+    return {
+      userId,
+      name: user?.name || userId,
+      email: user?.email || '',
+      meta: [user?.department, user?.team, user?.position].filter(Boolean).join(' · '),
+    }
+  }))
 }
 
 function mergeMailDetail(listMail, detail) {
@@ -272,10 +276,6 @@ function mergeMailDetail(listMail, detail) {
   }
 }
 
-function isFallbackMail(mail) {
-  return typeof mail.mailId === 'string' && !/^[0-9a-fA-F-]{36}$/.test(mail.mailId)
-}
-
 async function deleteSelected() {
   const permanently = tab.value === 'trash'
   const confirmed = await requestConfirm({
@@ -287,11 +287,7 @@ async function deleteSelected() {
   })
   if (!confirmed) return
   const ids = [...selected.value]
-  const localIds = ids.filter((id) => isLocalMailId(id))
-  await Promise.all(ids.map((id) => isLocalMailId(id) ? Promise.resolve() : tab.value === 'trash' ? permanentlyDeleteMail(id) : moveMailToTrash(id)))
-  if (tab.value === 'trash') removeLocalTrashMails(localIds)
-  else moveLocalSentMailsToTrash(localIds)
-  persistLocalMailState()
+  await Promise.all(ids.map((id) => tab.value === 'trash' ? permanentlyDeleteMail(id) : moveMailToTrash(id)))
   await loadMails()
   showToast('메일 삭제 완료', `${ids.length}개 메일을 삭제했습니다.`)
 }
@@ -306,38 +302,28 @@ async function deleteOne(mailId) {
     confirmLabel: permanently ? '영구 삭제' : '삭제',
   })
   if (!confirmed) return
-  if (!isLocalMailId(mailId)) {
-    if (open.value?.trashed || tab.value === 'trash') await permanentlyDeleteMail(mailId)
-    else await moveMailToTrash(mailId)
-  } else if (open.value?.trashed || tab.value === 'trash') {
-    removeLocalTrashMails([mailId])
-  } else {
-    moveLocalSentMailsToTrash([mailId])
-  }
-  persistLocalMailState()
+  if (open.value?.trashed || tab.value === 'trash') await permanentlyDeleteMail(mailId)
+  else await moveMailToTrash(mailId)
   open.value = null
   await loadMails()
   showToast('메일 삭제 완료', '선택한 메일을 삭제했습니다.')
 }
 
 async function restoreOne(mailId) {
-  if (isLocalMailId(mailId)) restoreLocalTrashMail(mailId)
-  else await restoreMail(mailId)
+  await restoreMail(mailId)
   open.value = null
-  persistLocalMailState()
   await loadMails()
 }
 
 async function backupSelected() {
   const ids = [...selected.value]
-  const apiIds = ids.filter((id) => !isLocalMailId(id))
-  if (apiIds.length) await backupMails(apiIds)
+  await backupMails(ids)
   selected.value = new Set()
   showToast('메일 백업 완료', `${ids.length}개 메일을 백업했습니다.`)
 }
 
 async function backupMail(mailId) {
-  if (!isLocalMailId(mailId)) await backupMails([mailId])
+  await backupMails([mailId])
   showToast('메일 백업 완료', '메일을 백업했습니다.')
 }
 
@@ -350,14 +336,8 @@ async function sendDraft(draft) {
     await loadMails()
     showToast('메일 전송 완료', '메일을 보냈습니다.')
   } catch (error) {
-    localSentMails.value.unshift(createLocalSentMail(draft))
-    persistLocalMailState()
-    closeCompose()
-    tab.value = 'sent'
-    pageNo.value = 1
-    errorMessage.value = ''
-    await loadMails()
-    showToast('메일 전송 완료', '서버 연결 실패로 로컬 보낸 메일함에 저장했습니다.')
+    errorMessage.value = error?.message || '메일을 전송하지 못했습니다.'
+    showToast('메일 전송 실패', errorMessage.value)
   }
 }
 
@@ -392,84 +372,6 @@ function closeCompose() {
   composeRecipients.value = []
 }
 
-function createLocalSentMail(draft) {
-  return {
-    mailId: `local-sent-${Date.now()}`,
-    senderUserId: 'local-user',
-    senderName: '나',
-    senderMeta: '테스트 발송',
-    recipientUserIds: draft.recipientUserIds,
-    subject: draft.subject,
-    body: draft.body,
-    requestedAt: new Date().toISOString(),
-    read: true,
-    trashed: false,
-    hasAttachments: draft.attachments?.length > 0,
-    attachmentCount: draft.attachments?.length || 0,
-    attachments: draft.attachments || [],
-  }
-}
-
-function readStoredLocalSentMails() {
-  return readStoredJson(LOCAL_SENT_MAILS_KEY, [])
-}
-
-function readStoredLocalTrashMails() {
-  return readStoredJson(LOCAL_TRASH_MAILS_KEY, [])
-}
-
-function readStoredDeletedMailIds() {
-  return new Set(readStoredJson(LOCAL_DELETED_MAIL_IDS_KEY, []))
-}
-
-function persistLocalMailState() {
-  writeStoredJson(LOCAL_SENT_MAILS_KEY, localSentMails.value)
-  writeStoredJson(LOCAL_TRASH_MAILS_KEY, localTrashMails.value)
-  writeStoredJson(LOCAL_DELETED_MAIL_IDS_KEY, [...deletedMailIds.value])
-}
-
-function moveLocalSentMailsToTrash(mailIds) {
-  if (!mailIds.length) return
-  const moveIds = new Set(mailIds)
-  const moved = localSentMails.value.filter((mail) => moveIds.has(mail.mailId)).map((mail) => ({ ...mail, trashed: true }))
-  localSentMails.value = localSentMails.value.filter((mail) => !moveIds.has(mail.mailId))
-  if (moved.length) {
-    localTrashMails.value = [...moved, ...localTrashMails.value.filter((mail) => !moveIds.has(mail.mailId))]
-  }
-}
-
-function removeLocalTrashMails(mailIds) {
-  if (!mailIds.length) return
-  const removeIds = new Set(mailIds)
-  localTrashMails.value = localTrashMails.value.filter((mail) => !removeIds.has(mail.mailId))
-}
-
-function restoreLocalTrashMail(mailId) {
-  const restored = localTrashMails.value.find((mail) => mail.mailId === mailId)
-  if (!restored) return
-  localTrashMails.value = localTrashMails.value.filter((mail) => mail.mailId !== mailId)
-  localSentMails.value = [{ ...restored, trashed: false }, ...localSentMails.value]
-}
-
-function readStoredJson(key, fallback) {
-  try {
-    if (typeof window === 'undefined') return fallback
-    const raw = window.localStorage.getItem(key)
-    return raw ? JSON.parse(raw) : fallback
-  } catch {
-    return fallback
-  }
-}
-
-function writeStoredJson(key, value) {
-  try {
-    if (typeof window === 'undefined') return
-    window.localStorage.setItem(key, JSON.stringify(value))
-  } catch {
-    // 로컬 보관함 저장 실패는 치명적이지 않다.
-  }
-}
-
 function printMail() {
   window.print()
 }
@@ -495,26 +397,11 @@ async function downloadAttachment(attachment) {
   }
 }
 
-function createAttachmentDownloadBlob(attachment, fileName) {
-  const bytes = normalizeAttachmentBytes(attachment)
-  if (bytes > 0) {
-    const content = new Uint8Array(bytes)
-    const header = new TextEncoder().encode(`${fileName}\nMeetbowl dummy attachment\n`)
-    content.set(header.slice(0, content.length))
-    return new Blob([content], { type: attachment.mimeType || 'application/octet-stream' })
-  }
-  return new Blob([`${fileName}\nMeetbowl dummy attachment\n`], { type: attachment.mimeType || 'text/plain;charset=utf-8' })
-}
-
 function triggerDownload(url, fileName) {
   const link = document.createElement('a')
   link.href = url
   link.download = fileName
   link.click()
-}
-
-function isLocalMailId(mailId) {
-  return typeof mailId === 'string' && !/^[0-9a-fA-F-]{36}$/.test(mailId)
 }
 
 function showToast(title, message) {
@@ -525,31 +412,4 @@ function showToast(title, message) {
   }, 2600)
 }
 
-function normalizeAttachmentBytes(attachment) {
-  const candidates = [
-    attachment.actualSizeBytes,
-    attachment.file?.size,
-    attachment.sizeBytes,
-    attachment.size,
-    attachment.fileSize,
-    attachment.contentLength,
-  ]
-  for (const candidate of candidates) {
-    const parsed = parseByteValue(candidate)
-    if (parsed !== null) return parsed
-  }
-  return 0
-}
-
-function parseByteValue(value) {
-  if (typeof value === 'number' && Number.isFinite(value)) return value
-  if (typeof value !== 'string') return null
-  const normalized = value.trim().replace(/\s+/g, '').toUpperCase()
-  const numeric = Number.parseFloat(normalized)
-  if (!Number.isFinite(numeric)) return null
-  if (normalized.endsWith('GB')) return Math.round(numeric * 1024 * 1024 * 1024)
-  if (normalized.endsWith('MB')) return Math.round(numeric * 1024 * 1024)
-  if (normalized.endsWith('KB')) return Math.round(numeric * 1024)
-  return Math.round(numeric)
-}
 </script>

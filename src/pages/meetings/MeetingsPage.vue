@@ -379,53 +379,6 @@ function openEdit(meeting) {
   modal.value = true
 }
 
-async function openMeetingDetail(meeting) {
-  detailMeeting.value = meeting
-  detailFull.value = null
-  detailError.value = ''
-  try {
-    const full = await getMeeting(meeting.meetingId)
-    detailFull.value = full
-    resolveNames([full.hostUserId, ...(full.attendees || []).map((attendee) => attendee.userId)])
-  } catch (error) {
-    detailError.value = error?.message || '회의 상세 정보를 불러오지 못했습니다.'
-  }
-}
-
-function closeMeetingDetail() {
-  detailMeeting.value = null
-  detailFull.value = null
-  detailError.value = ''
-  cancelling.value = false
-}
-
-function editFromDetail() {
-  if (!detailMeeting.value) return
-  openEdit(detailMeeting.value)
-}
-
-function enterFromDetail() {
-  if (!detailMeeting.value) return
-  enterMeeting(detailMeeting.value)
-}
-
-async function cancelFromDetail() {
-  if (!detailMeeting.value || cancelling.value || !canCancel(detailMeeting.value)) return
-  if (!window.confirm(`'${detailMeeting.value.title}' 회의를 취소하시겠습니까?`)) return
-
-  cancelling.value = true
-  detailError.value = ''
-  try {
-    await cancelMeeting(detailMeeting.value.meetingId)
-    closeMeetingDetail()
-    await loadMeetings()
-  } catch (error) {
-    detailError.value = error?.message || '회의 취소에 실패했습니다.'
-  } finally {
-    cancelling.value = false
-  }
-}
-
 // 워크스페이스 달력에서 넘어온 editMeetingId를 찾아 수정 모달을 연다(내가 주최한 종료 전 회의만).
 function openMeetingFromQuery() {
   const editMeetingId = route.query.editMeetingId
@@ -569,6 +522,7 @@ function handleVisibilityChange() {
   width: 16px;
   height: 16px;
   accent-color: var(--primary);
+}
 /* 입장 대기(참석자, 시작 15분 이상 남음): 비활성 입장 버튼 + 안내 문구. */
 .modal-actions .primary-button:disabled,
 .row-actions .primary-button:disabled {

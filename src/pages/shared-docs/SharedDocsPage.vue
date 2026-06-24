@@ -133,7 +133,7 @@
               <button type="button" class="primary-button small" @click="downloadFile(openDoc)"><Download :size="14" /> 다운로드</button>
             </div>
           </article>
-          <h2>버전 이력</h2>
+          <h2 class="shared-version-history-title">버전 이력</h2>
           <article v-for="version in versions" :key="version.versionId" class="version-card" :class="{ active: selectedVersion?.versionId === version.versionId }" @click="selectedVersion = version">
             <div><span class="badge primary">{{ version.version }}</span><strong>{{ version.changeMemo || '변경 메모 없음' }}</strong><small>{{ displayDate(version.uploadedAt) }}</small></div>
             <p>{{ userLabel(version.uploaderUserId) }} · {{ formatSize(version.sizeBytes) }}</p>
@@ -293,14 +293,6 @@ import {
 import { previewKind, resolveBlobFileName, saveBlob } from '../../lib/file-actions'
 import { getUserSummary, searchUsers } from '../../lib/users'
 import { formatKstDateTime } from '../../utils/dateTime'
-import {
-  fallbackSharedFiles,
-  fallbackSharedMembers,
-  fallbackSharedVersions,
-  fallbackSharedWorkspaces,
-  fallbackUserSearch,
-  withFallback,
-} from '../../data/mailWorkspaceFallbacks'
 import { useAuthStore } from '../../stores/auth'
 import { useConfirmDialog } from '../../composables/useConfirmDialog'
 
@@ -366,8 +358,6 @@ const versionPreviewText = computed(() => {
     `버전: ${selectedVersion.value.version}`,
     `작성자: ${userLabel(selectedVersion.value.uploaderUserId)}`,
     `변경 내용: ${selectedVersion.value.changeMemo || '변경 메모 없음'}`,
-    '',
-    '이 영역은 파일 원본 미리보기 API가 연결되기 전까지 버전 메타데이터와 변경 메모를 기반으로 내용을 확인하는 목업입니다.',
   ].join('\n')
 })
 
@@ -401,29 +391,43 @@ async function loadSpaces() {
   errorMessage.value = ''
   try {
     spaces.value = await getSharedWorkspaces()
-    if (!spaces.value.length) spaces.value = fallbackSharedWorkspaces()
-    await Promise.all(spaces.value.map((space) => loadFilesForSpace(space.workspaceId, false)))
-    if (!activeSpaceId.value && spaces.value[0]) await selectSpace(spaces.value[0].workspaceId)
   } catch (error) {
-    spaces.value = fallbackSharedWorkspaces()
-    await Promise.all(spaces.value.map((space) => loadFilesForSpace(space.workspaceId, false)))
-    if (!activeSpaceId.value && spaces.value[0]) await selectSpace(spaces.value[0].workspaceId)
-    errorMessage.value = `${error?.message || '공유 워크스페이스를 불러오지 못했습니다.'} 테스트용 더미 데이터를 표시합니다.`
+    spaces.value = []
+    activeSpaceId.value = ''
+    files.value = []
+    members.value = []
+    errorMessage.value = error?.message || '공유 워크스페이스를 불러오지 못했습니다.'
+    return
+  }
+
+  const fileResults = await Promise.allSettled(
+    spaces.value.map((space) => loadFilesForSpace(space.workspaceId, false)),
+  )
+  if (fileResults.some((result) => result.status === 'rejected')) {
+    errorMessage.value = '일부 공유 프로젝트의 자료를 불러오지 못했습니다. 새로고침 후 다시 확인해 주세요.'
+  }
+  if (!activeSpaceId.value && spaces.value[0]) {
+    await selectSpace(spaces.value[0].workspaceId)
   }
 }
 
 async function selectSpace(spaceId) {
   activeSpaceId.value = spaceId
-  files.value = await loadFilesForSpace(spaceId, true)
-  members.value = await withFallback(() => getSharedWorkspaceMembers(spaceId), () => fallbackSharedMembers(spaceId))
-  if (!members.value.length) members.value = fallbackSharedMembers(spaceId)
+  const [fileResult, memberResult] = await Promise.allSettled([
+    loadFilesForSpace(spaceId, true),
+    getSharedWorkspaceMembers(spaceId),
+  ])
+  files.value = fileResult.status === 'fulfilled' ? fileResult.value : []
+  members.value = memberResult.status === 'fulfilled' ? memberResult.value : []
+  if (fileResult.status === 'rejected' || memberResult.status === 'rejected') {
+    errorMessage.value = '선택한 공유 프로젝트의 자료를 불러오지 못했습니다.'
+  }
   await Promise.all([...members.value.map((member) => member.userId), ...files.value.map((file) => file.uploaderUserId)].map(cacheUser))
 }
 
 async function loadFilesForSpace(spaceId, useCache) {
   if (useCache && filesBySpace.value.has(spaceId)) return filesBySpace.value.get(spaceId)
-  let loaded = await withFallback(() => getSharedWorkspaceFiles(spaceId), () => fallbackSharedFiles(spaceId))
-  if (!loaded.length) loaded = fallbackSharedFiles(spaceId)
+  const loaded = await getSharedWorkspaceFiles(spaceId)
   filesBySpace.value = new Map(filesBySpace.value).set(spaceId, loaded)
   return loaded
 }
@@ -434,8 +438,12 @@ async function openFile(file) {
   versionDraft.value = { file: null, newVersion: '', changeMemo: '' }
   versionUploadOpen.value = false
   await loadFilePreview(file)
-  versions.value = await withFallback(() => getSharedWorkspaceFileVersions(activeSpaceId.value, file.fileId), () => fallbackSharedVersions(file))
-  if (!versions.value.length) versions.value = fallbackSharedVersions(file)
+  try {
+    versions.value = await getSharedWorkspaceFileVersions(activeSpaceId.value, file.fileId)
+  } catch (error) {
+    versions.value = []
+    showToast('버전 이력 조회 실패', error?.message || '버전 이력을 불러오지 못했습니다.')
+  }
   selectedVersion.value = versions.value[0] || null
   await Promise.all(versions.value.map((version) => cacheUser(version.uploaderUserId)))
 }
@@ -448,8 +456,12 @@ async function openFileInfo(file) {
   filePreviewText.value = ''
   filePreviewError.value = ''
   filePreviewLoading.value = false
-  versions.value = await withFallback(() => getSharedWorkspaceFileVersions(activeSpaceId.value, file.fileId), () => fallbackSharedVersions(file))
-  if (!versions.value.length) versions.value = fallbackSharedVersions(file)
+  try {
+    versions.value = await getSharedWorkspaceFileVersions(activeSpaceId.value, file.fileId)
+  } catch (error) {
+    versions.value = []
+    showToast('버전 이력 조회 실패', error?.message || '버전 이력을 불러오지 못했습니다.')
+  }
   selectedVersion.value = versions.value[0] || null
   await Promise.all(versions.value.map((version) => cacheUser(version.uploaderUserId)))
 }
@@ -681,18 +693,17 @@ function removeCreateMember(userId) {
 
 async function inviteMember() {
   if (!activeSpaceId.value || !inviteUserId.value) return
-  let mocked = false
   try {
     await inviteSharedWorkspaceMember(activeSpaceId.value, inviteUserId.value)
-  } catch {
-    addMockMember(inviteUserId.value)
-    mocked = true
+  } catch (error) {
+    showToast('멤버 초대 실패', error?.message || '공유 프로젝트 멤버를 추가하지 못했습니다.')
+    return
   }
   inviteUserId.value = ''
   userKeyword.value = ''
   userCandidates.value = []
   inviteSearchOpen.value = false
-  if (!mocked) await selectSpace(activeSpaceId.value)
+  await selectSpace(activeSpaceId.value)
   showToast('멤버 초대 완료', '공유 프로젝트 멤버를 추가했습니다.')
 }
 
@@ -701,7 +712,7 @@ function selectInviteUser(user) {
 }
 
 async function loadInviteCandidates(keyword) {
-  const data = await withFallback(() => searchUsers({ keyword, size: 20 }), () => fallbackUserSearch({ keyword, size: 20 }))
+  const data = await searchUsers({ keyword, size: 20 }).catch(() => ({ items: [] }))
   const memberIds = new Set(members.value.map((member) => member.userId))
   userCandidates.value = (data.items || []).filter((user) => !memberIds.has(user.userId))
   userCandidates.value.forEach((user) => {
@@ -710,7 +721,7 @@ async function loadInviteCandidates(keyword) {
 }
 
 async function loadCreateMemberCandidates(keyword) {
-  const data = await withFallback(() => searchUsers({ keyword, size: 20 }), () => fallbackUserSearch({ keyword, size: 20 }))
+  const data = await searchUsers({ keyword, size: 20 }).catch(() => ({ items: [] }))
   const selectedIds = new Set(createSelectedMembers.value.map((member) => member.userId))
   createMemberCandidates.value = (data.items || []).filter((user) => !selectedIds.has(user.userId))
   createMemberCandidates.value.forEach((user) => {
@@ -772,11 +783,6 @@ async function removeActiveSpace() {
   closeDrawer()
   if (spaces.value[0]) await selectSpace(spaces.value[0].workspaceId)
   showToast('프로젝트 삭제 완료', target.name)
-}
-
-function addMockMember(userId) {
-  if (members.value.some((member) => member.userId === userId)) return
-  members.value = [...members.value, { userId, role: 'MEMBER' }]
 }
 
 function showToast(title, message) {

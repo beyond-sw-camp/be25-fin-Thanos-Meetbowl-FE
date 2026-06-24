@@ -4,9 +4,10 @@ import { openMeetingWindow } from '../../lib/meeting-route'
 import { useAuthStore } from '../../stores/auth'
 import { getMeetings, getRooms } from '../../lib/reservations'
 import { getWorkspaceCalendar } from '../../lib/workspace'
+import { listMails } from '../../lib/mail'
+import { listMinutes } from '../../lib/minutes'
 import { useUserNames } from '../../composables/useUserNames'
 import { compareByEpochAsc, todayKst, utcToKstClock, utcToKstDate } from '../../utils/dateTime'
-import { mails, minutes } from '../../data/mockData'
 
 const statusLabel = {
   live: '진행 중',
@@ -25,6 +26,8 @@ export default defineComponent({
     const workspaceEvents = ref([])
     const rooms = ref([])
     const selectedId = ref('')
+    const unreadMailCount = ref(0)
+    const minutesCount = ref(0)
     const loadError = ref(false)
     const scheduleLoadError = ref(false)
 
@@ -114,9 +117,9 @@ export default defineComponent({
     })
 
     const kpis = computed(() => [
-      { label: '읽지 않은 메일', value: mails.filter((mail) => mail.unread).length, to: '/app/mail' },
+      { label: '읽지 않은 메일', value: unreadMailCount.value, to: '/app/mail' },
       { label: '오늘 예정된 회의', value: todayScheduledCount.value, to: '/app/meetings?tab=active' },
-      { label: '최근 내 회의록', value: minutes.length, to: '/app/minutes' },
+      { label: '최근 내 회의록', value: minutesCount.value, to: '/app/minutes' },
       { label: '현재 진행 중', value: liveMeetings.value.length, to: '/app/meetings?tab=active' },
     ])
 
@@ -153,6 +156,15 @@ export default defineComponent({
         workspaceEvents.value = []
         scheduleLoadError.value = true
       }
+
+      const [mailResult, minutesResult] = await Promise.allSettled([
+        listMails('inbox', { page: 1, size: 100 }),
+        listMinutes(),
+      ])
+      unreadMailCount.value = mailResult.status === 'fulfilled'
+        ? (mailResult.value.items || []).filter((mail) => !mail.read).length
+        : 0
+      minutesCount.value = minutesResult.status === 'fulfilled' ? minutesResult.value.length : 0
     }
     onMounted(load)
 
