@@ -229,30 +229,49 @@ function flashSavedState(target) {
       <p>{{ description }}</p>
     </header>
 
-    <article class="card settings-card policy-summary-card">
-      <div class="settings-card-head">
+    <article class="card policy-summary-card">
+      <div class="policy-summary-head">
         <div>
           <h2>페이지 최종 수정</h2>
           <p>보관 정책 페이지 전체의 마지막 변경 시각입니다.</p>
         </div>
         <div class="policy-summary-meta">
-          <strong class="policy-updated-at">{{ formatDateTime(pageUpdatedAt) }}</strong>
-          <button
-            type="button"
-            class="primary-button"
-            :disabled="pageSaving"
-            @click="saveAllPolicies"
-          >
-            {{ pageSaving ? '저장 중...' : '전체 저장' }}
-          </button>
+          <span class="badge primary policy-updated-badge">{{ formatDateTime(pageUpdatedAt) }}</span>
+          <div class="admin-actions">
+            <button
+              type="button"
+              class="primary-button policy-summary-save"
+              :disabled="pageSaving"
+              @click="saveAllPolicies"
+            >
+              {{ pageSaving ? '저장 중...' : '전체 저장' }}
+            </button>
+          </div>
         </div>
       </div>
-      <p class="policy-summary-note">회의록과 백업 문서, 메일 데이터의 보관 기준을 한 화면에서 관리합니다.</p>
+      <div class="policy-overview-grid">
+        <div class="policy-overview-item">
+          <span>회의록 보관</span>
+          <strong>{{ retentionPolicy.minutesRetentionDays }}일</strong>
+          <small>회의록 데이터 기준</small>
+        </div>
+        <div class="policy-overview-item">
+          <span>백업 문서 보관</span>
+          <strong>{{ retentionPolicy.backupRetentionDays }}일</strong>
+          <small>문서 백업 기준</small>
+        </div>
+        <div class="policy-overview-item">
+          <span>메일 보관</span>
+          <strong>{{ retentionPeriodText }}</strong>
+          <small>{{ mailForm.autoDeleteEnabled ? '자동 삭제 사용' : '자동 삭제 미사용' }}</small>
+        </div>
+      </div>
+      <p class="policy-summary-note">회의록, 백업 문서, 메일 데이터의 보관 기준을 한 화면에서 관리합니다.</p>
     </article>
 
     <div class="policy-card-grid">
-      <article class="card settings-card policy-card">
-        <div class="settings-card-head">
+      <article class="card policy-card">
+        <div class="policy-card-head">
           <div>
             <h2>보관 정책</h2>
             <p>회의록과 백업 문서의 보관 기간, 검토 알림 기준을 설정합니다.</p>
@@ -260,41 +279,66 @@ function flashSavedState(target) {
         </div>
 
         <div class="policy-section-group">
-          <div class="policy-form-section">
-            <h3 class="policy-group-title">보관 기간</h3>
+          <section class="policy-form-section policy-panel">
+            <div class="policy-panel-head">
+              <h3 class="policy-group-title">보관 기간</h3>
+              <p>문서 종류별 보관 일수를 동일한 입력 리듬으로 관리합니다.</p>
+            </div>
             <div class="policy-field-grid">
               <label class="policy-input-field">
                 <span>회의록 보관 기간</span>
                 <input v-model.number="retentionPolicy.minutesRetentionDays" type="number">
+                <small>일 단위로 입력</small>
               </label>
               <label class="policy-input-field">
                 <span>백업 문서 보관 기간</span>
                 <input v-model.number="retentionPolicy.backupRetentionDays" type="number">
+                <small>일 단위로 입력</small>
               </label>
             </div>
-          </div>
+          </section>
 
-          <div class="policy-form-section policy-form-section--split">
-            <h3 class="policy-group-title">검토/공유 설정</h3>
+          <section class="policy-form-section policy-panel policy-panel--lowered policy-form-section--split">
             <div class="policy-field-grid">
               <label class="policy-input-field">
                 <span>검토 지연 알림</span>
                 <input v-model.number="retentionPolicy.reviewHours" type="number">
+                <small>시간 단위로 입력</small>
               </label>
-              <label class="policy-input-field policy-check-field">
+              <div class="policy-input-field policy-check-field">
                 <span>검토 완료 시 자동 공유 메일 발송</span>
-                <input v-model="retentionPolicy.autoShare" type="checkbox">
-              </label>
+                <div class="policy-choice-group" role="radiogroup" aria-label="자동 공유 메일 발송">
+                  <button
+                    type="button"
+                    class="policy-choice"
+                    :class="{ active: retentionPolicy.autoShare }"
+                    :aria-pressed="retentionPolicy.autoShare"
+                    @click="retentionPolicy.autoShare = true"
+                  >
+                    사용
+                  </button>
+                  <button
+                    type="button"
+                    class="policy-choice"
+                    :class="{ active: !retentionPolicy.autoShare }"
+                    :aria-pressed="!retentionPolicy.autoShare"
+                    @click="retentionPolicy.autoShare = false"
+                  >
+                    미사용
+                  </button>
+                </div>
+                <small class="policy-field-help">발송 여부를 선택합니다.</small>
+              </div>
             </div>
-          </div>
+          </section>
 
           <p v-if="retentionPolicySaved" class="settings-success">정책을 저장했습니다.</p>
           <p v-if="notificationPolicySaved" class="settings-success">정책을 저장했습니다.</p>
         </div>
       </article>
 
-      <article class="card settings-card policy-card">
-        <div class="settings-card-head">
+      <article class="card policy-card">
+        <div class="policy-card-head">
           <div>
             <h2>메일 보관 설정</h2>
             <p>메일 데이터 보관 기간과 자동 삭제 여부를 설정합니다.</p>
@@ -319,8 +363,14 @@ function flashSavedState(target) {
 
         <template v-else>
           <div class="mail-policy-grid">
-            <div class="mail-policy-field">
-              <label class="mail-policy-label" for="mail-retention-years">보관 기간</label>
+            <section class="mail-policy-field mail-policy-panel">
+              <div class="policy-panel-head">
+                <label class="mail-policy-label" for="mail-retention-years">보관 기간</label>
+                <p>보관 기간을 년/개월/주 조합으로 설정합니다.</p>
+              </div>
+              <div class="mail-policy-help-group">
+                <small class="mail-policy-help mail-policy-current">현재 설정: {{ retentionPeriodText }}</small>
+              </div>
               <div class="mail-policy-input-row">
                 <AppSelect
                   id="mail-retention-years"
@@ -363,15 +413,14 @@ function flashSavedState(target) {
                   </option>
                 </AppSelect>
               </div>
-              <div class="mail-policy-help-group">
-                <small class="mail-policy-help">메일 보관 기간을 년/개월/주 단위로 선택합니다.</small>
-                <small class="mail-policy-help mail-policy-current">현재 설정: {{ retentionPeriodText }}</small>
-              </div>
+              <small class="mail-policy-help">최대 10년까지 설정할 수 있습니다.</small>
               <div v-if="retentionDaysError" class="error-box mail-policy-field-error">{{ retentionDaysError }}</div>
-            </div>
+            </section>
 
-            <div class="mail-policy-field mail-policy-field--surface">
-              <span class="mail-policy-label">자동 삭제</span>
+            <section class="mail-policy-field mail-policy-panel mail-policy-field--surface">
+              <div class="policy-panel-head">
+                <span class="mail-policy-label">자동 삭제</span>
+              </div>
               <div class="mail-policy-choice-group" role="radiogroup" aria-label="자동 삭제">
                 <button
                   type="button"
@@ -392,7 +441,8 @@ function flashSavedState(target) {
                   사용 안 함
                 </button>
               </div>
-            </div>
+              <p class="mail-policy-description">보관 기간이 지난 메일을 자동으로 정리할지 선택합니다.</p>
+            </section>
           </div>
 
           <p v-if="mailSuccessMessage" class="settings-success">{{ mailSuccessMessage }}</p>
@@ -404,6 +454,15 @@ function flashSavedState(target) {
 </template>
 
 <style scoped>
+.settings-page {
+  display: grid;
+  gap: 22px;
+}
+
+.settings-page > .page-header {
+  margin-bottom: 0;
+}
+
 .policy-card-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -411,20 +470,78 @@ function flashSavedState(target) {
   align-items: stretch;
 }
 
-.policy-card-grid > .settings-card + .settings-card {
-  margin-top: 0;
-}
-
 .policy-card {
   align-self: stretch;
   display: flex;
   flex-direction: column;
+  padding: 0;
+  overflow: hidden;
 }
 
 .policy-summary-card {
   display: grid;
+  gap: 14px;
+  margin-bottom: 0;
+}
+
+.policy-summary-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  padding-bottom: 14px;
+  border-bottom: 1px solid var(--border);
+}
+
+.policy-summary-head h2,
+.policy-card-head h2 {
+  margin: 0;
+  font-size: 17px;
+  line-height: 1.35;
+}
+
+.policy-summary-head p,
+.policy-card-head p {
+  margin: 4px 0 0;
+  color: var(--muted-foreground);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.policy-overview-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 10px;
-  margin-bottom: 20px;
+}
+
+.policy-overview-item {
+  display: grid;
+  gap: 4px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: #fcfcfd;
+  padding: 12px 14px;
+}
+
+.policy-overview-item span,
+.policy-overview-item small {
+  color: var(--muted-foreground);
+}
+
+.policy-overview-item span {
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.policy-overview-item strong {
+  color: var(--foreground);
+  font-size: 18px;
+  line-height: 1.2;
+}
+
+.policy-overview-item small {
+  font-size: 12px;
+  line-height: 1.45;
 }
 
 .policy-summary-meta {
@@ -435,11 +552,15 @@ function flashSavedState(target) {
   justify-content: flex-end;
 }
 
-.policy-updated-at {
-  color: var(--primary-dark);
-  font-size: 16px;
-  font-weight: 800;
-  white-space: nowrap;
+.policy-updated-badge {
+  min-height: 32px;
+  padding-inline: 10px;
+}
+
+.policy-summary-save {
+  min-height: 38px;
+  padding-inline: 14px;
+  font-size: 13px;
 }
 
 .policy-summary-note {
@@ -453,27 +574,56 @@ function flashSavedState(target) {
   gap: 18px;
   flex: 1;
   grid-auto-rows: min-content;
+  padding: 18px;
+}
+
+.policy-card-head {
+  padding: 18px 18px 14px;
+  border-bottom: 1px solid var(--border);
 }
 
 .policy-form-section {
   display: grid;
-  gap: 10px;
+  gap: 12px;
+}
+
+.policy-panel {
+  padding: 14px 16px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: white;
+  box-shadow: 0 0 0 1px rgba(15, 23, 42, 0.02);
+}
+
+.policy-panel--lowered .policy-field-grid {
+  margin-top: 18px;
+}
+
+.policy-panel-head {
+  display: grid;
+  gap: 4px;
+}
+
+.policy-panel-head p {
+  margin: 0;
+  color: var(--muted-foreground);
+  font-size: 12px;
+  line-height: 1.5;
 }
 
 .policy-form-section + .policy-form-section {
-  padding-top: 14px;
-  border-top: 1px solid var(--border);
+  padding-top: 0;
+  border-top: 0;
 }
 
 .policy-group-title {
   margin: 0;
-  font-size: 15px;
-  font-weight: 800;
+  font-size: 13px;
+  font-weight: 700;
   color: var(--foreground);
-  line-height: 1.35;
+  line-height: 1.4;
 }
 
-/* 정책 카드의 입력 필드를 균형 있게 묶어 좌우 밀도를 맞춘다. */
 .policy-field-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -482,6 +632,8 @@ function flashSavedState(target) {
 
 .policy-input-field {
   min-width: 0;
+  display: grid;
+  gap: 6px;
   align-content: start;
 }
 
@@ -492,19 +644,64 @@ function flashSavedState(target) {
   line-height: 1.4;
 }
 
-.policy-check-field {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  align-items: start;
-  gap: 12px;
-  padding-top: 30px;
+.policy-input-field > small {
+  color: var(--muted-foreground);
+  font-size: 12px;
+  line-height: 1.45;
 }
 
-.policy-check-field input {
-  width: 18px;
-  height: 18px;
-  margin: 2px 0 0;
-  accent-color: var(--primary);
+.policy-input-field > input {
+  width: 100%;
+  min-height: 40px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: white;
+  padding: 0 12px;
+  box-sizing: border-box;
+}
+
+.policy-input-field > input:focus {
+  outline: none;
+  border-color: var(--primary);
+  box-shadow: 0 0 0 3px rgba(243, 115, 33, 0.15);
+}
+
+.policy-check-field {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  align-items: start;
+  gap: 8px;
+}
+
+.policy-field-help {
+  color: var(--muted-foreground);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.policy-choice-group {
+  display: inline-flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.policy-choice {
+  min-height: 38px;
+  min-width: 96px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: white;
+  padding: 0 14px;
+  color: var(--muted-foreground);
+  font-size: 13px;
+  font-weight: 700;
+  transition: border-color 0.2s ease, background 0.2s ease, color 0.2s ease;
+}
+
+.policy-choice.active {
+  border-color: var(--primary);
+  background: color-mix(in srgb, var(--primary) 10%, white);
+  color: var(--primary);
 }
 
 .mail-policy-grid {
@@ -513,10 +710,11 @@ function flashSavedState(target) {
   align-content: start;
   flex: 1;
   grid-auto-rows: min-content;
+  padding: 18px;
 }
 
 .mail-policy-state {
-  margin-top: 8px;
+  padding: 18px;
 }
 
 .mail-policy-retry {
@@ -530,14 +728,21 @@ function flashSavedState(target) {
   min-width: 0;
 }
 
+.mail-policy-panel {
+  padding: 14px 16px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: white;
+  box-shadow: 0 0 0 1px rgba(15, 23, 42, 0.02);
+}
+
 .mail-policy-field--surface {
   padding-top: 14px;
-  border-top: 1px solid var(--border);
 }
 
 .mail-policy-label {
   color: var(--foreground);
-  font-size: 14px;
+  font-size: 13px;
   font-weight: 700;
 }
 
@@ -588,7 +793,7 @@ function flashSavedState(target) {
 .mail-policy-help-group {
   display: grid;
   gap: 3px;
-  margin-top: -2px;
+  margin-top: 2px;
 }
 
 .mail-policy-help {
@@ -599,6 +804,13 @@ function flashSavedState(target) {
 
 .mail-policy-current {
   font-weight: 600;
+}
+
+.mail-policy-description {
+  margin: 0;
+  color: var(--muted-foreground);
+  font-size: 12px;
+  line-height: 1.45;
 }
 
 .mail-policy-choice-group {
@@ -613,10 +825,11 @@ function flashSavedState(target) {
   min-width: 96px;
   border: 1px solid var(--border);
   border-radius: 10px;
-  padding: 10px 14px;
-  background: var(--card);
+  min-height: 38px;
+  padding: 0 14px;
+  background: white;
   color: var(--muted-foreground);
-  font-size: 14px;
+  font-size: 13px;
   font-weight: 700;
   transition: border-color 0.2s ease, background 0.2s ease, color 0.2s ease;
 }
@@ -632,28 +845,12 @@ function flashSavedState(target) {
   margin-top: 0;
 }
 
-.settings-card {
-  padding: 16px 18px;
-}
-
-.settings-card-head {
-  margin-bottom: 16px;
-}
-
-.settings-card-head > div {
-  max-width: 520px;
-}
-
-.settings-card-head h2 {
-  line-height: 1.35;
-}
-
-.settings-card-head p {
-  line-height: 1.5;
-}
-
 @media (max-width: 960px) {
   .policy-card-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .policy-overview-grid {
     grid-template-columns: 1fr;
   }
 }
@@ -666,6 +863,11 @@ function flashSavedState(target) {
 
   .policy-summary-meta {
     justify-content: flex-start;
+  }
+
+  .policy-summary-head {
+    flex-direction: column;
+    align-items: stretch;
   }
 
   .mail-policy-choice {

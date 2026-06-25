@@ -820,9 +820,6 @@ function formatActionError(error, fallbackMessage) {
               <input v-model="editForm.activeUntil" type="date" />
             </label>
           </div>
-          <p v-if="isEditMode" class="admin-modal-note">
-            비밀번호 초기화가 필요하면 footer의 버튼을 눌러 1234로 초기화할 수 있습니다.
-          </p>
           <p v-if="isEditMode && isEditingCurrentUser" class="admin-modal-note">
             현재 로그인한 관리자 계정은 삭제할 수 없습니다.
           </p>

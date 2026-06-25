@@ -1538,7 +1538,11 @@ function getDepartmentTreeData(departmentId) {
 <style scoped>
 .organization-page {
   display: grid;
-  gap: 18px;
+  gap: 22px;
+}
+
+.organization-page > .page-header {
+  margin-bottom: 0;
 }
 
 .organization-header {
@@ -1752,7 +1756,7 @@ function getDepartmentTreeData(departmentId) {
   align-items: center;
   gap: 12px;
   border-bottom: 1px solid var(--border);
-  margin-bottom: 24px;
+  margin-bottom: 1px;
 }
 
 .admin-tabs {
