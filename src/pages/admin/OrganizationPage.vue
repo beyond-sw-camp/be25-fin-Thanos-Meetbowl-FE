@@ -1369,14 +1369,20 @@ function getDepartmentTreeData(departmentId) {
         </div>
       </template>
 
-      <div v-if="modalOpen" class="modal-backdrop" @click.self="closeModal">
-        <article class="card write-modal admin-modal">
-          <header>
+      <ModalShell v-if="modalOpen" modal-class="admin-modal" @close="closeModal">
+        <header class="admin-modal-header">
+          <div class="admin-modal-title">
             <h2>{{ editingItem ? `${actionLabel()} 수정` : `${actionLabel()} 추가` }}</h2>
-            <button type="button" @click="closeModal">닫기</button>
-          </header>
+            <p class="admin-modal-subtitle">
+              {{ activeTab === 'team' ? '상위 부서와 순서를 함께 관리합니다.' : '이름, 순서, 상태를 입력해 주세요.' }}
+            </p>
+          </div>
+          <button type="button" class="admin-modal-close" @click="closeModal">닫기</button>
+        </header>
 
-          <form class="form-grid" @submit.prevent="saveItem">
+        <form class="admin-modal-form" @submit.prevent="saveItem">
+          <div class="admin-modal-body">
+            <p v-if="actionError" class="admin-modal-inline-error">{{ actionError }}</p>
             <label v-if="activeTab !== 'position'">
               계열사
               <AppSelect v-model="form.affiliateId" required>
@@ -1413,7 +1419,7 @@ function getDepartmentTreeData(departmentId) {
             <label>
               순서
               <input v-model.number="form.sortOrder" type="number" min="0" />
-              <div v-if="sortOrderError" class="error-box organization-form-error">{{ sortOrderError }}</div>
+              <p v-if="sortOrderError" class="admin-field-error">{{ sortOrderError }}</p>
             </label>
 
             <label>
@@ -1425,8 +1431,9 @@ function getDepartmentTreeData(departmentId) {
               </AppSelect>
             </label>
 
-            <div class="modal-actions">
-              <button type="button" class="secondary-button" @click="closeModal">취소</button>
+          </div>
+          <footer class="admin-modal-footer">
+            <div class="admin-modal-actions-left">
               <button
                 v-if="editingItem"
                 type="button"
@@ -1436,13 +1443,16 @@ function getDepartmentTreeData(departmentId) {
               >
                 {{ deleteLoading ? '삭제 중...' : deleteTargetLabel() + ' 삭제' }}
               </button>
+            </div>
+            <div class="admin-modal-actions-right">
+              <button type="button" class="secondary-button" @click="closeModal">취소</button>
               <button class="primary-button" :disabled="saving || deleteLoading || Boolean(sortOrderError)">
                 {{ saving ? '저장 중...' : '저장' }}
               </button>
             </div>
-          </form>
-        </article>
-      </div>
+          </footer>
+        </form>
+      </ModalShell>
 
       <ModalShell v-if="deleteConfirmOpen" modal-class="organization-delete-modal" @close="closeDeleteConfirm">
         <header>
@@ -1659,10 +1669,6 @@ function getDepartmentTreeData(departmentId) {
 
 .action-feedback {
   white-space: pre-line;
-}
-
-.organization-form-error {
-  margin-top: 8px;
 }
 
 .excel-confirm-body {

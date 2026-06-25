@@ -723,18 +723,19 @@ function formatActionError(error, fallbackMessage) {
       </article>
     </div>
 
-    <div v-if="editOpen" class="modal-backdrop" @click.self="editOpen = false">
-      <article class="card write-modal admin-modal">
-        <header>
-          <div>
-            <h2>{{ isEditMode ? '사용자 수정' : '회원 추가' }}</h2>
-            <p>{{ editForm.loginId || '새 사용자 정보를 입력하세요.' }}</p>
-          </div>
-          <button @click="editOpen = false">닫기</button>
-        </header>
+    <ModalShell v-if="editOpen" modal-class="admin-modal admin-modal--wide" @close="editOpen = false">
+      <header class="admin-modal-header">
+        <div class="admin-modal-title">
+          <h2>{{ isEditMode ? '사용자 수정' : '회원 추가' }}</h2>
+          <p class="admin-modal-subtitle">{{ editForm.loginId || '새 사용자 정보를 입력하세요.' }}</p>
+        </div>
+        <button type="button" class="admin-modal-close" @click="editOpen = false">닫기</button>
+      </header>
 
-        <div v-if="editLoading" class="empty-state">사용자 정보를 불러오는 중입니다.</div>
-        <form v-else class="form-grid" @submit.prevent="saveMember">
+      <div v-if="editLoading" class="empty-state">사용자 정보를 불러오는 중입니다.</div>
+      <form v-else class="admin-modal-form" @submit.prevent="saveMember">
+        <div class="admin-modal-body">
+          <p v-if="actionError" class="admin-modal-inline-error">{{ actionError }}</p>
           <label>
             로그인 ID
             <input
@@ -819,14 +820,15 @@ function formatActionError(error, fallbackMessage) {
               <input v-model="editForm.activeUntil" type="date" />
             </label>
           </div>
-          <div v-if="isEditMode" class="settings-alert">
-            비밀번호 초기화가 필요하면 아래 버튼을 눌러 1234로 초기화할 수 있습니다.
-          </div>
-          <div v-if="isEditMode && isEditingCurrentUser" class="settings-alert">
+          <p v-if="isEditMode" class="admin-modal-note">
+            비밀번호 초기화가 필요하면 footer의 버튼을 눌러 1234로 초기화할 수 있습니다.
+          </p>
+          <p v-if="isEditMode && isEditingCurrentUser" class="admin-modal-note">
             현재 로그인한 관리자 계정은 삭제할 수 없습니다.
-          </div>
-          <div class="modal-actions">
-            <button type="button" class="secondary-button" @click="editOpen = false">취소</button>
+          </p>
+        </div>
+        <footer class="admin-modal-footer">
+          <div class="admin-modal-actions-left">
             <button
               v-if="isEditMode"
               type="button"
@@ -845,13 +847,16 @@ function formatActionError(error, fallbackMessage) {
             >
               {{ resetPasswordLoading ? '초기화 중...' : '비밀번호 초기화' }}
             </button>
+          </div>
+          <div class="admin-modal-actions-right">
+            <button type="button" class="secondary-button" @click="editOpen = false">취소</button>
             <button class="primary-button" :disabled="saving || deleteLoading">
               {{ saving ? '저장 중...' : '저장' }}
             </button>
           </div>
-        </form>
-      </article>
-    </div>
+        </footer>
+      </form>
+    </ModalShell>
 
     <ModalShell v-if="deleteConfirmOpen" modal-class="delete-confirm-modal" @close="closeDeleteConfirm">
       <header>
