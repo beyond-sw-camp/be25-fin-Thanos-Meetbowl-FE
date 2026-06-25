@@ -62,7 +62,7 @@ import {
   reviseMeetingMinutes,
   shareMeetingMinutes,
 } from '../../lib/minutes'
-import { extractTiptapText, isValidTiptapDocument } from '../../lib/minutes-content'
+import { isValidTiptapDocument } from '../../lib/minutes-content'
 import { useAuthStore } from '../../stores/auth'
 
 const route = useRoute()
@@ -312,7 +312,6 @@ function normalizeMinute(raw) {
     attendees: Number(raw.attendeeCount || 0),
     summary: raw.summary || '',
     content: raw.content || '',
-    contentText: extractTiptapText(raw.content),
     reviewer: raw.reviewerName || raw.reviewerDepartment || '-',
     reviewerDepartment: raw.reviewerDepartment || '',
     rawStatus: raw.status,

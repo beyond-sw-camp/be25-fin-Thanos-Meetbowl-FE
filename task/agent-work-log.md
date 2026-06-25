@@ -219,3 +219,75 @@
   `npm audit fix`로 기존 Vite 취약점 패치 버전도 함께 반영했다.
 - 검증:
   통과: `npm run build`, `npm test`, `npm audit --omit=dev`, `git diff --check`.
+
+2026-06-25 회의록 조회 화면 Tiptap 서식 보존
+
+- 작업 목적: AI가 생성한 heading, bold, 목록 서식이 회의록 조회 화면에서 평문으로 변환되어 소제목 굵기가 사라지는 문제를 해결한다.
+- 변경 파일: `src/components/minutes/MinutesEditor.vue`, `src/components/minutes/MinuteDetail.vue`, `src/pages/minutes/MinutesPage.vue`, `src/styles/main.css`, 이 작업 기록 파일.
+- 동작 변경:
+  조회 화면도 `minutes.content` Tiptap JSON을 읽기 전용 editor로 렌더링한다.
+  읽기 전용 모드에서는 편집 toolbar와 입력 동작을 숨기고, `h1`, `h2`, `h3`의 크기·굵기·간격을 명시적으로 적용한다.
+  조회용 평문 추출 상태인 `contentText`와 `<pre>` 렌더링을 제거해 heading, bold mark, bullet list 구조를 보존한다.
+- 검증:
+  통과: `npm test` 101개, `npm run build`, `git diff --check`.
+  브라우저 자동 화면 검증은 브라우저 연결 환경 오류로 수행하지 못했다.
+
+2026-06-25 회의록 PDF 다운로드 구현
+
+- 작업 목적: 회의록 상세 화면의 비활성 상태였던 `PDF 다운로드` 버튼을 실제 PDF 파일 생성·다운로드 기능으로 연결한다.
+- 변경 파일: `package.json`, `package-lock.json`, `src/lib/minutes-pdf.js`, `src/components/minutes/MinuteDetail.vue`, `src/styles/main.css`, `test/minutes-pdf.test.js`, 이 작업 기록 파일.
+- 동작 변경:
+  현재 사용자가 조회한 회의 제목, 일시·시간·참석자·검토자 메타데이터, 요약과 Tiptap 본문을 브라우저에서 A4 PDF로 생성한다.
+  한국어 글꼴 깨짐을 막기 위해 HTML을 고해상도 캔버스로 렌더링하고, 긴 문서는 A4 높이에 맞춰 여러 페이지로 분할한다.
+  다운로드 파일명은 회의 제목을 사용하되 파일명 금지 문자를 제거하며, 생성 중에는 버튼 중복 클릭을 막고 실패 메시지를 화면에 표시한다.
+  AI 기본 본문의 `회의록`, `회의 요약` preamble은 PDF 상단 정보와 중복되지 않도록 내보내기 복제본에서만 제거한다.
+- 검증:
+  통과: `npm test` 103개, `npm run build`, `git diff --check`.
+  Playwright에서 한국어 샘플 PDF를 실제 다운로드했고 PDF 1.3/A4 1페이지 파일 생성을 확인했다.
+  브라우저 PDF 뷰어로 제목, 메타데이터, 소제목 굵기, 한글 본문과 bullet list가 깨지지 않는 것을 시각 검증했다.
+
+2026-06-25 회의록 상세 헤더 디자인 정리
+
+- 작업 목적: 회의 제목 아래의 참여자·검토자 정보가 한 줄 텍스트로 뭉쳐 보이고, 우측 액션 버튼 높이가 과도한 문제를 개선한다.
+- 변경 파일: `src/components/minutes/MinuteDetail.vue`, `src/styles/main.css`, 이 작업 기록 파일.
+- 동작 변경:
+  날짜와 회의 시간은 간결한 메타 텍스트로 유지하고, 참여자 수·검토자·상태는 구분되는 pill 형태로 재배치했다.
+  즐겨찾기 버튼 크기를 줄이고 hover 배경을 추가했다.
+  PDF 다운로드·수정·승인·내부 메일 공유 버튼을 30px 높이의 compact 스타일로 통일했으며, 모바일에서는 세로로 늘어나지 않고 자연스럽게 줄바꿈된다.
+- 제한 사항: 현재 회의록 API는 참여자 이름 목록이 아닌 `attendeeCount`만 제공하므로 실제 이름 리스트는 표시하지 않는다.
+- 검증: `npm test` 103개, `npm run build`, `git diff --check` 통과.
+
+2026-06-25 회의록 참여자 상세 모달 연결
+
+- 작업 목적: 회의록 상세의 참여자 수를 클릭했을 때 참여자 이름과 역할을 확인할 수 있도록 한다.
+- 변경 파일: `src/components/minutes/MinutesParticipantsModal.vue`, `src/components/minutes/MinuteDetail.vue`, `src/styles/main.css`, 이 작업 기록 파일.
+- 동작 변경:
+  참여자 pill을 버튼으로 전환하고, 클릭 시 `GET /meetings/{meetingId}`로 등록 참석자와 역할을 조회한다.
+  각 사용자 요약 API를 통해 이름, 계열사·부서·팀·직급, 이메일을 조립하며 주최자·참여자·검토자 badge를 표시한다.
+  로딩, 빈 목록, 조회 실패와 재시도 상태를 모달 내부에서 처리하고 회의 선택이 바뀌면 이전 참여자 캐시를 초기화한다.
+- 데이터 기준: 현재 서버에는 LiveKit 실제 접속 이력 원장이 없으므로 모달은 실제 접속자가 아니라 회의에 등록된 참여자를 표시하며 이를 안내 문구로 명시한다.
+- 검증: `npm test` 103개, `npm run build`, `git diff --check` 통과.
+
+2026-06-25 회의록 본문 문서형 레이아웃 전환
+
+- 작업 목적: 회의록 요약 카드 안에 본문 카드가 중첩되고 주황색 배경이 적용되어 문서 가독성이 떨어지는 문제를 개선한다.
+- 변경 파일: `src/components/minutes/MinuteDetail.vue`, `src/styles/main.css`, 이 작업 기록 파일.
+- 동작 변경:
+  조회 모드의 주황색 배경, 외곽 border, 내부 회의록 본문 박스를 모두 제거하고 전체 영역을 흰색 문서 레이아웃으로 변경했다.
+  회의 요약과 회의록 본문은 독립된 제목과 얇은 구분선만 사용해 자연스럽게 이어지도록 구성했다.
+  읽기 전용 Tiptap 본문도 투명/장식 카드가 아닌 흰 배경의 일반 문서처럼 표시한다.
+  편집 모드는 입력 영역의 경계를 유지하고 상단에 `편집 중` 상태만 간결하게 표시한다.
+- 검증: `npm test` 103개, `npm run build`, `git diff --check` 통과.
+
+2026-06-25 회의록 Tiptap 편집 기능 확장
+
+- 작업 목적: 최소 기능만 제공하던 회의록 편집기를 표를 포함한 실사용 편집기로 확장한다.
+- 변경 파일: `package.json`, `package-lock.json`, `src/components/minutes/MinutesEditor.vue`, `src/styles/main.css`, `test/minutes-content.test.js`, 이 작업 기록 파일.
+- 추가 기능:
+  실행 취소·다시 실행, 본문/제목 1~3, 글자 크기·색상, 굵게·기울임·밑줄·취소선·형광펜, 좌/중앙/우 정렬을 지원한다.
+  글머리·번호·체크 목록, 인용문, 구분선, 링크를 지원한다.
+  3x3 표 삽입과 행/열 추가·삭제, 셀 병합/분할, 표 삭제를 지원한다.
+- 저장 계약: 모든 확장 결과는 기존 `minutes.content` Tiptap JSON 문자열에 저장하므로 BE DB 계약은 변경하지 않는다.
+- 조회/PDF: 읽기 전용 회의록과 PDF 출력에 표, 체크 목록, 인용문 스타일을 추가했다.
+- 제외 범위: 이미지 삽입과 내부 메일 HTML 서식 보존은 포함하지 않았다.
+- 검증: 프로덕션 빌드, 전체 테스트, `git diff --check` 통과. 표 노드의 JSON 유효성과 텍스트 추출 테스트를 추가했다.
