@@ -2,6 +2,7 @@
 import { computed, onMounted, ref, watch } from 'vue'
 import ActionButton from '../../components/common/ActionButton.vue'
 import AppSelect from '../../components/common/AppSelect.vue'
+import ModalShell from '../../components/common/ModalShell.vue'
 import {
   changeMeetingRoomAvailability,
   createMeetingBuilding,
@@ -614,13 +615,17 @@ function normalizeBuilding(item) {
         </table>
       </div>
 
-      <div v-if="roomModal" class="modal-backdrop" @click.self="closeRoomModal">
-        <article class="card write-modal admin-modal">
-          <header>
+      <ModalShell v-if="roomModal" modal-class="admin-modal" @close="closeRoomModal">
+        <header class="admin-modal-header">
+          <div class="admin-modal-title">
             <h2>{{ editingRoom ? '회의실 정보 수정' : '회의실 등록' }}</h2>
-            <button type="button" @click="closeRoomModal">닫기</button>
-          </header>
-          <form class="form-grid" @submit.prevent="saveRoom">
+            <p class="admin-modal-subtitle">회의실 이름과 위치, 정원·운영 상태를 입력해 주세요.</p>
+          </div>
+          <button type="button" class="admin-modal-close" @click="closeRoomModal">닫기</button>
+        </header>
+        <form class="admin-modal-form" @submit.prevent="saveRoom">
+          <div class="admin-modal-body">
+            <p v-if="actionError" class="admin-modal-inline-error">{{ actionError }}</p>
             <label>회의실 이름<input v-model="roomForm.name" required></label>
             <div class="form-row two">
               <label>
@@ -639,43 +644,51 @@ function normalizeBuilding(item) {
                 <input v-else v-model="roomForm.buildingName" placeholder="건물명 입력">
               </label>
             </div>
-            <small v-if="!editingRoom && !formBuildings.length" class="empty-state-inline">
+            <p v-if="!editingRoom && !formBuildings.length" class="admin-modal-note">
               선택한 사이트에 등록된 건물이 없습니다. 먼저 사이트/건물을 추가하세요.
-            </small>
-            <small v-else-if="isRenamedBuilding" class="empty-state-inline">
+            </p>
+            <p v-else-if="isRenamedBuilding" class="admin-modal-note">
               건물 이름이 '{{ roomForm.buildingName.trim() }}'(으)로 변경됩니다 (해당 건물을 쓰는 다른 회의실에도 반영).
-            </small>
+            </p>
             <div class="form-row two">
               <label>층<input type="number" v-model.number="roomForm.floor"></label>
               <label>정원<input type="number" min="1" v-model.number="roomForm.capacity"></label>
             </div>
-            <label class="settings-toggle-row">
+            <label class="admin-toggle-row">
               <span>운영 중</span>
               <input type="checkbox" v-model="roomForm.isAvailable">
             </label>
-            <div class="modal-actions">
+          </div>
+          <footer class="admin-modal-footer">
+            <div class="admin-modal-actions-left"></div>
+            <div class="admin-modal-actions-right">
               <ActionButton variant="secondary" type="button" @click="closeRoomModal">취소</ActionButton>
               <ActionButton variant="primary" type="submit" :disabled="saving">{{ saving ? '저장 중...' : '저장' }}</ActionButton>
             </div>
-          </form>
-        </article>
-      </div>
+          </footer>
+        </form>
+      </ModalShell>
 
-      <div v-if="siteModal" class="modal-backdrop" @click.self="closeSiteModal">
-        <article class="card write-modal admin-modal">
-          <header>
+      <ModalShell v-if="siteModal" modal-class="admin-modal" @close="closeSiteModal">
+        <header class="admin-modal-header">
+          <div class="admin-modal-title">
             <h2>사이트 / 건물 관리</h2>
-            <button type="button" @click="closeSiteModal">닫기</button>
-          </header>
+            <p class="admin-modal-subtitle">사이트와 건물을 추가하거나 기존 항목을 수정·삭제합니다.</p>
+          </div>
+          <button type="button" class="admin-modal-close" @click="closeSiteModal">닫기</button>
+        </header>
 
+        <div class="admin-modal-body">
           <!-- 모달 안 에러 표시(페이지 상단 피드백은 모달 뒤라 안 보이므로). -->
-          <div v-if="actionError" class="error-box site-modal-error">{{ actionError }}</div>
+          <p v-if="actionError" class="admin-modal-inline-error">{{ actionError }}</p>
 
           <!-- 사이트/건물 추가(기존 기능 유지) -->
-          <form class="form-grid" @submit.prevent="saveSite">
-            <label>사이트<input v-model="siteForm.siteName" required placeholder="예: 판교"></label>
-            <label>건물<input v-model="siteForm.buildingName" required placeholder="예: 본관"></label>
-            <div class="modal-actions">
+          <form class="site-add-form" @submit.prevent="saveSite">
+            <div class="form-row two">
+              <label>사이트<input v-model="siteForm.siteName" required placeholder="예: 판교"></label>
+              <label>건물<input v-model="siteForm.buildingName" required placeholder="예: 본관"></label>
+            </div>
+            <div class="admin-modal-actions-right">
               <ActionButton variant="secondary" type="button" @click="closeSiteModal">취소</ActionButton>
               <ActionButton variant="primary" type="submit" :disabled="saving">{{ saving ? '추가 중...' : '추가' }}</ActionButton>
             </div>
@@ -726,21 +739,21 @@ function normalizeBuilding(item) {
               </li>
             </ul>
           </div>
-        </article>
-      </div>
+        </div>
+      </ModalShell>
     </template>
   </section>
 </template>
 
 <style scoped>
-/* 모달 폼 */
-.form-grid {
+/* 사이트/건물 추가 폼(모달 본문 안, 사이트 목록 위) */
+.site-add-form {
   display: grid;
-  gap: 16px;
+  gap: 14px;
 }
-
-.modal-actions {
+.site-add-form .admin-modal-actions-right {
   display: flex;
+  justify-content: flex-end;
   gap: 8px;
 }
 
@@ -769,17 +782,26 @@ function normalizeBuilding(item) {
 .admin-data-table th:nth-child(6), .admin-data-table td:nth-child(6) { width: 14%; } /* 상태 */
 .admin-data-table th:nth-child(7), .admin-data-table td:nth-child(7) { width: 16%; } /* 액션 */
 
-/* 운영 중 토글 */
-.settings-toggle-row {
+/* 운영 중 토글: 본문 라벨은 기본 grid(세로)라, 라벨+체크박스를 한 줄로 정렬하도록 덮어씀 */
+.admin-modal-body > label.admin-toggle-row {
+  display: flex;
+  align-items: center;
   justify-content: flex-start;
+  gap: 8px;
+}
+/* 본문 input 공통 규칙(width:100%; min-height:40px)이 체크박스에도 적용돼서 되돌림 */
+.admin-toggle-row > input[type='checkbox'] {
+  width: 16px;
+  height: 16px;
+  min-height: 0;
+  flex: 0 0 auto;
+  margin: 0;
+  cursor: pointer;
 }
 
-/* 사이트 관리(추가 폼 아래 사이트 목록 + 인라인 수정) */
-.site-modal-error {
-  margin-bottom: 12px;
-}
+/* 사이트 관리(추가 폼 아래 사이트 목록 + 인라인) */
 .site-manage {
-  margin-top: 20px;
+  margin-top: 4px;
   border-top: 1px solid var(--border);
   padding-top: 16px;
 }
@@ -868,7 +890,7 @@ function normalizeBuilding(item) {
   flex: 1 1 120px;
   min-width: 0;
 }
-/* 행 버튼은 컴팩트하게(.small 유무와 무관하게 보장). */
+/* 행 버튼은 컴팩트하게(.small 유무와 무관) */
 .site-row .secondary-button,
 .building-row .secondary-button,
 .site-edit-form button {

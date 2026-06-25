@@ -1401,7 +1401,7 @@ input:focus { border-color: var(--primary); box-shadow: 0 0 0 3px rgba(243,115,3
 .hour-line { border-right: 1px solid var(--border); background: linear-gradient(90deg, transparent 49%, rgba(226,232,240,.55) 50%, transparent 51%); }
 .now-marker { position: absolute; top: 0; bottom: 0; z-index: 2; width: 2px; background: var(--danger); pointer-events: none; }
 .now-marker em { position: absolute; top: 4px; left: 4px; border-radius: 999px; background: var(--danger); color: white; padding: 2px 6px; font-size: 10px; font-style: normal; font-weight: 800; white-space: nowrap; }
-.reservation-block { position: absolute; top: 12px; bottom: 12px; min-width: 36px; display: grid; align-content: center; gap: 2px; border: 0; border-radius: 8px; background: #64748b; color: white; padding: 6px 9px; text-align: left; box-shadow: 0 6px 16px rgba(15,23,42,.15); cursor: pointer; overflow: hidden; }
+.reservation-block { position: absolute; top: 8px; bottom: 8px; min-width: 36px; display: grid; align-content: center; gap: 2px; border: 0; border-radius: 8px; background: #64748b; color: white; padding: 5px 9px; text-align: left; line-height: 1.25; box-shadow: 0 6px 16px rgba(15,23,42,.15); cursor: pointer; overflow: hidden; }
 .reservation-block.mine { background: var(--primary); }
 .reservation-block strong, .reservation-block span, .reservation-block small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .reservation-block strong { font-size: 12px; }
