@@ -33,3 +33,32 @@ test('parseTiptapDocument falls back to an empty editable document', () => {
   assert.equal(Array.isArray(parsed.content), true)
   assert.equal(stringifyTiptapDocument(parsed), '{"type":"doc","content":[{"type":"paragraph","content":[]}]}')
 })
+
+test('advanced Tiptap table nodes remain valid and table text is searchable', () => {
+  const document = {
+    type: 'doc',
+    content: [
+      {
+        type: 'table',
+        content: [
+          {
+            type: 'tableRow',
+            content: [
+              {
+                type: 'tableHeader',
+                content: [{ type: 'paragraph', content: [{ type: 'text', text: '담당자' }] }],
+              },
+              {
+                type: 'tableCell',
+                content: [{ type: 'paragraph', content: [{ type: 'text', text: '김민준' }] }],
+              },
+            ],
+          },
+        ],
+      },
+    ],
+  }
+
+  assert.equal(isValidTiptapDocument(document), true)
+  assert.equal(extractTiptapText(document), '담당자\n김민준')
+})
