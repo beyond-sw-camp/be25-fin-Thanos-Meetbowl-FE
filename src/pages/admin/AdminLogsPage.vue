@@ -1,5 +1,6 @@
 <script setup>
-import { computed, onMounted, reactive, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
+import AppSelect from '../../components/common/AppSelect.vue'
 import Pagination from '../../components/common/Pagination.vue'
 import { getAdminAuditLogDetail, getAdminAuditLogs } from '../../lib/admin-audit-logs'
 import {
@@ -9,7 +10,11 @@ import {
   formatActionTypeLabel,
   formatAuditResultLabel,
   formatTargetTypeLabel,
-  summarizeAuditLogChanges,
+  getAuditActionDisplay,
+  getAuditActorIp,
+  getAuditDisplayChangeItems,
+  getAuditDisplayTitle,
+  getAuditTargetTypeDisplay,
 } from '../../lib/admin-audit-log-utils'
 import {
   buildOrganizationNameMaps,
@@ -72,6 +77,11 @@ const filterForm = reactive({
   from: '',
   to: '',
 })
+const dateFilterDraft = reactive({
+  dateRange: 'last7Days',
+  from: '',
+  to: '',
+})
 
 const detailOpen = ref(false)
 const detailLoading = ref(false)
@@ -79,12 +89,15 @@ const detailError = ref('')
 const selectedLog = ref(null)
 const organizationReferenceMaps = ref(EMPTY_REFERENCE_MAPS)
 const organizationLookupLoading = ref(false)
+const datePopoverOpen = ref(false)
+const datePopoverRef = ref(null)
 
 const isAdmin = computed(() => auth.user?.role === 'ADMIN')
 const useCustomDateRange = computed(() => filterForm.dateRange === 'custom')
+const useCustomDateRangeDraft = computed(() => dateFilterDraft.dateRange === 'custom')
 const hasFilters = computed(() =>
   Boolean(
-      filterForm.actionType ||
+    filterForm.actionType ||
       filterForm.targetType ||
       filterForm.result ||
       filterForm.from ||
@@ -98,7 +111,7 @@ const emptyStateMessage = computed(() =>
 )
 const changeSummary = computed(() =>
   selectedLog.value
-    ? summarizeAuditLogChanges(selectedLog.value.beforeSnapshot, selectedLog.value.afterSnapshot, {
+    ? getAuditDisplayChangeItems(selectedLog.value, {
         referenceMaps: organizationReferenceMaps.value,
       })
     : [],
@@ -106,15 +119,44 @@ const changeSummary = computed(() =>
 const detailSubtitle = computed(() => {
   if (detailLoading.value) return ''
 
-  return [formatActionTypeLabel(selectedLog.value?.actionType), formatDateTime(selectedLog.value?.createdAt)]
+  return [getAuditDisplayTitle(selectedLog.value), formatDateTime(selectedLog.value?.createdAt)]
     .filter((value) => value && value !== '-')
     .join(' · ')
+})
+const additionalInfoItems = computed(() => {
+  if (!selectedLog.value) return []
+
+  const items = []
+
+  if (selectedLog.value.reason && selectedLog.value.reason !== '-') {
+    items.push({
+      key: 'reason',
+      label: '사유 또는 메시지',
+      value: selectedLog.value.reason,
+    })
+  }
+
+  return items
+})
+const currentDateRangeLabel = computed(() => {
+  const option = DATE_RANGE_OPTIONS.find((item) => item.value === filterForm.dateRange)
+
+  if (filterForm.dateRange !== 'custom') return option?.label || '기간 선택'
+  if (!filterForm.from || !filterForm.to) return option?.label || '기간 선택'
+
+  return `${formatDateRangeSummary(filterForm.from)} - ${formatDateRangeSummary(filterForm.to)}`
 })
 
 onMounted(() => {
   applyDateRangePreset(filterForm.dateRange)
+  syncDateFilterDraft()
+  document.addEventListener('pointerdown', handleDocumentPointerDown)
   loadLogs()
   loadOrganizationReferenceMaps()
+})
+
+onBeforeUnmount(() => {
+  document.removeEventListener('pointerdown', handleDocumentPointerDown)
 })
 
 watch(pageNo, () => {
@@ -129,14 +171,6 @@ watch(pageSize, (value, previousValue) => {
   }
   loadLogs()
 })
-
-watch(
-  () => filterForm.dateRange,
-  (value, previousValue) => {
-    if (value === previousValue) return
-    applyDateRangePreset(value)
-  },
-)
 
 async function loadLogs() {
   if (!isAdmin.value) {
@@ -220,6 +254,7 @@ function resetFilters() {
   filterForm.result = ''
   filterForm.dateRange = 'last7Days'
   applyDateRangePreset(filterForm.dateRange)
+  syncDateFilterDraft()
   const shouldLoadImmediately = pageNo.value === 1 && pageSize.value === DEFAULT_PAGE_SIZE
 
   if (pageSize.value !== DEFAULT_PAGE_SIZE) {
@@ -272,7 +307,7 @@ function closeDetail() {
 
 function normalizeAuditLog(item) {
   const targetDisplay = extractAuditLogTargetDisplay(
-    item?.targetId || '',
+    item || {},
     item?.beforeSnapshot ?? null,
     item?.afterSnapshot ?? null,
   )
@@ -280,15 +315,19 @@ function normalizeAuditLog(item) {
   return {
     auditLogId: item?.auditLogId || '',
     actorName: item?.actorName || '-',
-    ipAddress: item?.ipAddress || '',
+    ipAddress: getAuditActorIp(item || {}),
     actionType: item?.actionType || '-',
+    actionLabel: item?.actionLabel || '',
     targetType: item?.targetType || '-',
+    targetTypeLabel: item?.targetTypeLabel || '',
     targetId: item?.targetId || '',
     targetLoginId: targetDisplay.loginId,
     targetName: targetDisplay.name,
     result: item?.result || '',
     reason: item?.reason || '',
     createdAt: item?.createdAt || '',
+    displayTitle: item?.displayTitle || '',
+    displayChangeItems: Array.isArray(item?.displayChangeItems) ? item.displayChangeItems : [],
     beforeSnapshot: item?.beforeSnapshot ?? null,
     afterSnapshot: item?.afterSnapshot ?? null,
   }
@@ -299,18 +338,61 @@ function normalizeResultFilter(result) {
 }
 
 function applyDateRangePreset(value) {
+  applyDateRangePresetToTarget(filterForm, value)
+}
+
+function applyDateRangePresetToTarget(target, value) {
+  target.dateRange = value
+
   if (value === 'custom') {
-    if (!filterForm.from || !filterForm.to) {
+    if (!target.from || !target.to) {
       const range = createPresetDateRange('last7Days')
-      filterForm.from = range.from
-      filterForm.to = range.to
+      target.from = range.from
+      target.to = range.to
     }
     return
   }
 
   const range = createPresetDateRange(value)
-  filterForm.from = range.from
-  filterForm.to = range.to
+  target.from = range.from
+  target.to = range.to
+}
+
+function syncDateFilterDraft() {
+  dateFilterDraft.dateRange = filterForm.dateRange
+  dateFilterDraft.from = filterForm.from
+  dateFilterDraft.to = filterForm.to
+}
+
+function openDatePopover() {
+  syncDateFilterDraft()
+  datePopoverOpen.value = true
+}
+
+function closeDatePopover() {
+  datePopoverOpen.value = false
+}
+
+function selectDateRangeDraft(value) {
+  applyDateRangePresetToTarget(dateFilterDraft, value)
+}
+
+function applyDatePopover() {
+  filterForm.dateRange = dateFilterDraft.dateRange
+  filterForm.from = dateFilterDraft.from
+  filterForm.to = dateFilterDraft.to
+  closeDatePopover()
+}
+
+function cancelDatePopover() {
+  syncDateFilterDraft()
+  closeDatePopover()
+}
+
+function handleDocumentPointerDown(event) {
+  if (!datePopoverOpen.value) return
+  if (datePopoverRef.value?.contains(event.target)) return
+  cancelDatePopover()
 }
 
 function createPresetDateRange(preset) {
@@ -358,13 +440,27 @@ function formatAuxiliaryId(value) {
   return value || '-'
 }
 
-function formatChangeTitle(change) {
-  const parts = []
+function formatIpAddress(value) {
+  return value || '-'
+}
 
-  if (change?.beforeTitle) parts.push(`이전 ID: ${change.beforeTitle}`)
-  if (change?.afterTitle) parts.push(`이후 ID: ${change.afterTitle}`)
+function normalizeInlineValue(value) {
+  if (value === null || value === undefined) return ''
+  const normalized = String(value).trim()
+  return normalized && normalized !== '-' ? normalized : ''
+}
 
-  return parts.join('\n')
+function buildAuditTargetSummary(log) {
+  const loginId = normalizeInlineValue(log?.targetLoginId)
+  const targetName = normalizeInlineValue(log?.targetName)
+
+  if (!loginId && !targetName) return '-'
+  if (loginId && targetName) return `${loginId} · ${targetName}`
+  return loginId || targetName || '-'
+}
+
+function buildAuditTargetTooltip(log) {
+  return [getAuditTargetTypeDisplay(log) || '-', buildAuditTargetSummary(log)].join('\n')
 }
 
 function resultBadgeClass(result) {
@@ -382,6 +478,21 @@ function toIsoUtc(value) {
 
   return date.toISOString()
 }
+
+function formatDateRangeSummary(value) {
+  if (!value) return ''
+
+  const [date, time = ''] = String(value).split('T')
+  if (!date) return ''
+
+  return time ? `${date} ${time}` : date
+}
+
+function formatChangeTitle(change) {
+  const before = change?.before ?? '-'
+  const after = change?.after ?? '-'
+  return `${change?.label || '변경 항목'}: ${before} → ${after}`
+}
 </script>
 
 <template>
@@ -393,9 +504,7 @@ function toIsoUtc(value) {
       </div>
     </header>
 
-    <article v-if="loading" class="card empty-state">
-      관리자 작업 로그를 불러오는 중입니다.
-    </article>
+    <article v-if="loading" class="card empty-state">관리자 작업 로그를 불러오는 중입니다.</article>
 
     <article v-else-if="forbidden" class="card empty-state">
       <h2>접근 권한 없음</h2>
@@ -412,41 +521,72 @@ function toIsoUtc(value) {
     <template v-else>
       <article class="card admin-toolbar admin-log-toolbar">
         <form class="admin-log-filter-form" @submit.prevent="submitFilters">
-
-          <select v-model="filterForm.actionType" aria-label="작업 유형">
+          <AppSelect v-model="filterForm.actionType" aria-label="작업 유형">
             <option v-for="option in AUDIT_ACTION_TYPE_OPTIONS" :key="option.value || 'all-action'" :value="option.value">
               {{ option.label }}
             </option>
-          </select>
+          </AppSelect>
 
-          <select v-model="filterForm.targetType" aria-label="대상 유형">
+          <AppSelect v-model="filterForm.targetType" aria-label="대상 유형">
             <option v-for="option in AUDIT_TARGET_TYPE_OPTIONS" :key="option.value || 'all-target'" :value="option.value">
               {{ option.label }}
             </option>
-          </select>
+          </AppSelect>
 
-          <select v-model="filterForm.result" aria-label="결과">
+          <AppSelect v-model="filterForm.result" aria-label="결과">
             <option v-for="option in RESULT_OPTIONS" :key="option.value || 'all-result'" :value="option.value">
               {{ option.label }}
             </option>
-          </select>
+          </AppSelect>
 
-          <select v-model="filterForm.dateRange" aria-label="기간 빠른 선택">
-            <option v-for="option in DATE_RANGE_OPTIONS" :key="option.value" :value="option.value">
-              {{ option.label }}
-            </option>
-          </select>
+          <div ref="datePopoverRef" class="date-filter-popover-wrap">
+            <button
+              type="button"
+              class="date-filter-trigger"
+              aria-label="기간 선택"
+              :aria-expanded="datePopoverOpen"
+              @click="datePopoverOpen ? cancelDatePopover() : openDatePopover()"
+            >
+              <span>{{ currentDateRangeLabel }}</span>
+              <small>{{ useCustomDateRange ? '직접 선택' : '빠른 선택' }}</small>
+            </button>
 
-          <template v-if="useCustomDateRange">
-            <input v-model="filterForm.from" type="datetime-local" aria-label="시작 기간" />
-            <input v-model="filterForm.to" type="datetime-local" aria-label="종료 기간" />
-          </template>
+            <div v-if="datePopoverOpen" class="date-filter-popover">
+              <div class="date-filter-option-list">
+                <button
+                  v-for="option in DATE_RANGE_OPTIONS"
+                  :key="option.value"
+                  type="button"
+                  :class="['date-filter-option', { active: dateFilterDraft.dateRange === option.value }]"
+                  @click="selectDateRangeDraft(option.value)"
+                >
+                  {{ option.label }}
+                </button>
+              </div>
 
-          <select v-model.number="pageSize" aria-label="페이지 크기">
+              <div v-if="useCustomDateRangeDraft" class="date-filter-custom-fields">
+                <label>
+                  <span>시작일</span>
+                  <input v-model="dateFilterDraft.from" type="datetime-local" aria-label="시작 기간" />
+                </label>
+                <label>
+                  <span>종료일</span>
+                  <input v-model="dateFilterDraft.to" type="datetime-local" aria-label="종료 기간" />
+                </label>
+              </div>
+
+              <div class="date-filter-popover-actions">
+                <button class="secondary-button" type="button" @click="cancelDatePopover">취소</button>
+                <button class="primary-button" type="button" @click="applyDatePopover">적용</button>
+              </div>
+            </div>
+          </div>
+
+          <AppSelect v-model.number="pageSize" aria-label="페이지 크기">
             <option v-for="size in PAGE_SIZE_OPTIONS" :key="size" :value="size">
               {{ size }}개씩 보기
             </option>
-          </select>
+          </AppSelect>
 
           <button class="secondary-button" type="button" @click="resetFilters">초기화</button>
           <button class="primary-button" type="submit">검색</button>
@@ -457,41 +597,43 @@ function toIsoUtc(value) {
         <table>
           <thead>
             <tr>
+              <th>작업 일시</th>
+              <th>작업 내용</th>
+              <th>대상</th>
               <th>작업자 IP</th>
-              <th>작업 유형</th>
-              <th>대상 유형</th>
-              <th>대상 로그인 ID</th>
-              <th>변경 대상 이름</th>
               <th>결과</th>
-              <th>발생 일시</th>
               <th>상세</th>
             </tr>
           </thead>
           <tbody>
             <tr v-if="!logs.length">
-              <td colspan="8">
+              <td colspan="6">
                 <div class="empty-state-inline">
                   {{ emptyStateMessage }}
                 </div>
               </td>
             </tr>
             <tr v-for="log in logs" :key="log.auditLogId">
-              <td class="ip-cell">
-                <strong>{{ log.ipAddress || '-' }}</strong>
-                <small>{{ log.actorName || '-' }}</small>
+              <td class="date-cell" :title="formatDateTime(log.createdAt)">
+                {{ formatDateTime(log.createdAt) }}
               </td>
-              <td>{{ formatActionTypeLabel(log.actionType) }}</td>
-              <td>{{ formatTargetTypeLabel(log.targetType) }}</td>
-              <td class="target-id-cell" :title="log.targetId || ''">{{ log.targetLoginId || '-' }}</td>
-              <td>{{ log.targetName || '-' }}</td>
+              <td class="ellipsis-cell" :title="getAuditActionDisplay(log)">
+                {{ getAuditActionDisplay(log) }}
+              </td>
+              <td class="target-cell" :title="buildAuditTargetTooltip(log)">
+                <strong>{{ getAuditTargetTypeDisplay(log) }}</strong>
+                <small>{{ buildAuditTargetSummary(log) }}</small>
+              </td>
+              <td class="ip-cell" :title="formatIpAddress(log.ipAddress)">
+                {{ formatIpAddress(log.ipAddress) }}
+              </td>
               <td>
                 <span :class="['badge', resultBadgeClass(log.result)]">
                   {{ formatAuditResultLabel(log.result) }}
                 </span>
               </td>
-              <td>{{ formatDateTime(log.createdAt) }}</td>
-              <td>
-                <button class="icon-text" type="button" @click="openDetail(log)">상세 보기</button>
+              <td class="detail-cell">
+                <button class="detail-link-button" type="button" @click="openDetail(log)">상세 보기</button>
               </td>
             </tr>
           </tbody>
@@ -505,69 +647,67 @@ function toIsoUtc(value) {
 
       <div v-if="detailOpen" class="modal-backdrop" @click.self="closeDetail">
         <article class="card write-modal detail-modal audit-log-detail-modal">
-          <header>
+          <header class="audit-log-detail-header">
             <div>
               <h2>{{ detailLoading ? '작업 로그 상세 조회 중' : '작업 로그 상세' }}</h2>
               <p v-if="!detailLoading && detailSubtitle" class="detail-subtitle">
                 {{ detailSubtitle }}
               </p>
             </div>
-            <button type="button" @click="closeDetail">닫기</button>
+            <button type="button" class="detail-close-button" @click="closeDetail">닫기</button>
           </header>
 
-          <div v-if="detailLoading" class="empty-state">
-            작업 로그 상세 정보를 불러오는 중입니다.
-          </div>
-          <div v-else-if="detailError" class="error-box">{{ detailError }}</div>
-          <template v-else-if="selectedLog">
-            <section class="detail-section">
-              <h3>변경 내용</h3>
-              <div class="detail-section-body">
-                <ul v-if="changeSummary.length" class="change-summary-list prominent">
-                  <li
-                    v-for="change in changeSummary"
-                    :key="change.key"
-                    :title="formatChangeTitle(change)"
-                  >
-                    <strong>{{ change.label }}</strong>
-                    <span>{{ change.before }} → {{ change.after }}</span>
-                  </li>
-                </ul>
-                <p v-else class="empty-change-text">변경된 항목이 없습니다.</p>
+          <div class="detail-modal-body">
+            <div v-if="detailLoading" class="detail-feedback empty-state">작업 로그 상세 정보를 불러오는 중입니다.</div>
+            <div v-else-if="detailError" class="detail-feedback error-box">{{ detailError }}</div>
+            <template v-else-if="selectedLog">
+              <section class="detail-section detail-section-compact">
+                <h3>작업 내용</h3>
+                <div class="detail-section-body">
+                  <ul v-if="changeSummary.length" class="change-summary-list prominent">
+                    <li v-for="change in changeSummary" :key="change.key" :title="formatChangeTitle(change)">
+                      <strong>{{ change.label }}</strong>
+                      <span>{{ change.before }} → {{ change.after }}</span>
+                    </li>
+                  </ul>
+                  <p v-else class="empty-change-text">표시할 작업 내용이 없습니다.</p>
+                </div>
+              </section>
+
+              <div class="detail-grid">
+                <section class="detail-section">
+                  <h3>기본 정보</h3>
+                  <dl class="detail-list detail-kv-list">
+                    <div><dt>작업 유형</dt><dd>{{ formatActionTypeLabel(selectedLog.actionType) }}</dd></div>
+                    <div><dt>결과</dt><dd>{{ formatAuditResultLabel(selectedLog.result) }}</dd></div>
+                    <div><dt>발생 일시</dt><dd>{{ formatDateTime(selectedLog.createdAt) }}</dd></div>
+                    <div><dt>작업자</dt><dd>{{ selectedLog.actorName || '-' }}</dd></div>
+                    <div><dt>작업자 IP</dt><dd>{{ selectedLog.ipAddress || '-' }}</dd></div>
+                  </dl>
+                </section>
+
+                <section class="detail-section">
+                  <h3>대상 정보</h3>
+                  <dl class="detail-list detail-kv-list">
+                    <div><dt>대상 유형</dt><dd>{{ formatTargetTypeLabel(selectedLog.targetType) }}</dd></div>
+                    <div><dt>대상 ID</dt><dd>{{ formatAuxiliaryId(selectedLog.targetId) }}</dd></div>
+                    <div><dt>대상 로그인 ID</dt><dd>{{ selectedLog.targetLoginId || '-' }}</dd></div>
+                    <div><dt>변경 대상 이름</dt><dd>{{ selectedLog.targetName || '-' }}</dd></div>
+                  </dl>
+                </section>
               </div>
-            </section>
 
-            <div class="detail-grid">
-              <section class="detail-section">
-                <h3>작업 정보</h3>
-                <dl class="detail-list">
-                  <div><dt>작업 유형</dt><dd>{{ formatActionTypeLabel(selectedLog.actionType) }}</dd></div>
-                  <div><dt>결과</dt><dd>{{ formatAuditResultLabel(selectedLog.result) }}</dd></div>
-                  <div><dt>발생 일시</dt><dd>{{ formatDateTime(selectedLog.createdAt) }}</dd></div>
-                  <div><dt>작업자 IP</dt><dd>{{ selectedLog.ipAddress || '-' }}</dd></div>
-                  <div><dt>작업자</dt><dd>{{ selectedLog.actorName || '-' }}</dd></div>
+              <section v-if="additionalInfoItems.length" class="detail-section detail-section-compact">
+                <h3>추가 정보</h3>
+                <dl class="detail-list detail-kv-list detail-kv-list-single">
+                  <div v-for="item in additionalInfoItems" :key="item.key">
+                    <dt>{{ item.label }}</dt>
+                    <dd>{{ item.value }}</dd>
+                  </div>
                 </dl>
               </section>
-
-              <section class="detail-section">
-                <h3>대상 정보</h3>
-                <dl class="detail-list">
-                  <div><dt>대상 유형</dt><dd>{{ formatTargetTypeLabel(selectedLog.targetType) }}</dd></div>
-                  <div><dt>대상 ID</dt><dd>{{ formatAuxiliaryId(selectedLog.targetId) }}</dd></div>
-                  <div><dt>대상 로그인 ID</dt><dd>{{ selectedLog.targetLoginId || '-' }}</dd></div>
-                  <div><dt>변경 대상 이름</dt><dd>{{ selectedLog.targetName || '-' }}</dd></div>
-                </dl>
-              </section>
-            </div>
-
-            <section class="detail-section">
-              <h3>추가 정보</h3>
-              <dl class="detail-list">
-                <div><dt>사유 또는 메시지</dt><dd>{{ selectedLog.reason || '-' }}</dd></div>
-                <div><dt>감사 로그 ID</dt><dd>{{ formatAuxiliaryId(selectedLog.auditLogId) }}</dd></div>
-              </dl>
-            </section>
-          </template>
+            </template>
+          </div>
         </article>
       </div>
     </template>
@@ -591,6 +731,7 @@ function toIsoUtc(value) {
 .admin-log-filter-form {
   width: 100%;
   display: flex;
+  flex-wrap: wrap;
   gap: 10px;
 }
 
@@ -601,15 +742,134 @@ function toIsoUtc(value) {
   height: 38px;
   border: 1px solid var(--border);
   border-radius: 8px;
-  background: white;
+  background: #fcfcfd;
   padding: 0 12px;
   font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--foreground);
+}
+
+.admin-log-filter-form input::placeholder,
+.admin-log-filter-form select {
+  color: var(--muted-foreground);
+}
+
+.date-filter-popover-wrap {
+  position: relative;
+  flex: 1;
+  min-width: 0;
+}
+
+.date-filter-trigger {
+  width: 100%;
+  min-height: 38px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: #fcfcfd;
+  padding: 0 12px;
+  color: var(--foreground);
+  text-align: left;
+}
+
+.date-filter-trigger span,
+.date-filter-trigger small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.date-filter-trigger span {
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.date-filter-trigger small {
+  color: var(--muted-foreground);
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.date-filter-popover {
+  position: absolute;
+  top: calc(100% + 8px);
+  left: 0;
+  z-index: 15;
+  width: min(360px, calc(100vw - 48px));
+  display: grid;
+  gap: 14px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: white;
+  box-shadow: 0 20px 50px rgba(15, 23, 42, 0.18);
+  padding: 14px;
+}
+
+.date-filter-option-list {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.date-filter-option {
+  min-height: 38px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: #fcfcfd;
+  padding: 0 12px;
+  color: var(--foreground);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.date-filter-option.active {
+  border-color: rgba(243, 115, 33, 0.45);
+  background: #fff7ed;
+  color: var(--primary-dark);
+}
+
+.date-filter-custom-fields {
+  display: grid;
+  gap: 10px;
+}
+
+.date-filter-custom-fields label {
+  display: grid;
+  gap: 6px;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--muted-foreground);
+  letter-spacing: 0.02em;
+}
+
+.date-filter-custom-fields input {
+  width: 100%;
+  background: #fcfcfd;
+}
+
+.date-filter-popover-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.date-filter-popover-actions button {
+  flex: 0 0 auto;
+  min-width: 72px;
+  font-size: 13px;
+  font-weight: 700;
 }
 
 .admin-log-filter-form button {
   flex: 0 0 80px;
   height: 38px;
   border-radius: 8px;
+  font-size: 13px;
+  font-weight: 700;
 }
 
 .admin-log-table table {
@@ -618,62 +878,104 @@ function toIsoUtc(value) {
 
 .admin-log-table th:nth-child(1),
 .admin-log-table td:nth-child(1) {
-  width: 16%;
+  width: 17%;
 }
 
 .admin-log-table th:nth-child(2),
 .admin-log-table td:nth-child(2) {
-  width: 16%;
+  width: 19%;
 }
 
 .admin-log-table th:nth-child(3),
 .admin-log-table td:nth-child(3) {
-  width: 11%;
+  width: 25%;
 }
 
 .admin-log-table th:nth-child(4),
 .admin-log-table td:nth-child(4) {
-  width: 16%;
+  width: 19%;
 }
 
 .admin-log-table th:nth-child(5),
 .admin-log-table td:nth-child(5) {
-  width: 15%;
+  width: 9%;
 }
 
 .admin-log-table th:nth-child(6),
 .admin-log-table td:nth-child(6) {
-  width: 8%;
+  width: 11%;
 }
 
-.admin-log-table th:nth-child(7),
-.admin-log-table td:nth-child(7) {
-  width: 12%;
+.admin-log-table th,
+.admin-log-table td {
+  padding-top: 16px;
+  padding-bottom: 16px;
+  vertical-align: middle;
 }
 
-.admin-log-table th:nth-child(8),
-.admin-log-table td:nth-child(8) {
-  width: 6%;
+.date-cell,
+.ip-cell,
+.detail-cell {
+  white-space: nowrap;
 }
 
-.ip-cell strong,
-.ip-cell small {
+.date-cell {
+  color: var(--foreground);
+  font-weight: 600;
+}
+
+.target-cell {
+  min-width: 0;
+}
+
+.target-cell strong,
+.target-cell small {
   display: block;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
-.ip-cell strong {
-  font-size: 14px;
+.target-cell strong {
+  color: var(--foreground);
+  font-size: 13px;
   font-weight: 700;
 }
 
-.ip-cell small {
+.target-cell small {
   margin-top: 4px;
   color: var(--muted-foreground);
   font-size: 12px;
 }
 
-.target-id-cell {
-  word-break: break-word;
+.ip-cell {
+  color: var(--muted-foreground);
+  font-weight: 500;
+}
+
+.ellipsis-cell {
+  max-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.detail-link-button {
+  min-height: 32px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  padding: 0;
+  color: var(--primary-dark);
+  font-size: 13px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.detail-link-button:hover {
+  color: var(--primary);
+  text-decoration: underline;
 }
 
 .admin-log-footer {
@@ -681,16 +983,94 @@ function toIsoUtc(value) {
   justify-content: space-between;
   align-items: center;
   gap: 12px;
+  padding: 16px 4px 2px;
+  border-top: 1px solid var(--border);
+  margin-bottom: 84px;
 }
 
 .admin-log-count {
   margin: 0;
   color: var(--muted-foreground);
   font-size: 13px;
+  font-weight: 600;
+}
+
+.admin-log-footer :deep(.pagination) {
+  margin-top: 0;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.admin-log-footer :deep(.pagination button) {
+  min-width: 42px;
+  min-height: 36px;
+  padding: 0 14px;
+  border-radius: 8px;
+  background: #fcfcfd;
+  color: var(--foreground);
+  font-weight: 700;
+  font-size: 13px;
+  transition: background-color 0.15s ease, border-color 0.15s ease, transform 0.15s ease;
+}
+
+.admin-log-footer :deep(.pagination button:hover:not(:disabled)) {
+  background: var(--muted);
+  transform: translateY(-1px);
+}
+
+.admin-log-footer :deep(.pagination button:disabled) {
+  background: #f8fafc;
+  color: var(--muted-foreground);
+}
+
+.admin-log-footer :deep(.pagination span) {
+  min-width: 54px;
+  color: var(--foreground);
+  font-size: 13px;
+  font-weight: 700;
+  text-align: center;
 }
 
 .audit-log-detail-modal {
-  width: min(980px, calc(100vw - 32px));
+  width: min(900px, calc(100vw - 32px));
+  max-height: min(82vh, 760px);
+  display: flex;
+  flex-direction: column;
+  padding: 0;
+  overflow: hidden;
+}
+
+.audit-log-detail-header {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 18px 22px 14px;
+  border-bottom: 1px solid var(--border);
+  background: linear-gradient(180deg, #ffffff 0%, #fcfcfd 100%);
+}
+
+.audit-log-detail-header h2 {
+  margin: 0;
+  font-size: 20px;
+}
+
+.detail-close-button {
+  flex: 0 0 auto;
+  min-height: 34px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: white;
+  padding: 0 12px;
+  color: var(--foreground);
+  font-weight: 600;
+}
+
+.detail-close-button:hover {
+  background: var(--muted);
 }
 
 .detail-subtitle {
@@ -699,31 +1079,43 @@ function toIsoUtc(value) {
   font-size: 13px;
 }
 
+.detail-modal-body {
+  display: grid;
+  gap: 18px;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 20px 22px 32px;
+}
+
+.detail-feedback {
+  margin: 0;
+}
+
 .detail-grid {
   display: grid;
-  gap: 16px;
+  gap: 18px;
 }
 
 .detail-section {
-  margin-top: 18px;
-  padding: 18px;
+  padding: 14px 16px;
   border: 1px solid var(--border);
-  border-radius: 14px;
+  border-radius: 12px;
   background: #fcfcfd;
 }
 
-.detail-section:first-of-type {
-  margin-top: 0;
+.detail-section-compact {
+  padding-top: 12px;
+  padding-bottom: 12px;
 }
 
 .detail-section h3 {
-  margin: 0 0 14px;
-  font-size: 15px;
+  margin: 0 0 10px;
+  font-size: 14px;
 }
 
 .detail-section-body {
   display: grid;
-  gap: 12px;
+  gap: 10px;
 }
 
 .change-summary-list {
@@ -734,7 +1126,7 @@ function toIsoUtc(value) {
 }
 
 .change-summary-list li {
-  line-height: 1.6;
+  line-height: 1.5;
   word-break: break-word;
 }
 
@@ -743,13 +1135,56 @@ function toIsoUtc(value) {
   gap: 2px;
 }
 
+.change-summary-list.prominent strong {
+  font-size: 13px;
+}
+
 .change-summary-list.prominent span {
   color: var(--muted-foreground);
+  font-size: 13px;
 }
 
 .empty-change-text {
   margin: 0;
   color: var(--muted-foreground);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.detail-list dd,
+.detail-section-body span {
+  word-break: break-word;
+  overflow-wrap: anywhere;
+}
+
+.detail-kv-list {
+  display: grid;
+  gap: 10px;
+  margin: 0;
+}
+
+.detail-kv-list div {
+  display: grid;
+  grid-template-columns: 112px minmax(0, 1fr);
+  gap: 8px 12px;
+  align-items: start;
+}
+
+.detail-kv-list dt {
+  color: var(--muted-foreground);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.detail-kv-list dd {
+  margin: 0;
+  color: var(--foreground);
+  font-size: 13px;
+  line-height: 1.55;
+}
+
+.detail-kv-list-single div {
+  grid-template-columns: 112px minmax(0, 1fr);
 }
 
 @media (min-width: 960px) {
@@ -759,9 +1194,42 @@ function toIsoUtc(value) {
 }
 
 @media (max-width: 959px) {
+  .admin-log-filter-form {
+    align-items: stretch;
+  }
+
+  .date-filter-popover {
+    right: 0;
+    left: auto;
+    width: min(360px, calc(100vw - 32px));
+  }
+
   .admin-log-footer {
     flex-direction: column;
     align-items: stretch;
+    gap: 10px;
+    margin-bottom: 32px;
+  }
+
+  .admin-log-footer :deep(.pagination) {
+    justify-content: flex-start;
+  }
+
+  .audit-log-detail-modal {
+    width: min(100vw - 20px, 900px);
+    max-height: calc(100vh - 20px);
+  }
+
+  .audit-log-detail-header,
+  .detail-modal-body {
+    padding-left: 16px;
+    padding-right: 16px;
+  }
+
+  .detail-kv-list div,
+  .detail-kv-list-single div {
+    grid-template-columns: 1fr;
+    gap: 4px;
   }
 }
 </style>

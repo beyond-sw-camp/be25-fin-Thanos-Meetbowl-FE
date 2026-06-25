@@ -40,9 +40,9 @@
           <button class="secondary-button" @click="date = todayKst()">오늘</button>
         </div>
         <div class="room-legend">
-          <select class="room-site-select" v-model="site">
+          <AppSelect class="room-site-select" v-model="site">
             <option v-for="item in sites" :key="item" :value="item">{{ item }}</option>
-          </select>
+          </AppSelect>
           <span><i class="mine"></i>내 예약</span>
           <span><i></i>예약됨</span>
           <span><i class="restricted"></i>사용 제한</span>
@@ -111,13 +111,17 @@
         <button v-else class="primary-button" type="button" disabled>회의 입장</button>
       </div>
     </ModalShell>
+    <ConfirmDialog v-if="confirmDialog" v-bind="confirmDialog" @cancel="cancelConfirm" @confirm="acceptConfirm" />
   </section>
 </template>
 
 <script setup>
 import { computed, onMounted, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
+import AppSelect from '../../components/common/AppSelect.vue'
 import ModalShell from '../../components/common/ModalShell.vue'
+import ConfirmDialog from '../../components/common/ConfirmDialog.vue'
+import { useConfirmDialog } from '../../composables/useConfirmDialog'
 import RoomTimelineRow from '../../components/rooms/RoomTimelineRow.vue'
 import ReservationModal from '../../components/rooms/ReservationModal.vue'
 import { useAuthStore } from '../../stores/auth'
@@ -129,6 +133,7 @@ import { TIMELINE, timelineHours } from '../../utils/timeline'
 
 const auth = useAuthStore()
 const router = useRouter()
+const { confirmDialog, requestConfirm, cancelConfirm, acceptConfirm } = useConfirmDialog()
 const myUserId = computed(() => auth.user?.userId || '')
 const { nameMap, resolveNames } = useUserNames()
 
@@ -342,12 +347,18 @@ function enterMeeting(targetMeetingId) {
   closeDetail()
   openMeetingWindow(normalizedMeetingId, {
     scheduledAt,
+    title: detailFull.value?.title || detail.value?.title || '',
   })
 }
 
 async function cancelReservation(meetingId) {
   if (saving.value) return
-  if (!window.confirm('이 예약을 취소하시겠습니까?')) return
+  const confirmed = await requestConfirm({
+    title: '예약을 취소할까요?',
+    message: '선택한 회의실 예약을 취소합니다. 참석자가 있다면 일정 변경을 확인해 주세요.',
+    confirmLabel: '예약 취소',
+  })
+  if (!confirmed) return
 
   saving.value = true
   actionError.value = ''

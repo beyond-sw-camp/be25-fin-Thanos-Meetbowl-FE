@@ -123,7 +123,7 @@
 
             <label>
               마이크
-              <select
+              <AppSelect
                 v-model="selectedAudioInput"
                 :disabled="!audioInputs.length || loadingDevices"
                 @change="restartPreview"
@@ -132,7 +132,7 @@
                 <option v-for="device in audioInputs" :key="device.deviceId" :value="device.deviceId">
                   {{ device.label }}
                 </option>
-              </select>
+              </AppSelect>
             </label>
 
             <div class="microphone-test">
@@ -165,7 +165,7 @@
 
             <label>
               스피커
-              <select
+              <AppSelect
                 v-model="selectedAudioOutput"
                 :disabled="!audioOutputs.length || !supportsSpeakerSelection"
                 @change="applySpeaker"
@@ -174,7 +174,7 @@
                 <option v-for="device in audioOutputs" :key="device.deviceId" :value="device.deviceId">
                   {{ device.label }}
                 </option>
-              </select>
+              </AppSelect>
               <small v-if="!supportsSpeakerSelection">
                 이 브라우저에서는 스피커 선택을 지원하지 않습니다.
               </small>
@@ -182,7 +182,7 @@
 
             <label>
               카메라
-              <select
+              <AppSelect
                 v-model="selectedVideoInput"
                 :disabled="!videoInputs.length || loadingDevices"
                 @change="restartPreview"
@@ -191,7 +191,7 @@
                 <option v-for="device in videoInputs" :key="device.deviceId" :value="device.deviceId">
                   {{ device.label }}
                 </option>
-              </select>
+              </AppSelect>
             </label>
           </div>
 
@@ -231,6 +231,7 @@
 
 <script setup>
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import AppSelect from '../../components/common/AppSelect.vue'
 
 const step = ref('form')
 const displayName = ref('')

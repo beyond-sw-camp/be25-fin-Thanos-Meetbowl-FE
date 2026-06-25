@@ -1,5 +1,6 @@
 <script setup>
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import AppSelect from './AppSelect.vue'
 import {
   createAdminUser,
   deleteAdminUser,
@@ -9,6 +10,7 @@ import {
   searchAdminUserSuggestions,
   updateAdminUser,
 } from '../../lib/admin-users'
+import { adminUserStatusLabel, adminUserStatusTone, resolveAdminUserStatus } from '../../lib/admin-user-status.js'
 import {
   getAdminAffiliates,
   getAdminDepartments,
@@ -196,12 +198,22 @@ async function loadUsers() {
       size: props.pageSize,
     })
 
+    const nextTotalPages = Math.max(1, Number(data?.totalPages || 1))
+    totalPages.value = nextTotalPages
+    totalElements.value = Number(data?.totalElements || 0)
+
+    // 삭제나 상태 변경으로 현재 페이지 구성이 바뀌면 마지막 유효 페이지를 다시 조회한다.
+    if (pageNo.value > nextTotalPages) {
+      pageNo.value = nextTotalPages
+      return
+    }
+
+    users.value = (data?.items || []).map(normalizeUserSummary)
+
     const visibleUsers = (data?.items || [])
       .map(normalizeUserSummary)
       .filter((user) => user.role === 'USER' && user.loginId !== 'admin')
     users.value = visibleUsers
-    totalPages.value = Number(data?.totalPages || 1)
-    totalElements.value = Number(data?.totalElements || visibleUsers.length)
   } catch (error) {
     if (error?.status === 403) {
       forbidden.value = true
@@ -248,6 +260,7 @@ async function openCreate() {
   successMessage.value = ''
   await loadOrganizationOptions()
   editForm.value = createEmptyForm()
+  editForm.value.affiliateId = auth.user?.affiliateId || availableAffiliates.value[0]?.affiliateId || ''
   editOpen.value = true
 }
 
@@ -309,11 +322,12 @@ async function saveMember() {
 
   try {
     if (editForm.value.userId) {
-      const updated = await updateAdminUser(editForm.value.userId, buildUserUpdatePayload(editForm.value))
-      const normalized = normalizeUserSummary(updated)
-      users.value = users.value.map((item) => (item.userId === normalized.userId ? normalized : item))
-      if (selectedUser.value?.userId === normalized.userId) {
-        selectedUser.value = normalized
+      await updateAdminUser(editForm.value.userId, buildUserUpdatePayload(editForm.value))
+      // 수정 저장 후에는 현재 검색어/필터/페이지 기준으로 목록을 다시 받아 badge 상태를 BE 응답과 맞춘다.
+      await loadUsers()
+
+      if (selectedUser.value?.userId === editForm.value.userId) {
+        selectedUser.value = normalizeUserSummary(await getAdminUser(editForm.value.userId))
       }
       successMessage.value = '사용자 정보를 수정했습니다.'
     } else {
@@ -370,8 +384,10 @@ async function handleDeleteMember() {
     deleteConfirmOpen.value = false
     editOpen.value = false
     detailOpen.value = false
+    selectedUser.value = null
     successMessage.value = '회원이 삭제되었습니다.'
     // 삭제 성공 후에는 현재 필터/페이지 기준으로 목록을 다시 받아 비활성화 상태와 총 개수를 함께 동기화한다.
+    // 삭제 후에도 현재 검색어/필터/페이지 조건은 유지한 채 목록만 최신화한다.
     await loadUsers()
   } catch (error) {
     if (error?.status === 403) {
@@ -427,9 +443,10 @@ function normalizeUserSummary(user) {
     team: user?.team || '-',
     position: user?.position || '-',
     role: `${user?.role || ''}`.toUpperCase(),
-    status: `${user?.status || ''}`.toUpperCase(),
-    activeFrom: user?.activeFrom || null,
-    activeUntil: user?.activeUntil || null,
+    // 상태 badge source of truth는 BE가 계산한 최종 status다.
+    status: resolveAdminUserStatus(user),
+    activeFrom: user?.activeFrom || user?.activeStartDate || null,
+    activeUntil: user?.activeUntil || user?.activeEndDate || null,
     affiliateId: user?.affiliateId || '',
     departmentId: user?.departmentId || '',
     teamId: user?.teamId || '',
@@ -441,8 +458,12 @@ function roleLabel(role) {
   return role === 'ADMIN' ? 'ADMIN' : role === 'USER' ? 'USER' : role || '-'
 }
 
-function statusLabel(value) {
-  return value === 'ACTIVE' ? '활성' : value === 'INACTIVE' ? '비활성' : value || '-'
+function displayStatusLabel(value) {
+  return adminUserStatusLabel(value)
+}
+
+function displayStatusTone(value) {
+  return adminUserStatusTone(value)
 }
 
 function createEmptyForm() {
@@ -474,15 +495,18 @@ function createFormFromUser(user) {
     departmentId: user?.departmentId || '',
     teamId: user?.teamId || '',
     positionId: user?.positionId || '',
-    activeFrom: toDateInputValue(user?.activeFrom),
-    activeUntil: toDateInputValue(user?.activeUntil),
+    activeFrom: toDateInputValue(user?.activeFrom || user?.activeStartDate),
+    activeUntil: toDateInputValue(user?.activeUntil || user?.activeEndDate),
   }
 }
 
 function buildUserCreatePayload(targetForm) {
   return {
     loginId: targetForm.loginId.trim(),
-    ...buildSharedUserPayload(targetForm),
+    ...buildSharedUserPayload({
+      ...targetForm,
+      affiliateId: targetForm.affiliateId || auth.user?.affiliateId || availableAffiliates.value[0]?.affiliateId || '',
+    }),
     status: targetForm.status,
   }
 }
@@ -646,8 +670,8 @@ function formatActionError(error, fallbackMessage) {
               <td>{{ user.position }}</td>
               <td>{{ roleLabel(user.role) }}</td>
               <td>
-                <span :class="['badge', user.status === 'ACTIVE' ? 'success' : 'warning']">
-                  {{ statusLabel(user.status) }}
+                <span :class="['badge', displayStatusTone(user.status)]">
+                  {{ displayStatusLabel(user.status) }}
                 </span>
               </td>
               <td v-if="editable">
@@ -682,7 +706,7 @@ function formatActionError(error, fallbackMessage) {
             <div><dt>팀</dt><dd>{{ selectedUser.team }}</dd></div>
             <div><dt>직책</dt><dd>{{ selectedUser.position }}</dd></div>
             <div><dt>권한</dt><dd>{{ roleLabel(selectedUser.role) }}</dd></div>
-            <div><dt>상태</dt><dd>{{ statusLabel(selectedUser.status) }}</dd></div>
+            <div><dt>상태</dt><dd>{{ displayStatusLabel(selectedUser.status) }}</dd></div>
           </dl>
           <div class="modal-actions">
             <button
@@ -732,57 +756,57 @@ function formatActionError(error, fallbackMessage) {
           <div class="form-row two">
             <label>
               권한
-              <select v-model="editForm.role">
+              <AppSelect v-model="editForm.role">
                 <option value="USER">USER</option>
                 <option value="ADMIN">ADMIN</option>
-              </select>
+              </AppSelect>
             </label>
             <label v-if="!isEditMode">
               상태
-              <select v-model="editForm.status">
+              <AppSelect v-model="editForm.status">
                 <option value="ACTIVE">활성</option>
                 <option value="INACTIVE">비활성</option>
-              </select>
+              </AppSelect>
             </label>
           </div>
           <div class="form-row two">
             <label>
               계열사
-              <select v-model="editForm.affiliateId" :disabled="organizationLoading">
+              <AppSelect v-model="editForm.affiliateId" :disabled="organizationLoading">
                 <option value="">선택 안 함</option>
                 <option v-for="affiliate in availableAffiliates" :key="affiliate.affiliateId" :value="affiliate.affiliateId">
                   {{ affiliate.name }}
                 </option>
-              </select>
+              </AppSelect>
             </label>
             <label>
               부서
-              <select v-model="editForm.departmentId" :disabled="organizationLoading">
+              <AppSelect v-model="editForm.departmentId" :disabled="organizationLoading">
                 <option value="">선택 안 함</option>
                 <option v-for="department in availableDepartments" :key="department.departmentId" :value="department.departmentId">
                   {{ department.name }}
                 </option>
-              </select>
+              </AppSelect>
             </label>
           </div>
           <div class="form-row two">
             <label>
               팀
-              <select v-model="editForm.teamId" :disabled="organizationLoading">
+              <AppSelect v-model="editForm.teamId" :disabled="organizationLoading">
                 <option value="">선택 안 함</option>
                 <option v-for="team in availableTeams" :key="team.teamId" :value="team.teamId">
                   {{ team.name }}
                 </option>
-              </select>
+              </AppSelect>
             </label>
             <label>
               직책
-              <select v-model="editForm.positionId" :disabled="organizationLoading">
+              <AppSelect v-model="editForm.positionId" :disabled="organizationLoading">
                 <option value="">선택 안 함</option>
                 <option v-for="position in availablePositions" :key="position.positionId" :value="position.positionId">
                   {{ position.name }}
                 </option>
-              </select>
+              </AppSelect>
             </label>
           </div>
           <div class="form-row two">
@@ -836,9 +860,8 @@ function formatActionError(error, fallbackMessage) {
       </header>
 
       <div class="delete-confirm-body">
-        <!-- 회원 삭제 확인 모달은 실제 동작이 비활성화 처리라는 점을 공통 문구로 명확히 안내한다. -->
         <p>정말 이 회원을 삭제하시겠습니까?</p>
-        <p>삭제 후 해당 회원은 비활성화되며 더 이상 로그인할 수 없습니다.</p>
+        <p>삭제한 회원은 사용자 목록에서 더 이상 조회되지 않습니다. 삭제하시겠습니까?</p>
         <p class="delete-confirm-target">{{ editForm.name || editForm.loginId || '-' }}</p>
       </div>
 

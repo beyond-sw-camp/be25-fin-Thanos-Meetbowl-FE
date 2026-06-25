@@ -50,3 +50,10 @@ export function updateMeeting(meetingId, payload) {
 export function cancelMeeting(meetingId) {
   return postJson(`/meetings/${meetingId}/cancel`)
 }
+
+// 참석자 시간 겹침 실시간 검사. userIds가 scheduledAt~scheduledEndAt에 다른 활성 회의에 잡혀 있으면
+// { conflicts: [{ userId, meetingId, meetingTitle, scheduledAt, scheduledEndAt }] }를 반환(빈 배열=겹침 없음).
+// excludeMeetingId: 수정 시 현재 회의 id를 넘겨 자기 회의 기존 참석자가 걸리지 않게 한다(생성 시 생략).
+export function checkAttendeeAvailability(payload) {
+  return postJson('/meetings/attendee-availability', payload)
+}

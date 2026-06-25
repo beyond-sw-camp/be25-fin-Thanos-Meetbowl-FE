@@ -1,14 +1,9 @@
-import { myMeetings } from '../data/mockData'
-
-const defaultMeetingId = myMeetings.find((meeting) => meeting.status === 'live')?.id || myMeetings[0]?.id || ''
 const MEETING_EARLY_JOIN_WINDOW_MINUTES = 15
 
 /**
- * mock 화면 여러 곳에서 회의 입장 링크를 일관되게 만들기 위한 helper다.
- *
- * 회의 상세/알림/대시보드처럼 meetingId를 직접 들고 있지 않은 화면은 현재 진행 중 회의로 fallback한다.
+ * 회의 입장 링크를 일관되게 만든다. meetingId가 없으면 회의 목록으로 이동한다.
  */
-export function meetingRoute(meetingId = defaultMeetingId) {
+export function meetingRoute(meetingId = '') {
   return meetingId ? `/app/meeting/${meetingId}` : '/app/meetings'
 }
 
@@ -46,7 +41,7 @@ function buildAbsoluteUrl(path) {
   return new URL(path, window.location.origin).toString()
 }
 
-export function openMeetingWindow(meetingId = defaultMeetingId, options = {}) {
+export function openMeetingWindow(meetingId = '', options = {}) {
   const path = meetingRoute(meetingId)
   if (!path || typeof window === 'undefined') return false
 
@@ -66,6 +61,10 @@ export function openMeetingWindow(meetingId = defaultMeetingId, options = {}) {
     returnTo: currentPath,
     popupSession: `${Date.now()}`,
   })
+  const resolvedTitle = String(options.title || '').trim()
+  if (resolvedTitle) {
+    popupQuery.set('title', resolvedTitle)
+  }
   const popupPath = `${path}?${popupQuery.toString()}`
   const features = [
     'popup=yes',

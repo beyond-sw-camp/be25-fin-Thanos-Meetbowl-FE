@@ -1,5 +1,7 @@
 <script setup>
 import { computed, onMounted, ref, watch } from 'vue'
+import ActionButton from '../../components/common/ActionButton.vue'
+import AppSelect from '../../components/common/AppSelect.vue'
 import {
   createAdminDepartment,
   deleteDepartment,
@@ -29,10 +31,23 @@ import {
   createPositionForm,
   createTeamForm,
 } from '../../lib/admin-organization-form'
+import {
+  getOrganizationSortOrderConflictMessage,
+  ORGANIZATION_SORT_ORDER_DUPLICATE_MESSAGE,
+  validateOrganizationSortOrder,
+} from '../../lib/admin-organization-sort-validation.js'
 import { getAllAdminUsers } from '../../lib/admin-users'
+import {
+  buildOrganizationMemberLabel,
+  buildOrganizationSummaryText,
+  buildOrganizationUserHeadline,
+  normalizeOrganizationUserDisplay,
+} from '../../lib/admin-organization-user-display.js'
 import { getOrganizationUserSummary } from '../../lib/user-directory'
 import { useAuthStore } from '../../stores/auth'
 import ModalShell from '../../components/common/ModalShell.vue'
+import OrganizationFullChartModal from '../../components/admin/OrganizationFullChartModal.vue'
+import { Download, Upload, Info, ExternalLink, ChevronRight } from '@lucide/vue'
 
 const auth = useAuthStore()
 
@@ -71,6 +86,7 @@ const excelDownloading = ref(false)
 const excelUploading = ref(false)
 const uploadFileInput = ref(null)
 const pendingUploadFile = ref(null)
+const fullChartOpen = ref(false)
 
 const affiliates = ref([])
 const departments = ref([])
@@ -214,18 +230,74 @@ const teamRows = computed(() =>
       return {
         ...team,
         departmentName: department?.name || '-',
+        departmentSortOrder: department?.sortOrder ?? null,
         affiliateName: findAffiliateName(department?.affiliateId),
         userCount: users.value.filter((user) => user.teamId === team.teamId).length,
       }
     })
-    .sort(compareBySortOrderThenName),
+    .sort((left, right) => {
+      const affiliateCompare = String(left.affiliateName || '').localeCompare(String(right.affiliateName || ''))
+      if (affiliateCompare !== 0) return affiliateCompare
+
+      const leftDepartmentOrder = Number.isFinite(Number(left.departmentSortOrder))
+        ? Number(left.departmentSortOrder)
+        : Number.MAX_SAFE_INTEGER
+      const rightDepartmentOrder = Number.isFinite(Number(right.departmentSortOrder))
+        ? Number(right.departmentSortOrder)
+        : Number.MAX_SAFE_INTEGER
+
+      if (leftDepartmentOrder !== rightDepartmentOrder) return leftDepartmentOrder - rightDepartmentOrder
+
+      const departmentCompare = String(left.departmentName || '').localeCompare(String(right.departmentName || ''))
+      if (departmentCompare !== 0) return departmentCompare
+
+      return compareBySortOrderThenName(left, right)
+    }),
 )
+
+const teamTableRows = computed(() => {
+  let currentDepartmentName = ''
+  let currentDepartmentStartIndex = -1
+
+  const rows = teamRows.value.map((team) => ({
+    ...team,
+    departmentRowspan: 0,
+    showDepartmentCell: false,
+  }))
+
+  rows.forEach((team, index) => {
+    if (team.departmentName !== currentDepartmentName) {
+      currentDepartmentName = team.departmentName
+      currentDepartmentStartIndex = index
+      team.showDepartmentCell = true
+      team.departmentRowspan = 1
+      return
+    }
+
+    rows[currentDepartmentStartIndex].departmentRowspan += 1
+  })
+
+  return rows
+})
 
 const positionRows = computed(() =>
   sortedPositions.value.map((position) => ({
     ...position,
     userCount: users.value.filter((user) => user.positionId === position.positionId).length,
   })),
+)
+
+const sortOrderError = computed(() =>
+  modalOpen.value
+    ? validateOrganizationSortOrder({
+        tab: activeTab.value,
+        form: form.value,
+        editingItem: editingItem.value,
+        departments: departments.value,
+        teams: teams.value,
+        positions: positions.value,
+      })
+    : '',
 )
 
 watch(
@@ -235,6 +307,15 @@ watch(
     // 계열사를 바꾸면 기존 부서 선택이 다른 계열사 소속일 수 있어, 유효한 값만 유지한다.
     if (availableDepartments.value.some((department) => department.departmentId === form.value.departmentId)) return
     form.value.departmentId = ''
+  },
+)
+
+watch(
+  () => [form.value.sortOrder, form.value.affiliateId, form.value.departmentId],
+  () => {
+    if (actionError.value === ORGANIZATION_SORT_ORDER_DUPLICATE_MESSAGE) {
+      actionError.value = ''
+    }
   },
 )
 
@@ -387,6 +468,9 @@ async function confirmDeleteItem() {
 async function saveItem() {
   if (saving.value) return
 
+  const validationMessage = sortOrderError.value
+  if (validationMessage) return
+
   saving.value = true
   actionError.value = ''
   successMessage.value = ''
@@ -437,7 +521,9 @@ async function saveItem() {
       return
     }
 
-    actionError.value = error?.message || '저장에 실패했습니다.'
+    const duplicatedSortOrderMessage = getOrganizationSortOrderConflictMessage(error)
+    actionError.value =
+      duplicatedSortOrderMessage || formatActionError(error, '저장에 실패했습니다.')
   } finally {
     saving.value = false
   }
@@ -539,6 +625,7 @@ function normalizeUser(item) {
   return {
     userId: item?.userId || '',
     name: item?.name || '-',
+    email: item?.email || '',
     affiliateId: item?.affiliateId || '',
     departmentId: item?.departmentId || '',
     teamId: item?.teamId || '',
@@ -548,18 +635,19 @@ function normalizeUser(item) {
 }
 
 function normalizeUserSummary(item) {
-  return {
+  // 로컬 관리자 공용 계정은 조직 정보가 비어 있어야 하므로 FE 기본값으로 채우지 않는다.
+  return normalizeOrganizationUserDisplay({
     userId: item?.userId || '',
     loginId: item?.loginId || '',
     name: item?.name || '-',
     email: item?.email || '-',
     affiliate: item?.affiliate || '-',
-    department: item?.department || '-',
-    team: item?.team || '-',
-    position: item?.position || '-',
+    department: item?.department || '',
+    team: item?.team || '',
+    position: item?.position || '',
     role: `${item?.role || ''}`.toUpperCase(),
     status: `${item?.status || ''}`.toUpperCase(),
-  }
+  })
 }
 
 function normalizeStatus(status) {
@@ -602,6 +690,31 @@ function findAffiliateName(affiliateId) {
 
 function resolvePositionName(positionId, fallbackName = '-') {
   return positionMap.value.get(positionId)?.name || fallbackName || '-'
+}
+
+function findUserById(userId) {
+  return users.value.find((user) => user.userId === userId) || null
+}
+
+function organizationTeamSummary(departmentId) {
+  return buildOrganizationSummaryText(
+    ...(teamsByDepartmentId.value.get(departmentId) || []).map((team) => team.name),
+  )
+}
+
+function departmentTeamSummary(departmentId) {
+  const names = (teamsByDepartmentId.value.get(departmentId) || []).map((team) => team.name).filter(Boolean)
+  return names.length ? names.join(' / ') : '-'
+}
+
+function memberPreviewLabel(userId) {
+  const user = findUserById(userId)
+  if (!user) return '-'
+  return buildOrganizationMemberLabel(user, resolvePositionName(user.positionId, user.position)) || user.name || '-'
+}
+
+function userSummaryHeadline(user) {
+  return buildOrganizationUserHeadline(user)
 }
 
 function statusLabel(status) {
@@ -799,6 +912,11 @@ function canCreateInCurrentTab() {
   return activeTab.value === 'department' || activeTab.value === 'team' || activeTab.value === 'position'
 }
 
+const fullChartAffiliateName = computed(() => {
+  if (sortedAffiliates.value.length === 1) return sortedAffiliates.value[0]?.name || '전체 조직'
+  return '전체 조직'
+})
+
 const visibleExcelValidationErrors = computed(() =>
   // 오류가 많을 때는 처음 10건만 먼저 보여 주고, 나머지는 펼쳐서 확인하게 한다.
   showAllExcelErrors.value
@@ -809,6 +927,59 @@ const visibleExcelValidationErrors = computed(() =>
 const remainingExcelValidationErrorCount = computed(() =>
   Math.max(excelValidationErrors.value.length - visibleExcelValidationErrors.value.length, 0),
 )
+
+// 조직도 3단계 계층 데이터 생성 helper 함수
+function getDepartmentTreeData(departmentId) {
+  // 1. 해당 부서의 활성 팀 조회 및 정렬
+  const deptTeams = (teams.value || [])
+    .filter((team) => team.departmentId === departmentId && team.status === 'ACTIVE')
+    .sort(compareBySortOrderThenName)
+
+  // 2. 해당 부서의 사용자 목록 조회
+  const deptUsers = usersByDepartmentId.value.get(departmentId) || []
+
+  // 3. 팀별 사용자 그룹핑 및 미지정 사용자 분류
+  const teamUsersMap = new Map()
+  const unassignedUsers = []
+
+  for (const team of deptTeams) {
+    teamUsersMap.set(team.teamId, [])
+  }
+
+  for (const user of deptUsers) {
+    if (user.teamId && teamUsersMap.has(user.teamId)) {
+      teamUsersMap.get(user.teamId).push(user)
+    } else {
+      unassignedUsers.push(user)
+    }
+  }
+
+  // 4. 팀 노드 데이터 구성
+  const teamNodes = []
+  for (const team of deptTeams) {
+    const usersInTeam = teamUsersMap.get(team.teamId) || []
+    teamNodes.push({
+      key: team.teamId,
+      id: team.teamId,
+      name: team.name,
+      isUnassigned: false,
+      users: usersInTeam,
+    })
+  }
+
+  // 5. 미지정 사용자가 있다면 "미지정 팀" 노드 추가
+  if (unassignedUsers.length > 0) {
+    teamNodes.push({
+      key: `unassigned-${departmentId}`,
+      id: 'unassigned',
+      name: '미지정 팀',
+      isUnassigned: true,
+      users: unassignedUsers,
+    })
+  }
+
+  return teamNodes
+}
 </script>
 
 <template>
@@ -826,22 +997,12 @@ const remainingExcelValidationErrorCount = computed(() =>
           accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
           @change="handleExcelFileChange"
         />
-        <button
-          class="secondary-button"
-          type="button"
-          :disabled="excelDownloading || excelUploading"
-          @click="handleExcelDownload"
-        >
+        <ActionButton variant="secondary" :disabled="excelDownloading || excelUploading" @click="handleExcelDownload">
           {{ excelDownloading ? '다운로드 중...' : '엑셀 다운로드' }}
-        </button>
-        <button
-          class="primary-button"
-          type="button"
-          :disabled="excelUploading || excelDownloading"
-          @click="openExcelUploadPicker"
-        >
+        </ActionButton>
+        <ActionButton variant="primary" :disabled="excelUploading || excelDownloading" @click="openExcelUploadPicker">
           {{ excelUploading ? '업로드 중...' : '엑셀 업로드' }}
-        </button>
+        </ActionButton>
       </div>
     </header>
 
@@ -869,13 +1030,36 @@ const remainingExcelValidationErrorCount = computed(() =>
       </div>
 
       <div v-if="excelResult" class="card feedback-card excel-result-card">
-        <h2>엑셀 반영 결과</h2>
+        <div class="excel-result-card-head">
+          <h2>엑셀 반영 결과</h2>
+          <p>업로드된 조직 데이터 반영 내역입니다.</p>
+        </div>
         <div class="excel-result-grid">
-          <p>계열사 생성/수정: {{ excelResult.createdAffiliates }} / {{ excelResult.updatedAffiliates }}</p>
-          <p>부서 생성/수정: {{ excelResult.createdDepartments }} / {{ excelResult.updatedDepartments }}</p>
-          <p>팀 생성/수정: {{ excelResult.createdTeams }} / {{ excelResult.updatedTeams }}</p>
-          <p>직급 생성/수정: {{ excelResult.createdPositions }} / {{ excelResult.updatedPositions }}</p>
-          <p>회원 생성/수정: {{ excelResult.createdUsers }} / {{ excelResult.updatedUsers }}</p>
+          <div class="excel-result-item">
+            <strong>계열사</strong>
+            <p>생성/수정</p>
+            <span>{{ excelResult.createdAffiliates }} / {{ excelResult.updatedAffiliates }}</span>
+          </div>
+          <div class="excel-result-item">
+            <strong>부서</strong>
+            <p>생성/수정</p>
+            <span>{{ excelResult.createdDepartments }} / {{ excelResult.updatedDepartments }}</span>
+          </div>
+          <div class="excel-result-item">
+            <strong>팀</strong>
+            <p>생성/수정</p>
+            <span>{{ excelResult.createdTeams }} / {{ excelResult.updatedTeams }}</span>
+          </div>
+          <div class="excel-result-item">
+            <strong>직급</strong>
+            <p>생성/수정</p>
+            <span>{{ excelResult.createdPositions }} / {{ excelResult.updatedPositions }}</span>
+          </div>
+          <div class="excel-result-item">
+            <strong>회원</strong>
+            <p>생성/수정</p>
+            <span>{{ excelResult.createdUsers }} / {{ excelResult.updatedUsers }}</span>
+          </div>
         </div>
       </div>
 
@@ -905,24 +1089,17 @@ const remainingExcelValidationErrorCount = computed(() =>
         </button>
       </div>
 
-      <article class="card excel-guide-card">
-        <div class="excel-guide-grid">
-          <section>
-            <h2>다운로드 안내</h2>
-            <p>현재 계열사, 부서, 팀, 직급, 회원 정보를 엑셀로 내려받습니다.</p>
-          </section>
-          <section>
-            <h2>업로드 안내</h2>
-            <p>수정한 엑셀 파일을 업로드하면 조직도와 회원 정보에 일괄 반영됩니다.</p>
-          </section>
+      <div class="info-bar-new">
+        <div class="info-left">
+          <Info :size="16" class="info-icon" />
+          <span class="info-text">엑셀로 조직/회원 정보를 내려받거나 수정 파일을 업로드할 수 있습니다.</span>
         </div>
-        <ul class="excel-notice-list">
-          <li>엑셀에 없는 기존 데이터는 삭제되지 않습니다.</li>
-          <li>신규 회원은 초기 비밀번호 1234로 생성됩니다.</li>
-          <li>권한은 ADMIN 또는 USER만 입력할 수 있습니다.</li>
-          <li>부서, 팀, 직급의 순서는 sortNumber 기준으로 반영됩니다.</li>
-        </ul>
-      </article>
+        <div class="info-right">
+          <span class="info-chip">엑셀 없이 기존 데이터는 삭제되지 않습니다.</span>
+          <span class="info-chip">ADMIN 또는 USER만 입력 가능</span>
+          <span class="info-chip">정렬 기준: sortNumber</span>
+        </div>
+      </div>
 
       <div class="tab-actions">
         <div class="admin-tabs">
@@ -966,12 +1143,40 @@ const remainingExcelValidationErrorCount = computed(() =>
               >
                 <div class="summary-item-head">
                   <strong>{{ department.name }}</strong>
-                  <span>{{ department.userCount }}명</span>
+                  <span class="dept-badge">{{ department.userCount }}명</span>
                 </div>
-                <p>{{ department.teamSummary }}</p>
+                
+                <div v-if="department.hasMembers" class="summary-item-body">
+                  <div
+                    v-for="teamNode in getDepartmentTreeData(department.departmentId)"
+                    :key="teamNode.key"
+                    class="summary-team-group"
+                  >
+                    <div class="summary-team-title">{{ teamNode.name }}</div>
+                    <div class="summary-team-users">
+                      <div
+                        v-for="user in teamNode.users"
+                        :key="user.userId"
+                        class="summary-member-name"
+                      >
+                        {{ user.name }} {{ resolvePositionName(user.positionId, user.position) }}
+                      </div>
+                      <div v-if="teamNode.users.length === 0" class="summary-member-empty">
+                        배정된 사용자가 없습니다.
+                      </div>
+                    </div>
+                  </div>
+                </div>
               </article>
             </div>
             <div v-else class="empty-state-inline">표시할 부서가 없습니다.</div>
+            
+            <div class="card-footer">
+              <button class="footer-link-btn" type="button" @click="switchTab('department')">
+                <span>전체 부서 보기</span>
+                <ChevronRight class="footer-link-icon" :size="16" />
+              </button>
+            </div>
           </article>
 
           <article class="card chart-card">
@@ -983,74 +1188,75 @@ const remainingExcelValidationErrorCount = computed(() =>
               <span class="badge navy">실제 사용자 기준</span>
             </div>
 
-            <div v-if="departmentSummaries.length" class="chart-list">
+            <div v-if="departmentSummaries.length" class="org-chart-list">
               <article
                 v-for="department in departmentSummaries"
                 :key="`${department.departmentId}-chart`"
-                class="chart-item"
+                class="org-department-card"
               >
-                <div class="chart-item-head">
-                  <strong>{{ department.name }}</strong>
-                  <span>{{ department.userCount }}명</span>
+                <div class="org-tree-container">
+                  <div class="org-tree-root">
+                    <div class="org-node-box dept-box">
+                      <div class="org-node-title">{{ department.name }}</div>
+                      <div class="org-node-desc">{{ department.userCount }}명</div>
+                    </div>
+                  </div>
+
+                  <div v-if="getDepartmentTreeData(department.departmentId).length > 0" class="org-tree-connector"></div>
+
+                  <div v-if="getDepartmentTreeData(department.departmentId).length > 0" class="org-tree-children team-level">
+                    <div
+                      v-for="teamNode in getDepartmentTreeData(department.departmentId)"
+                      :key="teamNode.key"
+                      class="org-tree-child team-child"
+                    >
+                      <div class="org-node-box team-box" :class="{ 'unassigned-team': teamNode.isUnassigned }">
+                        <div class="org-node-title">{{ teamNode.name }}</div>
+                        <div class="org-node-desc">{{ teamNode.users.length }}명</div>
+                      </div>
+
+                      <div v-if="teamNode.users.length > 0" class="org-tree-connector sub-connector"></div>
+
+                      <div v-if="teamNode.users.length > 0" class="org-tree-children user-level">
+                        <div
+                          v-for="user in teamNode.users"
+                          :key="user.userId"
+                          class="org-tree-child user-child"
+                        >
+                          <button type="button" class="org-node-box child-box" @click="openUserSummary(user.userId)">
+                            <div class="org-node-title">{{ user.name }} {{ resolvePositionName(user.positionId, user.position) }}</div>
+                            <div class="org-node-desc">1명</div>
+                          </button>
+                        </div>
+                      </div>
+                      <div v-else class="org-empty-users-inline">배정된 사용자가 없습니다.</div>
+                    </div>
+                  </div>
+                  <div v-else class="org-empty-users">배정된 팀이 없습니다.</div>
                 </div>
-
-                <ul v-if="department.hasMembers" class="member-preview-list">
-                  <li v-for="member in department.previewMembers" :key="member.key">
-                    <button type="button" class="member-preview-button" @click="openUserSummary(member.userId)">
-                      {{ member.label }}
-                    </button>
-                  </li>
-                </ul>
-                <p v-else class="empty-member-text">배정된 사용자가 없습니다.</p>
-
-                <small v-if="department.remainingMemberCount > 0" class="member-overflow">
-                  외 {{ department.remainingMemberCount }}명
-                </small>
               </article>
             </div>
             <div v-else class="empty-state-inline">표시할 조직도가 없습니다.</div>
+            
+            <div class="card-footer">
+              <button class="footer-link-btn" type="button" @click="fullChartOpen = true">
+                <span>전체 조직도 보기</span>
+                <ExternalLink class="footer-link-icon" :size="14" />
+              </button>
+            </div>
           </article>
         </section>
 
-        <div class="table-card admin-data-table organization-table">
-          <table>
-            <thead>
-              <tr>
-                <th>이름</th>
-                <th>인원</th>
-                <th>하위 팀</th>
-                <th>순서</th>
-                <th>액션</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr v-if="!departmentSummaries.length">
-                <td colspan="5"><div class="empty-state">등록된 부서가 없습니다.</div></td>
-              </tr>
-              <tr v-for="department in departmentSummaries" :key="department.departmentId">
-                <td>{{ department.name }}</td>
-                <td>{{ department.userCount }}명</td>
-                <td>{{ department.teamCount ? department.teamSummary : '-' }}</td>
-                <td>{{ department.sortOrder ?? '-' }}</td>
-                <td>
-                  <button class="icon-text" type="button" @click="openEditModal(department)">수정</button>
-                  <button class="icon-text danger-text" type="button" @click="changeStatus(department)">
-                    {{ department.status === 'ACTIVE' ? '비활성화' : '활성화' }}
-                  </button>
-                </td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
       </template>
 
+
       <template v-else-if="activeTab === 'department'">
-        <div class="table-card admin-data-table organization-table">
+        <div class="table-card admin-data-table organization-table organization-table-department">
           <table>
             <thead>
               <tr>
-                <th>이름</th>
                 <th>계열사</th>
+                <th>부서</th>
                 <th>인원</th>
                 <th>하위 팀</th>
                 <th>순서</th>
@@ -1061,11 +1267,17 @@ const remainingExcelValidationErrorCount = computed(() =>
               <tr v-if="!departmentRows.length">
                 <td colspan="6"><div class="empty-state">등록된 부서가 없습니다.</div></td>
               </tr>
-              <tr v-for="department in departmentRows" :key="department.departmentId">
-                <td>{{ department.name }}</td>
-                <td>{{ department.affiliateName }}</td>
+              <tr v-for="(department, index) in departmentRows" :key="department.departmentId">
+                <td
+                  v-if="index === 0"
+                  :rowspan="departmentRows.length"
+                  class="organization-shared-cell organization-affiliate-cell"
+                >
+                  {{ department.affiliateName }}
+                </td>
+                <td class="organization-department-cell organization-department-name-cell">{{ department.name }}</td>
                 <td>{{ department.userCount }}명</td>
-                <td>{{ department.teamSummary }}</td>
+                <td>{{ departmentTeamSummary(department.departmentId) }}</td>
                 <td>{{ department.sortOrder ?? '-' }}</td>
                 <td>
                   <button class="icon-text" type="button" @click="openEditModal(department)">수정</button>
@@ -1080,26 +1292,38 @@ const remainingExcelValidationErrorCount = computed(() =>
       </template>
 
       <template v-else-if="activeTab === 'team'">
-        <div class="table-card admin-data-table organization-table">
+        <div class="table-card admin-data-table organization-table organization-table-team">
           <table>
             <thead>
               <tr>
-                <th>이름</th>
                 <th>계열사</th>
                 <th>상위 부서</th>
+                <th>팀</th>
                 <th>인원</th>
                 <th>순서</th>
                 <th>액션</th>
               </tr>
             </thead>
             <tbody>
-              <tr v-if="!teamRows.length">
+              <tr v-if="!teamTableRows.length">
                 <td colspan="6"><div class="empty-state">등록된 팀이 없습니다.</div></td>
               </tr>
-              <tr v-for="team in teamRows" :key="team.teamId">
-                <td>{{ team.name }}</td>
-                <td>{{ team.affiliateName }}</td>
-                <td>{{ team.departmentName }}</td>
+              <tr v-for="(team, index) in teamTableRows" :key="team.teamId">
+                <td
+                  v-if="index === 0"
+                  :rowspan="teamTableRows.length"
+                  class="organization-shared-cell organization-affiliate-cell"
+                >
+                  {{ team.affiliateName }}
+                </td>
+                <td
+                  v-if="team.showDepartmentCell"
+                  :rowspan="team.departmentRowspan"
+                  class="organization-department-cell"
+                >
+                  {{ team.departmentName }}
+                </td>
+                <td class="organization-team-cell">{{ team.name }}</td>
                 <td>{{ team.userCount }}명</td>
                 <td>{{ team.sortOrder ?? '-' }}</td>
                 <td>
@@ -1115,7 +1339,7 @@ const remainingExcelValidationErrorCount = computed(() =>
       </template>
 
       <template v-else>
-        <div class="table-card admin-data-table organization-table">
+        <div class="table-card admin-data-table organization-table organization-table-position">
           <table>
             <thead>
               <tr>
@@ -1155,7 +1379,7 @@ const remainingExcelValidationErrorCount = computed(() =>
           <form class="form-grid" @submit.prevent="saveItem">
             <label v-if="activeTab !== 'position'">
               계열사
-              <select v-model="form.affiliateId" required>
+              <AppSelect v-model="form.affiliateId" required>
                 <option value="">선택해 주세요</option>
                 <option
                   v-for="affiliate in availableAffiliates"
@@ -1164,12 +1388,12 @@ const remainingExcelValidationErrorCount = computed(() =>
                 >
                   {{ affiliate.name }}
                 </option>
-              </select>
+              </AppSelect>
             </label>
 
             <label v-if="activeTab === 'team'">
               상위 부서
-              <select v-model="form.departmentId" :disabled="!form.affiliateId" required>
+              <AppSelect v-model="form.departmentId" :disabled="!form.affiliateId" required>
                 <option value="">선택해 주세요</option>
                 <option
                   v-for="department in availableDepartments"
@@ -1178,7 +1402,7 @@ const remainingExcelValidationErrorCount = computed(() =>
                 >
                   {{ department.name }}
                 </option>
-              </select>
+              </AppSelect>
             </label>
 
             <label>
@@ -1189,15 +1413,16 @@ const remainingExcelValidationErrorCount = computed(() =>
             <label>
               순서
               <input v-model.number="form.sortOrder" type="number" min="0" />
+              <div v-if="sortOrderError" class="error-box organization-form-error">{{ sortOrderError }}</div>
             </label>
 
             <label>
               상태
-              <select v-model="form.status" required>
+              <AppSelect v-model="form.status" required>
                 <option v-for="option in STATUS_OPTIONS" :key="option.value" :value="option.value">
                   {{ option.label }}
                 </option>
-              </select>
+              </AppSelect>
             </label>
 
             <div class="modal-actions">
@@ -1211,7 +1436,7 @@ const remainingExcelValidationErrorCount = computed(() =>
               >
                 {{ deleteLoading ? '삭제 중...' : deleteTargetLabel() + ' 삭제' }}
               </button>
-              <button class="primary-button" :disabled="saving || deleteLoading">
+              <button class="primary-button" :disabled="saving || deleteLoading || Boolean(sortOrderError)">
                 {{ saving ? '저장 중...' : '저장' }}
               </button>
             </div>
@@ -1265,7 +1490,7 @@ const remainingExcelValidationErrorCount = computed(() =>
           <header>
             <div>
               <h2>{{ userSummaryLoading ? '회원 요약 조회 중' : selectedUserSummary?.name || '-' }}</h2>
-              <p v-if="!userSummaryLoading">{{ selectedUserSummary?.department || '-' }} 쨌 {{ selectedUserSummary?.position || '-' }}</p>
+              <p v-if="!userSummaryLoading">{{ userSummaryHeadline(selectedUserSummary) }}</p>
             </div>
             <button type="button" @click="userSummaryOpen = false">닫기</button>
           </header>
@@ -1286,6 +1511,16 @@ const remainingExcelValidationErrorCount = computed(() =>
           </template>
         </article>
       </div>
+
+      <OrganizationFullChartModal
+        v-if="fullChartOpen"
+        :affiliate-name="fullChartAffiliateName"
+        :departments="departments"
+        :teams="teams"
+        :users="users"
+        :positions="positions"
+        @close="fullChartOpen = false"
+      />
     </template>
   </section>
 </template>
@@ -1299,7 +1534,7 @@ const remainingExcelValidationErrorCount = computed(() =>
 .organization-header {
   display: flex;
   justify-content: space-between;
-  align-items: flex-start;
+  align-items: center;
   gap: 16px;
 }
 
@@ -1309,11 +1544,10 @@ const remainingExcelValidationErrorCount = computed(() =>
   justify-content: flex-end;
   align-items: center;
   gap: 10px;
-  margin-top: 28px;
 }
 
 .excel-actions button {
-  min-height: 44px;
+  min-height: 40px;
 }
 
 .feedback-card {
@@ -1321,51 +1555,88 @@ const remainingExcelValidationErrorCount = computed(() =>
   padding-bottom: 14px;
 }
 
-.excel-guide-card,
 .excel-result-card,
 .excel-error-card {
   display: grid;
   gap: 12px;
 }
 
-.excel-guide-card h2,
+.excel-result-card {
+  border: 1px solid var(--border);
+  background: linear-gradient(180deg, #ffffff 0%, #fcfcfd 100%);
+}
+
+.excel-result-card-head {
+  display: grid;
+  gap: 6px;
+}
+
 .excel-result-card h2,
 .excel-error-card h2 {
   margin: 0;
   font-size: 18px;
 }
 
-.excel-guide-grid,
+.excel-result-card-head p {
+  margin: 0;
+  color: var(--muted-foreground);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
 .excel-result-grid {
   display: grid;
   gap: 10px;
 }
 
-.excel-guide-grid p,
-.excel-result-grid p,
+.excel-result-item {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 4px 16px;
+  align-items: center;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: #fcfcfd;
+  padding: 14px 16px;
+}
+
+.excel-result-item strong {
+  color: var(--foreground);
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.excel-result-item p,
 .excel-error-summary {
   margin: 0;
   color: var(--muted-foreground);
+  font-size: 13px;
   line-height: 1.6;
 }
 
-.excel-notice-list,
+.excel-result-item p {
+  grid-column: 1;
+}
+
+.excel-result-item span {
+  grid-column: 2;
+  grid-row: 1 / span 2;
+  color: var(--foreground);
+  font-size: 20px;
+  font-weight: 700;
+  line-height: 1;
+  white-space: nowrap;
+}
+
 .excel-error-list {
   display: grid;
   gap: 8px;
   margin: 0;
   padding-left: 18px;
-  color: var(--foreground);
-}
-
-.excel-error-list {
   color: var(--danger);
 }
 
-.excel-confirm-modal {
-  max-width: 520px;
-}
-
+.excel-confirm-modal,
 .organization-delete-modal {
   max-width: 520px;
 }
@@ -1390,6 +1661,10 @@ const remainingExcelValidationErrorCount = computed(() =>
   white-space: pre-line;
 }
 
+.organization-form-error {
+  margin-top: 8px;
+}
+
 .excel-confirm-body {
   display: grid;
   gap: 10px;
@@ -1410,13 +1685,99 @@ const remainingExcelValidationErrorCount = computed(() =>
   margin-top: 12px;
 }
 
+/* 안내 바 스타일 */
+.info-bar-new {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 16px;
+  padding: 10px 16px;
+  background: #ffffff;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  min-height: 48px;
+}
+
+.info-left {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--foreground);
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.info-icon {
+  color: var(--primary); /* orange */
+  flex-shrink: 0;
+}
+
+.info-right {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.info-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  background: #f8fafc;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  font-size: 12px;
+  color: var(--muted-foreground);
+  white-space: nowrap;
+}
+
+.info-chip::before {
+  content: "•";
+  color: var(--primary); /* orange */
+  font-size: 14px;
+  line-height: 1;
+}
+
+/* 탭 스타일 */
 .tab-actions {
   display: flex;
   justify-content: space-between;
   align-items: center;
   gap: 12px;
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 24px;
 }
 
+.admin-tabs {
+  display: flex;
+  gap: 2px;
+  border-bottom: none;
+  margin-bottom: 0;
+}
+
+.admin-tabs button {
+  min-height: 44px;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  background: transparent;
+  padding: 0 16px;
+  color: var(--muted-foreground);
+  font-weight: 800;
+  margin-bottom: -1px;
+  position: relative;
+}
+
+.admin-tabs button.active {
+  border-bottom-color: var(--primary);
+  color: var(--primary);
+}
+
+.tab-actions .primary-button {
+  margin-bottom: 6px;
+}
+
+/* 콘텐츠 카드 및 그리드 스타일 */
 .organization-summary-grid {
   display: grid;
   gap: 16px;
@@ -1425,7 +1786,8 @@ const remainingExcelValidationErrorCount = computed(() =>
 .summary-card,
 .chart-card {
   min-width: 0;
-  display: grid;
+  display: flex;
+  flex-direction: column;
   gap: 14px;
 }
 
@@ -1439,84 +1801,57 @@ const remainingExcelValidationErrorCount = computed(() =>
 .summary-card-head p {
   margin: 6px 0 0;
   font-size: 13px;
+  color: var(--muted-foreground);
 }
 
-.summary-list,
-.chart-list {
+.summary-list {
   display: grid;
   gap: 12px;
+  flex: 1;
 }
 
-.summary-item,
-.chart-item {
+.summary-item {
   border: 1px solid var(--border);
-  border-radius: 12px;
-  background: linear-gradient(180deg, #fbfcfe 0%, #f8fafc 100%);
-  padding: 16px;
+  border-radius: 8px;
+  background: #ffffff;
+  padding: 14px;
+  display: grid;
+  gap: 10px;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.02);
 }
 
-.summary-item-head,
-.chart-item-head {
+.summary-item-head {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  gap: 10px;
-  margin-bottom: 8px;
 }
 
-.summary-item strong,
-.chart-item strong {
-  font-size: 16px;
-}
-
-.summary-item span,
-.chart-item span,
-.member-overflow {
-  color: var(--muted-foreground);
-  font-size: 12px;
+.summary-item strong {
+  font-size: 15px;
   font-weight: 700;
-}
-
-.summary-item p,
-.empty-member-text {
-  margin: 0;
-  color: var(--muted-foreground);
-  font-size: 13px;
-  line-height: 1.6;
-}
-
-.member-preview-list {
-  display: grid;
-  gap: 7px;
-  margin: 0;
-  padding: 0;
-  list-style: none;
-}
-
-.member-preview-list li {
   color: var(--foreground);
+}
+
+.dept-badge {
+  padding: 2px 8px;
+  background: #f1f5f9;
+  border-radius: 4px;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--muted-foreground);
+}
+
+.summary-item-body {
+  display: grid;
+  gap: 6px;
+  padding-top: 8px;
+  border-top: 1px dashed var(--border);
+}
+
+.summary-member-name {
   font-size: 13px;
-  font-weight: 600;
-}
-
-.member-preview-button {
-  width: 100%;
-  border: 0;
-  background: transparent;
-  padding: 0;
-  color: inherit;
-  text-align: left;
-  font: inherit;
-  cursor: pointer;
-}
-
-.member-preview-button:hover {
-  color: var(--primary);
-}
-
-.member-overflow {
-  display: inline-block;
-  margin-top: 10px;
+  color: var(--muted-foreground);
+  font-weight: 500;
 }
 
 .empty-state-inline {
@@ -1537,8 +1872,418 @@ const remainingExcelValidationErrorCount = computed(() =>
   vertical-align: top;
 }
 
+.organization-shared-cell {
+  vertical-align: middle !important;
+  background: #fcfcfd;
+  color: var(--foreground);
+  font-size: 13px;
+}
+
+.organization-affiliate-cell {
+  min-width: 108px;
+  width: 108px;
+}
+
+.organization-department-cell {
+  color: var(--foreground);
+}
+
+.organization-team-cell {
+  color: var(--foreground);
+  font-weight: 700;
+}
+
+.organization-department-name-cell {
+  font-weight: 700;
+}
+
+.organization-table-department table,
+.organization-table-team table {
+  table-layout: fixed;
+}
+
+.organization-table-department th:nth-child(1),
+.organization-table-department td:nth-child(1) {
+  width: 108px;
+}
+
+.organization-table-department th:nth-child(2),
+.organization-table-department td:nth-child(2) {
+  width: 164px;
+}
+
+.organization-table-department th:nth-child(3),
+.organization-table-department td:nth-child(3) {
+  width: 78px;
+}
+
+.organization-table-department th:nth-child(4),
+.organization-table-department td:nth-child(4) {
+  width: 320px;
+}
+
+.organization-table-department th:nth-child(5),
+.organization-table-department td:nth-child(5) {
+  width: 72px;
+}
+
+.organization-table-department th:nth-child(6),
+.organization-table-department td:nth-child(6) {
+  width: 128px;
+}
+
+.organization-table-team th:nth-child(1),
+.organization-table-team td:nth-child(1) {
+  width: 108px;
+}
+
+.organization-table-team th:nth-child(2),
+.organization-table-team td:nth-child(2) {
+  width: 148px;
+}
+
+.organization-table-team th:nth-child(3),
+.organization-table-team td:nth-child(3) {
+  width: 148px;
+}
+
+.organization-table-team th:nth-child(4),
+.organization-table-team td:nth-child(4) {
+  width: 86px;
+}
+
+.organization-table-team th:nth-child(5),
+.organization-table-team td:nth-child(5) {
+  width: 76px;
+}
+
+.organization-table-team th:nth-child(6),
+.organization-table-team td:nth-child(6) {
+  width: 140px;
+}
+
+.organization-table-position table {
+  table-layout: fixed;
+}
+
+.organization-table-position th:nth-child(1),
+.organization-table-position td:nth-child(1) {
+  width: 220px;
+}
+
+.organization-table-position th:nth-child(2),
+.organization-table-position td:nth-child(2) {
+  width: 84px;
+}
+
+.organization-table-position th:nth-child(3),
+.organization-table-position td:nth-child(3) {
+  width: 92px;
+}
+
+.organization-table-position th:nth-child(4),
+.organization-table-position td:nth-child(4) {
+  width: 140px;
+}
+
+/* 카드 푸터 스타일 */
+.card-footer {
+  margin: 14px -18px -18px;
+  padding: 12px 18px;
+  border-top: 1px solid var(--border);
+  background: #f8fafc;
+  border-radius: 0 0 8px 8px;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+.footer-link-btn {
+  width: 100%;
+  border: 0;
+  background: transparent;
+  display: inline-flex;
+  justify-content: center;
+  align-items: center;
+  gap: 6px;
+  color: var(--muted-foreground);
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: color 0.15s;
+}
+
+.footer-link-btn:hover {
+  color: var(--primary);
+}
+
+.footer-link-icon {
+  flex-shrink: 0;
+}
+
+/* 조직도 트리 구조 스타일 */
+.org-chart-list {
+  display: grid;
+  gap: 16px;
+  flex: 1;
+}
+
+.org-department-card {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: white;
+  padding: 16px;
+  display: grid;
+  gap: 16px;
+  overflow-x: auto;
+}
+
+.org-tree-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  position: relative;
+  width: 100%;
+}
+
+.org-tree-root {
+  display: flex;
+  justify-content: center;
+}
+
+.org-node-box {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: white;
+  padding: 10px 20px;
+  text-align: center;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.02);
+}
+
+.dept-box {
+  background: #ffffff;
+  min-width: 140px;
+  border-color: var(--primary); /* subtle orange accent */
+}
+
+.team-box {
+  background: #f8fafc;
+  border: 1px solid var(--border);
+  min-width: 120px;
+  font-weight: 600;
+}
+
+.unassigned-team {
+  border-style: dashed;
+  background: #f1f5f9;
+}
+
+.child-box {
+  background: #ffffff;
+  min-width: 120px;
+  transition: all 0.15s;
+  cursor: pointer;
+}
+
+.child-box:hover {
+  border-color: var(--primary);
+  background: #fff7ed;
+}
+
+.org-node-title {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--foreground);
+}
+
+.org-node-desc {
+  font-size: 11px;
+  color: var(--muted-foreground);
+  margin-top: 4px;
+}
+
+.org-tree-connector {
+  width: 1px;
+  height: 16px;
+  background: #e2e8f0;
+  margin: 0 auto;
+}
+
+/* 3-level tree lines */
+.org-tree-children.team-level {
+  position: relative;
+  display: flex;
+  justify-content: center;
+  gap: 24px;
+}
+
+.org-tree-child.team-child {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding-top: 16px;
+}
+
+.org-tree-child.team-child::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 1px;
+  background: #e2e8f0;
+}
+
+.org-tree-child.team-child:first-child::before {
+  left: 50%;
+}
+
+.org-tree-child.team-child:last-child::before {
+  right: 50%;
+}
+
+.org-tree-child.team-child:only-child::before {
+  display: none;
+}
+
+.org-tree-child.team-child::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 50%;
+  width: 1px;
+  height: 16px;
+  background: #e2e8f0;
+}
+
+/* Sub tree connector between Team and User */
+.org-tree-connector.sub-connector {
+  width: 1px;
+  height: 16px;
+  background: #e2e8f0;
+  margin: 0 auto;
+}
+
+.org-tree-children.user-level {
+  position: relative;
+  display: flex;
+  justify-content: center;
+  gap: 12px;
+}
+
+.org-tree-child.user-child {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding-top: 16px;
+}
+
+.org-tree-child.user-child::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 1px;
+  background: #e2e8f0;
+}
+
+.org-tree-child.user-child:first-child::before {
+  left: 50%;
+}
+
+.org-tree-child.user-child:last-child::before {
+  right: 50%;
+}
+
+.org-tree-child.user-child:only-child::before {
+  display: none;
+}
+
+.org-tree-child.user-child::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 50%;
+  width: 1px;
+  height: 16px;
+  background: #e2e8f0;
+}
+
+.org-empty-users-inline {
+  margin-top: 12px;
+  padding: 6px 12px;
+  font-size: 11px;
+  color: var(--muted-foreground);
+  background: #f8fafc;
+  border: 1px dashed var(--border);
+  border-radius: 6px;
+  text-align: center;
+  position: relative;
+  white-space: nowrap;
+}
+
+.org-empty-users-inline::before {
+  content: "";
+  position: absolute;
+  top: -12px;
+  left: 50%;
+  width: 1px;
+  height: 12px;
+  background: #e2e8f0;
+}
+
+.org-empty-users {
+  color: var(--muted-foreground);
+  font-size: 13px;
+  padding: 16px;
+  text-align: center;
+  background: #f8fafc;
+  border-radius: 8px;
+  width: 100%;
+}
+
+/* Left Card Team list styling */
+.summary-team-group {
+  margin-top: 12px;
+  display: grid;
+  gap: 4px;
+}
+
+.summary-team-group:first-child {
+  margin-top: 0;
+}
+
+.summary-team-title {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--primary); /* orange */
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.summary-team-title::before {
+  content: "•";
+  font-size: 14px;
+}
+
+.summary-team-users {
+  padding-left: 10px;
+  display: grid;
+  gap: 4px;
+}
+
+.summary-member-empty {
+  font-size: 11px;
+  color: var(--muted-foreground);
+  font-style: italic;
+}
+
+/* 반응형 스타일 */
 @media (min-width: 960px) {
-  .excel-guide-grid,
   .excel-result-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
@@ -1549,16 +2294,48 @@ const remainingExcelValidationErrorCount = computed(() =>
 }
 
 @media (max-width: 959px) {
+  .excel-result-item {
+    grid-template-columns: 1fr;
+    gap: 6px;
+  }
+
+  .excel-result-item span {
+    grid-column: 1;
+    grid-row: auto;
+  }
+
   .organization-header,
   .tab-actions {
     flex-direction: column;
     align-items: stretch;
+    gap: 12px;
   }
 
   .header-actions {
     width: 100%;
     justify-content: flex-start;
-    margin-top: 10px;
+  }
+
+  .info-bar-new {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 12px;
+  }
+
+  .info-right {
+    width: 100%;
+  }
+}
+
+@media (max-width: 576px) {
+  .info-right {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .info-chip {
+    width: 100%;
+    box-sizing: border-box;
   }
 }
 </style>
