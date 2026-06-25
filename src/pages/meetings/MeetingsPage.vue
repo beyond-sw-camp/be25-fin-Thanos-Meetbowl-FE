@@ -413,7 +413,7 @@ function enterFromDetail() {
 
 async function requestCancelMeeting(meeting) {
   const target = meeting || detailMeeting.value
-  if (!target || cancelling.value || !canCancel(target)) return
+  if (!target || cancelling.value || !canCancelMeeting(target)) return
   if (!window.confirm(`'${target.title}' 회의를 취소하시겠습니까?`)) return
 
   cancelling.value = true
