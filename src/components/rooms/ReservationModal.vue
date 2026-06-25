@@ -36,6 +36,7 @@
         :blocks-by-room="blocksByRoom"
         :name-map="nameMap"
         :range="timelineRange"
+        :date="form.date"
         :selected-room-id="form.roomId"
         :preview-block="timelinePreviewBlock"
         @select-room="selectRoom"

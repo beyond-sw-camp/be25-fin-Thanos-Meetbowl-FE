@@ -647,14 +647,14 @@ function formatChangeTitle(change) {
 
       <div v-if="detailOpen" class="modal-backdrop" @click.self="closeDetail">
         <article class="card write-modal detail-modal audit-log-detail-modal">
-          <header class="audit-log-detail-header">
-            <div>
+          <header class="audit-log-detail-header admin-modal-header">
+            <div class="admin-modal-title">
               <h2>{{ detailLoading ? '작업 로그 상세 조회 중' : '작업 로그 상세' }}</h2>
-              <p v-if="!detailLoading && detailSubtitle" class="detail-subtitle">
+              <p v-if="!detailLoading && detailSubtitle" class="detail-subtitle admin-modal-subtitle">
                 {{ detailSubtitle }}
               </p>
             </div>
-            <button type="button" class="detail-close-button" @click="closeDetail">닫기</button>
+            <button type="button" class="detail-close-button admin-modal-close" @click="closeDetail">닫기</button>
           </header>
 
           <div class="detail-modal-body">
@@ -1044,39 +1044,15 @@ function formatChangeTitle(change) {
   position: sticky;
   top: 0;
   z-index: 1;
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 16px;
-  padding: 18px 22px 14px;
-  border-bottom: 1px solid var(--border);
   background: linear-gradient(180deg, #ffffff 0%, #fcfcfd 100%);
 }
 
 .audit-log-detail-header h2 {
-  margin: 0;
-  font-size: 20px;
-}
-
-.detail-close-button {
-  flex: 0 0 auto;
-  min-height: 34px;
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  background: white;
-  padding: 0 12px;
-  color: var(--foreground);
-  font-weight: 600;
-}
-
-.detail-close-button:hover {
-  background: var(--muted);
+  font-size: 18px;
 }
 
 .detail-subtitle {
-  margin: 6px 0 0;
-  color: var(--muted-foreground);
-  font-size: 13px;
+  margin-top: 4px;
 }
 
 .detail-modal-body {

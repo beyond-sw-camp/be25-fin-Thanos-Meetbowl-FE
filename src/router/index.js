@@ -102,7 +102,7 @@ const routes = [
         component: PolicyPage,
         props: {
           title: '보관 정책 관리',
-          description: '회의록, 녹음 파일, 메일 데이터의 보관 정책을 한 화면에서 관리합니다.',
+          description: '회의록, 백업 문서, 메일 데이터의 보관 기간과 삭제 정책을 한 화면에서 관리합니다.',
         },
         meta: { role: 'ADMIN' },
       },
