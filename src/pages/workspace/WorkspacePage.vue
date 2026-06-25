@@ -2,7 +2,7 @@
   <section class="page workspace-page">
     <header class="page-header">
       <h1>개인 워크스페이스</h1>
-      <p>개인 일정, 메모, 백업 자료와 드라이브 파일을 관리합니다.</p>
+      <p>개인 일정, 메모, 백업 메일과 드라이브 파일을 관리합니다.</p>
     </header>
 
     <nav class="workspace-tabs">
@@ -162,18 +162,32 @@
       <button
         type="button"
         class="workspace-upload-zone"
+        :class="{ 'is-dragging': driveDragging, 'is-uploading': driveUploading }"
+        :disabled="driveUploading"
         @click="driveInput?.click()"
-        @dragover.prevent
-        @drop.prevent="uploadPersonalFiles($event.dataTransfer?.files)"
+        @dragenter.prevent="driveDragging = true"
+        @dragover.prevent="driveDragging = true"
+        @dragleave.prevent="driveDragging = false"
+        @drop.prevent="onDriveDrop($event)"
       >
-        <strong>파일을 끌어다 놓거나 클릭해 업로드</strong>
-        <span>여러 파일 동시 업로드 지원 · 원본은 Object Storage, DB에는 메타데이터만 저장됩니다.</span>
+        <template v-if="driveUploading">
+          <strong>업로드 중...</strong>
+          <span>파일을 저장하고 있습니다. 잠시만 기다려 주세요.</span>
+        </template>
+        <template v-else-if="driveDragging">
+          <strong>여기에 놓아 업로드</strong>
+          <span>끌어온 파일을 이 영역에 놓으세요.</span>
+        </template>
+        <template v-else>
+          <strong>파일을 끌어다 놓거나 클릭해 업로드</strong>
+          <span>여러 파일 동시 업로드 지원 · 원본은 Object Storage, DB에는 메타데이터만 저장됩니다.</span>
+        </template>
       </button>
-      <div class="table-card">
+      <div class="table-card workspace-drive-table">
         <table>
           <thead><tr><th>파일명</th><th>크기</th><th>업로드</th><th>관리</th></tr></thead>
           <tbody>
-            <tr v-for="file in driveFiles" :key="file.fileId" class="workspace-drive-row" @click="openDrivePreview(file)">
+            <tr v-for="file in pagedDriveFiles" :key="file.fileId" class="workspace-drive-row" @click="openDrivePreview(file)">
               <td>
                 <div class="workspace-drive-file-cell">
                   <span class="workspace-file-icon"><FileText :size="17" /></span>
@@ -195,6 +209,7 @@
           </tbody>
         </table>
       </div>
+      <Pagination v-model="drivePage" :total-pages="driveTotalPages" />
     </article>
 
     <div v-if="eventOpen" class="modal-backdrop" @click="eventOpen = false">
@@ -312,7 +327,7 @@ const tabs = [
   { id: 'calendar', label: '일정', icon: CalendarDays },
   { id: 'memo', label: '개인 메모장', icon: StickyNote },
   { id: 'minutes', label: '회의록', icon: BookmarkCheck },
-  { id: 'backups', label: '백업 자료', icon: Mail },
+  { id: 'backups', label: '백업 메일', icon: Mail },
   { id: 'drive', label: '개인 드라이브', icon: Folder },
 ]
 const workspaceToday = new Date(workspaceNow().replace(' ', 'T'))
@@ -335,8 +350,12 @@ const memoDraft = ref({ memoId: '', title: '', content: '' })
 const backups = ref([])
 const backupKeyword = ref('')
 const driveFiles = ref([])
+// 드라이브 파일은 한 페이지에 15개씩 보여주고 나머지는 페이지네이션으로 넘긴다.
+const DRIVE_PAGE_SIZE = 15
+const drivePage = ref(1)
 const driveInput = ref(null)
 const driveUploading = ref(false)
+const driveDragging = ref(false)
 const driveActionFileId = ref('')
 const drivePreviewOpen = ref(false)
 const drivePreviewFile = ref(null)
@@ -394,6 +413,14 @@ const pagedMemos = computed(() => {
 // 메모 삭제 등으로 페이지 수가 줄면 현재 페이지가 범위를 벗어날 수 있어 마지막 페이지로 보정한다.
 watch(memoTotalPages, (total) => {
   if (memoPage.value > total) memoPage.value = total
+})
+const driveTotalPages = computed(() => Math.max(1, Math.ceil(driveFiles.value.length / DRIVE_PAGE_SIZE)))
+const pagedDriveFiles = computed(() => {
+  const start = (drivePage.value - 1) * DRIVE_PAGE_SIZE
+  return driveFiles.value.slice(start, start + DRIVE_PAGE_SIZE)
+})
+watch(driveTotalPages, (total) => {
+  if (drivePage.value > total) drivePage.value = total
 })
 const favoriteMinuteItems = computed(() => minuteItems.value.filter((minute) => minute.favorite))
 
@@ -644,6 +671,11 @@ async function removeFavoriteMinute(minuteId) {
   if (!confirmed) return
   await removeMinutesFavorite(minuteId)
   minuteItems.value = minuteItems.value.map((minute) => minute.id === minuteId ? { ...minute, favorite: false } : minute)
+}
+
+function onDriveDrop(event) {
+  driveDragging.value = false
+  uploadPersonalFiles(event.dataTransfer?.files)
 }
 
 async function uploadPersonalFiles(fileList) {

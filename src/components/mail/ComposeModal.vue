@@ -21,8 +21,7 @@
       <div class="mail-selected-recipients" :class="{ empty: !recipients.length }">
         <small v-if="!recipients.length">선택된 수신자가 없습니다.</small>
         <span v-for="member in recipients" :key="userKey(member)">
-          {{ member.name }}
-          <small>{{ member.department || member.team || member.email }}</small>
+          <span class="member-chip-label">{{ formatUserChipLabel(member) }}</span>
           <button type="button" :aria-label="`${member.name} 수신자 제거`" @click="removeRecipient(userKey(member))">×</button>
         </span>
       </div>
@@ -75,6 +74,7 @@
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { ChevronDown, FileType2, Paperclip, Search, Upload, X } from '@lucide/vue'
 import ModalShell from '../common/ModalShell.vue'
+import { formatUserChipLabel } from '../../utils/userLabel'
 
 const props = defineProps({
   initialDraft: { type: Object, default: () => ({}) },

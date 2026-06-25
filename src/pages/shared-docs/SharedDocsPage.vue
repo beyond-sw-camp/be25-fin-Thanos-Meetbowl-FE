@@ -66,9 +66,9 @@
                   </div>
                 </td>
                 <td><span class="badge primary">{{ file.currentVersion }}</span></td>
-                <td>{{ userLabel(file.uploaderUserId) }}</td>
+                <td class="shared-nowrap-cell">{{ userLabel(file.uploaderUserId) }}</td>
                 <td>{{ formatSize(file.sizeBytes) }}</td>
-                <td>{{ displayDate(file.uploadedAt) }}</td>
+                <td class="shared-nowrap-cell">{{ displayDate(file.uploadedAt) }}</td>
                 <td class="file-action-cell">
                   <button type="button" class="more-button" @click.stop="toggleFileActionMenu(file.fileId)" aria-label="파일 관리"><MoreHorizontal :size="17" /></button>
                   <div v-if="fileActionFileId === file.fileId" class="file-action-menu" @click.stop>
@@ -160,8 +160,8 @@
             <small>{{ createSelectedMembers.length }}명 선택</small>
           </div>
           <div class="participant-chips shared-selected-members">
-            <span v-for="member in createSelectedMembers" :key="member.userId">
-              {{ member.name || member.email || member.userId }}
+            <span v-for="member in createSelectedMembers" :key="member.userId" class="member-chip">
+              <span class="member-chip-label">{{ memberChipLabel(member) }}</span>
               <button type="button" @click="removeCreateMember(member.userId)">×</button>
             </span>
             <small v-if="!createSelectedMembers.length">생성 후 초대할 멤버를 선택하세요.</small>
@@ -187,13 +187,16 @@
         <button
           type="button"
           class="shared-upload-zone"
+          :class="{ 'is-dragging': uploadDragging }"
           @click="uploadInput?.click()"
-          @dragover.prevent
-          @drop.prevent="addUploadFiles($event.dataTransfer?.files)"
+          @dragenter.prevent="uploadDragging = true"
+          @dragover.prevent="uploadDragging = true"
+          @dragleave.prevent="uploadDragging = false"
+          @drop.prevent="onUploadDrop($event)"
         >
           <Upload :size="22" />
-          <strong>파일을 끌어다 놓거나 클릭해 선택</strong>
-          <span>여러 파일 동시 업로드 지원</span>
+          <strong>{{ uploadDragging ? '여기에 놓아 추가' : '파일을 끌어다 놓거나 클릭해 선택' }}</strong>
+          <span>{{ uploadDragging ? '끌어온 파일을 이 영역에 놓으세요.' : '여러 파일 동시 업로드 지원' }}</span>
         </button>
         <input ref="uploadInput" class="hidden-file-input" type="file" multiple @change="addUploadFiles($event.target.files)">
         <ul v-if="uploadDraft.files.length" class="shared-upload-list">
@@ -247,6 +250,12 @@
             <strong>멤버 초대</strong>
             <small>이름, 부서/팀, 이메일로 검색</small>
           </div>
+        <div v-if="inviteSelectedUser" class="participant-chips shared-selected-members">
+          <span class="member-chip">
+            <span class="member-chip-label">{{ memberChipLabel(inviteSelectedUser) }}</span>
+            <button type="button" @click="clearInviteSelection">×</button>
+          </span>
+        </div>
         <div ref="inviteSearchRoot" class="recipient-picker">
           <input v-model="userKeyword" placeholder="이름, 부서/팀, 이메일 검색" @focus="openInviteSearch">
           <div v-if="inviteSearchOpen && userCandidates.length" class="participant-results">
@@ -293,6 +302,7 @@ import {
 import { previewKind, resolveBlobFileName, saveBlob } from '../../lib/file-actions'
 import { getUserSummary, searchUsers } from '../../lib/users'
 import { formatKstDateTime } from '../../utils/dateTime'
+import { formatUserChipLabel as memberChipLabel } from '../../utils/userLabel'
 import { useAuthStore } from '../../stores/auth'
 import { useConfirmDialog } from '../../composables/useConfirmDialog'
 
@@ -322,6 +332,7 @@ const uploadOpen = ref(false)
 const inviteOpen = ref(false)
 const uploadInput = ref(null)
 const uploadLoading = ref(false)
+const uploadDragging = ref(false)
 const spaceDraft = ref({ name: '' })
 const uploadDraft = ref({ files: [] })
 const createMemberKeyword = ref('')
@@ -332,6 +343,7 @@ const createMemberSearchRoot = ref(null)
 const userKeyword = ref('')
 const userCandidates = ref([])
 const inviteUserId = ref('')
+const inviteSelectedUser = ref(null)
 const inviteSearchOpen = ref(false)
 const inviteSearchRoot = ref(null)
 const userMap = ref(new Map())
@@ -544,6 +556,11 @@ function openUpload() {
   uploadOpen.value = true
 }
 
+function onUploadDrop(event) {
+  uploadDragging.value = false
+  addUploadFiles(event.dataTransfer?.files)
+}
+
 // 드롭/선택 파일을 누적한다(여러 번 나눠 골라도 합쳐지도록).
 function addUploadFiles(fileList) {
   const selected = Array.from(fileList || [])
@@ -560,6 +577,7 @@ function openMemberManage() {
   if (!activeSpaceId.value) return
   inviteOpen.value = true
   inviteUserId.value = ''
+  inviteSelectedUser.value = null
   userKeyword.value = ''
   userCandidates.value = []
   inviteSearchOpen.value = false
@@ -700,6 +718,7 @@ async function inviteMember() {
     return
   }
   inviteUserId.value = ''
+  inviteSelectedUser.value = null
   userKeyword.value = ''
   userCandidates.value = []
   inviteSearchOpen.value = false
@@ -708,7 +727,18 @@ async function inviteMember() {
 }
 
 function selectInviteUser(user) {
+  if (!user?.userId) return
   inviteUserId.value = user.userId
+  inviteSelectedUser.value = user
+  userMap.value = new Map(userMap.value).set(user.userId, user)
+  userKeyword.value = ''
+  userCandidates.value = []
+  inviteSearchOpen.value = false
+}
+
+function clearInviteSelection() {
+  inviteUserId.value = ''
+  inviteSelectedUser.value = null
 }
 
 async function loadInviteCandidates(keyword) {
