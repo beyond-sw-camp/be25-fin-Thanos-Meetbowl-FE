@@ -675,7 +675,7 @@ function formatActionError(error, fallbackMessage) {
                 </span>
               </td>
               <td v-if="editable">
-                <button class="icon-text" @click.stop="openEdit(user)">수정</button>
+                <button class="icon-text directory-action-link" @click.stop="openEdit(user)">수정</button>
               </td>
             </tr>
           </tbody>
@@ -686,38 +686,40 @@ function formatActionError(error, fallbackMessage) {
     </template>
 
     <div v-if="detailOpen" class="modal-backdrop" @click.self="detailOpen = false">
-      <article class="card write-modal detail-modal">
-        <header>
+      <article class="card write-modal detail-modal directory-detail-modal">
+        <header class="directory-detail-modal__header">
           <div>
             <h2>{{ detailLoading ? '사용자 요약 조회 중' : selectedUser?.name || '-' }}</h2>
             <p v-if="!detailLoading">{{ selectedUser?.department || '-' }} · {{ selectedUser?.position || '-' }}</p>
           </div>
-          <button @click="detailOpen = false">닫기</button>
+          <button class="modal-close directory-detail-modal__close" type="button" @click="detailOpen = false">×</button>
         </header>
 
         <div v-if="detailLoading" class="empty-state">사용자 요약 정보를 불러오는 중입니다.</div>
         <div v-else-if="detailErrorMessage" class="error-box">{{ detailErrorMessage }}</div>
         <template v-else-if="selectedUser">
-          <dl class="detail-list">
-            <div><dt>이름</dt><dd>{{ selectedUser.name }}</dd></div>
-            <div><dt>이메일</dt><dd>{{ selectedUser.email }}</dd></div>
-            <div><dt>계열사</dt><dd>{{ selectedUser.affiliate }}</dd></div>
-            <div><dt>부서</dt><dd>{{ selectedUser.department }}</dd></div>
-            <div><dt>팀</dt><dd>{{ selectedUser.team }}</dd></div>
-            <div><dt>직책</dt><dd>{{ selectedUser.position }}</dd></div>
-            <div><dt>권한</dt><dd>{{ roleLabel(selectedUser.role) }}</dd></div>
-            <div><dt>상태</dt><dd>{{ displayStatusLabel(selectedUser.status) }}</dd></div>
-          </dl>
-          <div class="modal-actions">
+          <div class="detail-body directory-detail-modal__body">
+            <dl class="detail-list">
+              <div><dt>이름</dt><dd>{{ selectedUser.name }}</dd></div>
+              <div><dt>이메일</dt><dd>{{ selectedUser.email }}</dd></div>
+              <div><dt>계열사</dt><dd>{{ selectedUser.affiliate }}</dd></div>
+              <div><dt>부서</dt><dd>{{ selectedUser.department }}</dd></div>
+              <div><dt>팀</dt><dd>{{ selectedUser.team }}</dd></div>
+              <div><dt>직책</dt><dd>{{ selectedUser.position }}</dd></div>
+              <div><dt>권한</dt><dd>{{ roleLabel(selectedUser.role) }}</dd></div>
+              <div><dt>상태</dt><dd>{{ displayStatusLabel(selectedUser.status) }}</dd></div>
+            </dl>
+          </div>
+          <div class="modal-actions directory-detail-modal__actions">
             <button
               type="button"
-              class="secondary-button"
+              class="secondary-button small"
               :disabled="resetPasswordLoading"
               @click="handleResetPassword(selectedUser)"
             >
               {{ resetPasswordLoading ? '초기화 중...' : '비밀번호 초기화' }}
             </button>
-            <button type="button" class="primary-button" @click="openEdit(selectedUser)">수정</button>
+            <button type="button" class="primary-button small" @click="openEdit(selectedUser)">수정</button>
           </div>
         </template>
       </article>
@@ -904,10 +906,40 @@ function formatActionError(error, fallbackMessage) {
 
 .directory-toolbar {
   margin-bottom: 0;
+  gap: 10px;
 }
 
 .directory-search-field {
   flex: 1 1 320px;
+}
+
+.directory-head > .badge {
+  min-height: 30px;
+  padding: 0 10px;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.directory-toolbar :deep(input) {
+  height: 34px;
+  padding: 0 12px;
+  font-size: 13px;
+}
+
+.directory-toolbar :deep(input::placeholder) {
+  color: var(--muted-foreground);
+  font-size: 13px;
+}
+
+.directory-toolbar .toolbar {
+  gap: 6px;
+}
+
+.directory-toolbar .chip {
+  min-height: 34px;
+  padding: 0 11px;
+  font-size: 13px;
+  font-weight: 700;
 }
 
 .directory-table {
@@ -942,6 +974,76 @@ function formatActionError(error, fallbackMessage) {
   cursor: pointer;
 }
 
+.directory-action-link {
+  color: var(--primary-dark);
+  font-weight: 700;
+}
+
+.directory-action-link:hover {
+  color: var(--primary);
+  text-decoration: underline;
+}
+
+.directory-action-link:focus-visible {
+  outline: 2px solid rgba(243, 115, 33, 0.22);
+  outline-offset: 2px;
+}
+
+.directory-detail-modal {
+  width: min(600px, calc(100vw - 32px));
+  padding: 0;
+  overflow: hidden;
+}
+
+.directory-detail-modal__header {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  align-items: flex-start;
+  border-bottom: 1px solid var(--border);
+  padding: 18px 20px;
+}
+
+.directory-detail-modal__header h2 {
+  margin: 0;
+  font-size: 22px;
+  letter-spacing: 0;
+}
+
+.directory-detail-modal__header p {
+  margin: 6px 0 0;
+  color: var(--muted-foreground);
+  font-size: 12px;
+}
+
+.directory-detail-modal__close {
+  flex: 0 0 auto;
+}
+
+.directory-detail-modal__body {
+  padding: 18px 20px 0;
+}
+
+.directory-detail-modal :deep(.detail-list) {
+  gap: 12px;
+}
+
+.directory-detail-modal :deep(.detail-list dt) {
+  font-size: 10px;
+}
+
+.directory-detail-modal :deep(.detail-list dd) {
+  margin-top: 3px;
+  font-size: 13px;
+  line-height: 1.55;
+}
+
+.directory-detail-modal__actions {
+  padding: 16px 20px 20px;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
 @media (max-width: 959px) {
   .directory-head {
     flex-direction: column;
@@ -950,6 +1052,13 @@ function formatActionError(error, fallbackMessage) {
   .directory-head-actions {
     width: 100%;
     justify-content: space-between;
+  }
+
+  .directory-detail-modal__header,
+  .directory-detail-modal__body,
+  .directory-detail-modal__actions {
+    padding-left: 16px;
+    padding-right: 16px;
   }
 }
 </style>
