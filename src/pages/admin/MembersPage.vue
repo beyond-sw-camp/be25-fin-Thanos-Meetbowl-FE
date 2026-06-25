@@ -20,7 +20,7 @@ const auth = useAuthStore()
       </div>
       <div v-if="auth.user?.role === 'ADMIN'" class="admin-actions header-actions">
         <!-- 페이지 상단 오른쪽에 두는 주요 진입점이다. -->
-        <ActionButton variant="primary" @click="directoryPanel?.openCreate?.()">회원 추가</ActionButton>
+        <ActionButton variant="primary" size="sm" @click="directoryPanel?.openCreate?.()">회원 추가</ActionButton>
       </div>
     </header>
 
