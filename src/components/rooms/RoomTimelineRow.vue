@@ -8,7 +8,7 @@
     </div>
     <div ref="trackEl" class="room-track" @mousedown="onTrackMouseDown">
       <span v-for="hour in timelineHours" :key="hour" class="hour-line"></span>
-      <span class="now-marker" :style="nowMarkerStyle()"><em>현재</em></span>
+      <span v-if="isToday" class="now-marker" :style="nowMarkerStyle()"><em>현재</em></span>
       <span v-if="dragRange" class="drag-selection" :class="{ invalid: dragInvalid }" :style="dragStyle"></span>
       <span
         v-if="displayPreviewBlock"
@@ -55,7 +55,7 @@
 import { computed, onBeforeUnmount, ref } from 'vue'
 import ReservationBlock from './ReservationBlock.vue'
 import { blockStyle, nowMarkerStyle, slotRangeFromOffsets, slotTimeFromOffset, timelineHours } from '../../utils/timeline'
-import { addMinutes, kstToUtcIso, overlaps } from '../../utils/dateTime'
+import { addMinutes, kstToUtcIso, overlaps, todayKst } from '../../utils/dateTime'
 
 const props = defineProps({
   room: { type: Object, required: true },
@@ -71,6 +71,10 @@ const props = defineProps({
   date: { type: String, default: '' },
 })
 const emit = defineEmits(['block-click', 'track-click', 'track-drag', 'select', 'select-range'])
+
+// '현재' 세로 마커는 보고 있는 날짜가 오늘(KST)일 때만. 다른 날짜를 봐도 현재 시각 위치에 뜨던 버그 방지.
+// date 미지정 시(타임라인이 날짜 개념 없이 쓰이는 경우)는 기존처럼 표시한다.
+const isToday = computed(() => !props.date || props.date === todayKst())
 
 // 폼이 고른 시간대(selectedRange)와 겹치는 예약이 없으면 '가능'. start/end만 바뀌어도 즉시 재계산된다.
 const available = computed(() => {
