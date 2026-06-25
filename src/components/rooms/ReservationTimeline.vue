@@ -29,6 +29,7 @@
         :room="room"
         :blocks="blocksByRoom[room.roomId] || []"
         :name-map="nameMap"
+        :date="date"
         show-availability
         selectable
         :selected-range="range"
@@ -53,6 +54,8 @@ const props = defineProps({
   blocksByRoom: { type: Object, default: () => ({}) },
   nameMap: { type: Object, default: () => ({}) },
   range: { type: Object, required: true },
+  // 타임라인이 보고 있는 날짜(KST 'YYYY-MM-DD'). '현재' 마커를 오늘일 때만 표시하기 위해 자식에 전달.
+  date: { type: String, default: '' },
   selectedRoomId: { type: String, default: '' },
   previewBlock: { type: Object, default: null },
 })
