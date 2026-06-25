@@ -87,6 +87,7 @@ const excelUploading = ref(false)
 const uploadFileInput = ref(null)
 const pendingUploadFile = ref(null)
 const fullChartOpen = ref(false)
+const organizationChartCardRefs = new Map()
 
 const affiliates = ref([])
 const departments = ref([])
@@ -717,6 +718,60 @@ function userSummaryHeadline(user) {
   return buildOrganizationUserHeadline(user)
 }
 
+function setOrganizationChartCardRef(departmentId, element) {
+  if (element) {
+    organizationChartCardRefs.set(departmentId, element)
+    return
+  }
+
+  organizationChartCardRefs.delete(departmentId)
+}
+
+function findScrollParent(element) {
+  let current = element?.parentElement || null
+
+  while (current) {
+    const style = window.getComputedStyle(current)
+    const overflowY = style.overflowY
+    const canScroll =
+      (overflowY === 'auto' || overflowY === 'scroll' || overflowY === 'overlay') &&
+      current.scrollHeight > current.clientHeight
+
+    if (canScroll) return current
+    current = current.parentElement
+  }
+
+  return document.scrollingElement || document.documentElement
+}
+
+function scrollToOrganizationChart(departmentId) {
+  const target = organizationChartCardRefs.get(departmentId)
+  if (!target) return
+
+  const scrollParent = findScrollParent(target)
+  const visualOffset = 4
+
+  // 실제 스크롤 컨테이너 기준 좌표로 계산해서 부서 카드 상단이 최대한 딱 맞게 걸리도록 보정한다.
+  if (scrollParent === document.documentElement || scrollParent === document.body || scrollParent === document.scrollingElement) {
+    const targetTop = target.getBoundingClientRect().top + window.scrollY
+
+    window.scrollTo({
+      top: Math.max(targetTop - visualOffset, 0),
+      behavior: 'smooth',
+    })
+    return
+  }
+
+  const parentRect = scrollParent.getBoundingClientRect()
+  const targetRect = target.getBoundingClientRect()
+  const nextTop = scrollParent.scrollTop + (targetRect.top - parentRect.top) - visualOffset
+
+  scrollParent.scrollTo({
+    top: Math.max(nextTop, 0),
+    behavior: 'smooth',
+  })
+}
+
 function statusLabel(status) {
   return status === 'ACTIVE' ? '활성' : status === 'INACTIVE' ? '비활성' : '-'
 }
@@ -997,10 +1052,10 @@ function getDepartmentTreeData(departmentId) {
           accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
           @change="handleExcelFileChange"
         />
-        <ActionButton variant="secondary" :disabled="excelDownloading || excelUploading" @click="handleExcelDownload">
+        <ActionButton variant="secondary" size="sm" :disabled="excelDownloading || excelUploading" @click="handleExcelDownload">
           {{ excelDownloading ? '다운로드 중...' : '엑셀 다운로드' }}
         </ActionButton>
-        <ActionButton variant="primary" :disabled="excelUploading || excelDownloading" @click="openExcelUploadPicker">
+        <ActionButton variant="primary" size="sm" :disabled="excelUploading || excelDownloading" @click="openExcelUploadPicker">
           {{ excelUploading ? '업로드 중...' : '엑셀 업로드' }}
         </ActionButton>
       </div>
@@ -1114,25 +1169,28 @@ function getDepartmentTreeData(departmentId) {
           </button>
         </div>
 
-        <button
+        <ActionButton
           v-if="canCreateInCurrentTab()"
-          class="primary-button"
+          variant="primary"
+          size="sm"
           type="button"
           @click="openCreateModal"
         >
           {{ createButtonLabel() }}
-        </button>
+        </ActionButton>
       </div>
 
       <template v-if="activeTab === 'organization'">
         <section class="organization-summary-grid">
           <article class="card summary-card">
             <div class="summary-card-head">
-              <div>
-                <h2>{{ primaryAffiliate?.name || '계열사 정보 없음' }}</h2>
+              <div class="summary-card-head-copy">
+                <div class="summary-card-head-title-row">
+                  <h2>{{ primaryAffiliate?.name || '계열사 정보 없음' }}</h2>
+                  <span class="badge primary">부서 {{ organizationDepartments.length }}개</span>
+                </div>
                 <p>부서별 인원과 하위 팀 구성을 확인합니다.</p>
               </div>
-              <span class="badge primary">부서 {{ organizationDepartments.length }}개</span>
             </div>
 
             <div v-if="departmentSummaries.length" class="summary-list">
@@ -1141,10 +1199,14 @@ function getDepartmentTreeData(departmentId) {
                 :key="department.departmentId"
                 class="summary-item"
               >
-                <div class="summary-item-head">
+                <button
+                  type="button"
+                  class="summary-item-head summary-item-link"
+                  @click="scrollToOrganizationChart(department.departmentId)"
+                >
                   <strong>{{ department.name }}</strong>
                   <span class="dept-badge">{{ department.userCount }}명</span>
-                </div>
+                </button>
                 
                 <div v-if="department.hasMembers" class="summary-item-body">
                   <div
@@ -1181,11 +1243,17 @@ function getDepartmentTreeData(departmentId) {
 
           <article class="card chart-card">
             <div class="summary-card-head">
-              <div>
+              <div class="summary-card-head-copy">
                 <h2>조직도</h2>
                 <p>회원 관리 데이터 기준으로 부서별 사용자와 직급을 보여줍니다.</p>
               </div>
-              <span class="badge navy">실제 사용자 기준</span>
+              <div class="chart-card-head-actions">
+                <span class="badge navy">실제 사용자 기준</span>
+                <button class="chart-card-link-btn" type="button" @click="fullChartOpen = true">
+                  <span>전체 조직도 보기</span>
+                  <ExternalLink class="footer-link-icon" :size="14" />
+                </button>
+              </div>
             </div>
 
             <div v-if="departmentSummaries.length" class="org-chart-list">
@@ -1193,6 +1261,7 @@ function getDepartmentTreeData(departmentId) {
                 v-for="department in departmentSummaries"
                 :key="`${department.departmentId}-chart`"
                 class="org-department-card"
+                :ref="(element) => setOrganizationChartCardRef(department.departmentId, element)"
               >
                 <div class="org-tree-container">
                   <div class="org-tree-root">
@@ -1225,7 +1294,6 @@ function getDepartmentTreeData(departmentId) {
                         >
                           <button type="button" class="org-node-box child-box" @click="openUserSummary(user.userId)">
                             <div class="org-node-title">{{ user.name }} {{ resolvePositionName(user.positionId, user.position) }}</div>
-                            <div class="org-node-desc">1명</div>
                           </button>
                         </div>
                       </div>
@@ -1238,12 +1306,6 @@ function getDepartmentTreeData(departmentId) {
             </div>
             <div v-else class="empty-state-inline">표시할 조직도가 없습니다.</div>
             
-            <div class="card-footer">
-              <button class="footer-link-btn" type="button" @click="fullChartOpen = true">
-                <span>전체 조직도 보기</span>
-                <ExternalLink class="footer-link-icon" :size="14" />
-              </button>
-            </div>
           </article>
         </section>
 
@@ -1280,8 +1342,8 @@ function getDepartmentTreeData(departmentId) {
                 <td>{{ departmentTeamSummary(department.departmentId) }}</td>
                 <td>{{ department.sortOrder ?? '-' }}</td>
                 <td>
-                  <button class="icon-text" type="button" @click="openEditModal(department)">수정</button>
-                  <button class="icon-text danger-text" type="button" @click="changeStatus(department)">
+                  <button class="icon-text organization-action-link" type="button" @click="openEditModal(department)">수정</button>
+                  <button class="icon-text danger-text organization-action-link organization-action-link--danger" type="button" @click="changeStatus(department)">
                     {{ department.status === 'ACTIVE' ? '비활성화' : '활성화' }}
                   </button>
                 </td>
@@ -1327,8 +1389,8 @@ function getDepartmentTreeData(departmentId) {
                 <td>{{ team.userCount }}명</td>
                 <td>{{ team.sortOrder ?? '-' }}</td>
                 <td>
-                  <button class="icon-text" type="button" @click="openEditModal(team)">수정</button>
-                  <button class="icon-text danger-text" type="button" @click="changeStatus(team)">
+                  <button class="icon-text organization-action-link" type="button" @click="openEditModal(team)">수정</button>
+                  <button class="icon-text danger-text organization-action-link organization-action-link--danger" type="button" @click="changeStatus(team)">
                     {{ team.status === 'ACTIVE' ? '비활성화' : '활성화' }}
                   </button>
                 </td>
@@ -1358,8 +1420,8 @@ function getDepartmentTreeData(departmentId) {
                 <td>{{ position.sortOrder ?? '-' }}</td>
                 <td>{{ position.userCount }}명</td>
                 <td>
-                  <button class="icon-text" type="button" @click="openEditModal(position)">수정</button>
-                  <button class="icon-text danger-text" type="button" @click="changeStatus(position)">
+                  <button class="icon-text organization-action-link" type="button" @click="openEditModal(position)">수정</button>
+                  <button class="icon-text danger-text organization-action-link organization-action-link--danger" type="button" @click="changeStatus(position)">
                     {{ position.status === 'ACTIVE' ? '비활성화' : '활성화' }}
                   </button>
                 </td>
@@ -1496,28 +1558,30 @@ function getDepartmentTreeData(departmentId) {
       </ModalShell>
 
       <div v-if="userSummaryOpen" class="modal-backdrop" @click.self="userSummaryOpen = false">
-        <article class="card write-modal detail-modal">
-          <header>
+        <article class="card write-modal detail-modal organization-user-summary-modal">
+          <header class="organization-user-summary-modal__header">
             <div>
               <h2>{{ userSummaryLoading ? '회원 요약 조회 중' : selectedUserSummary?.name || '-' }}</h2>
               <p v-if="!userSummaryLoading">{{ userSummaryHeadline(selectedUserSummary) }}</p>
             </div>
-            <button type="button" @click="userSummaryOpen = false">닫기</button>
+            <button class="modal-close organization-user-summary-modal__close" type="button" @click="userSummaryOpen = false">×</button>
           </header>
 
           <div v-if="userSummaryLoading" class="empty-state">회원 요약 정보를 불러오는 중입니다.</div>
           <div v-else-if="userSummaryError" class="error-box">{{ userSummaryError }}</div>
           <template v-else-if="selectedUserSummary">
-            <dl class="detail-list">
-              <div><dt>이름</dt><dd>{{ selectedUserSummary.name }}</dd></div>
-              <div><dt>이메일</dt><dd>{{ selectedUserSummary.email }}</dd></div>
-              <div><dt>계열사</dt><dd>{{ selectedUserSummary.affiliate }}</dd></div>
-              <div><dt>부서</dt><dd>{{ selectedUserSummary.department }}</dd></div>
-              <div><dt>팀</dt><dd>{{ selectedUserSummary.team }}</dd></div>
-              <div><dt>직급</dt><dd>{{ selectedUserSummary.position }}</dd></div>
-              <div><dt>권한</dt><dd>{{ selectedUserSummary.role || '-' }}</dd></div>
-              <div><dt>상태</dt><dd>{{ statusLabel(selectedUserSummary.status) }}</dd></div>
-            </dl>
+            <div class="detail-body organization-user-summary-modal__body">
+              <dl class="detail-list">
+                <div><dt>이름</dt><dd>{{ selectedUserSummary.name }}</dd></div>
+                <div><dt>이메일</dt><dd>{{ selectedUserSummary.email }}</dd></div>
+                <div><dt>계열사</dt><dd>{{ selectedUserSummary.affiliate }}</dd></div>
+                <div><dt>부서</dt><dd>{{ selectedUserSummary.department }}</dd></div>
+                <div><dt>팀</dt><dd>{{ selectedUserSummary.team }}</dd></div>
+                <div><dt>직급</dt><dd>{{ selectedUserSummary.position }}</dd></div>
+                <div><dt>권한</dt><dd>{{ selectedUserSummary.role || '-' }}</dd></div>
+                <div><dt>상태</dt><dd>{{ statusLabel(selectedUserSummary.status) }}</dd></div>
+              </dl>
+            </div>
           </template>
         </article>
       </div>
@@ -1560,8 +1624,9 @@ function getDepartmentTreeData(departmentId) {
   gap: 10px;
 }
 
-.excel-actions button {
-  min-height: 40px;
+.excel-actions :deep(.action-button) {
+  min-height: 34px;
+  font-size: 13px;
 }
 
 .feedback-card {
@@ -1669,6 +1734,55 @@ function getDepartmentTreeData(departmentId) {
 .organization-delete-target {
   color: var(--muted-foreground);
   font-size: 13px;
+}
+
+.organization-user-summary-modal {
+  width: min(600px, calc(100vw - 32px));
+  padding: 0;
+  overflow: hidden;
+}
+
+.organization-user-summary-modal__header {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  align-items: flex-start;
+  border-bottom: 1px solid var(--border);
+  padding: 18px 20px;
+}
+
+.organization-user-summary-modal__header h2 {
+  margin: 0;
+  font-size: 22px;
+  letter-spacing: 0;
+}
+
+.organization-user-summary-modal__header p {
+  margin: 6px 0 0;
+  color: var(--muted-foreground);
+  font-size: 12px;
+}
+
+.organization-user-summary-modal__close {
+  flex: 0 0 auto;
+}
+
+.organization-user-summary-modal__body {
+  padding: 18px 20px 0;
+}
+
+.organization-user-summary-modal :deep(.detail-list) {
+  gap: 12px;
+}
+
+.organization-user-summary-modal :deep(.detail-list dt) {
+  font-size: 10px;
+}
+
+.organization-user-summary-modal :deep(.detail-list dd) {
+  margin-top: 3px;
+  font-size: 13px;
+  line-height: 1.55;
 }
 
 .action-feedback {
@@ -1804,16 +1918,76 @@ function getDepartmentTreeData(departmentId) {
 
 .summary-card-head {
   display: flex;
-  justify-content: space-between;
   align-items: flex-start;
   gap: 12px;
-  flex-wrap: wrap;
+}
+
+.summary-card-head-copy {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+  width: 100%;
+}
+
+.summary-card-head-title-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+}
+
+.summary-card-head-title-row h2 {
+  margin: 0;
+  min-width: 0;
 }
 
 .summary-card-head p {
-  margin: 6px 0 0;
+  margin: 0;
   font-size: 13px;
   color: var(--muted-foreground);
+}
+
+.chart-card-head-actions {
+  display: grid;
+  justify-items: stretch;
+  align-content: start;
+  gap: 6px;
+  flex-shrink: 0;
+  width: max-content;
+}
+
+.chart-card-head-actions .badge {
+  width: 100%;
+  box-sizing: border-box;
+  display: inline-flex;
+  justify-content: center;
+}
+
+/* 조직도 카드 우측 상단의 남는 세로 공간만 사용해서 배지 아래에 보조 액션을 배치한다. */
+.chart-card-link-btn {
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: #ffffff;
+  padding: 5px 8px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  color: var(--muted-foreground);
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1;
+  min-height: 28px;
+  width: 100%;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: border-color 0.15s, color 0.15s, background-color 0.15s;
+}
+
+.chart-card-link-btn:hover {
+  color: var(--primary);
+  border-color: #fdba74;
+  background: #fffaf5;
 }
 
 .summary-list {
@@ -1838,6 +2012,25 @@ function getDepartmentTreeData(departmentId) {
   justify-content: space-between;
   align-items: flex-start;
   gap: 10px;
+}
+
+.summary-item-link {
+  width: 100%;
+  border: 0;
+  padding: 0;
+  background: transparent;
+  text-align: left;
+  cursor: pointer;
+}
+
+.summary-item-link:hover strong {
+  color: var(--primary);
+}
+
+.summary-item-link:focus-visible {
+  outline: 2px solid rgba(249, 115, 22, 0.28);
+  outline-offset: 4px;
+  border-radius: 8px;
 }
 
 .summary-item-head strong {
@@ -2047,6 +2240,29 @@ function getDepartmentTreeData(departmentId) {
   flex-shrink: 0;
 }
 
+.organization-action-link {
+  color: var(--primary-dark);
+  font-weight: 700;
+}
+
+.organization-action-link:hover {
+  color: var(--primary);
+  text-decoration: underline;
+}
+
+.organization-action-link:focus-visible {
+  outline: 2px solid rgba(243, 115, 33, 0.22);
+  outline-offset: 2px;
+}
+
+.organization-action-link--danger {
+  color: var(--danger);
+}
+
+.organization-action-link--danger:hover {
+  color: #b91c1c;
+}
+
 /* 조직도 트리 구조 스타일 */
 .org-chart-list {
   display: grid;
@@ -2110,7 +2326,9 @@ function getDepartmentTreeData(departmentId) {
 
 .child-box {
   background: #ffffff;
-  min-width: 120px;
+  min-width: 104px;
+  min-height: 44px;
+  padding: 8px 12px;
   transition: all 0.15s;
   cursor: pointer;
 }
@@ -2199,7 +2417,14 @@ function getDepartmentTreeData(departmentId) {
   position: relative;
   display: flex;
   justify-content: center;
-  gap: 12px;
+  gap: 8px;
+}
+
+/* 직원 노드는 가로 스크롤이 과하게 늘어나지 않도록 카드 폭과 높이를 더 컴팩트하게 유지한다. */
+.org-tree-child.user-child .org-node-title {
+  font-size: 12px;
+  line-height: 1.35;
+  word-break: keep-all;
 }
 
 .org-tree-child.user-child {
@@ -2324,7 +2549,7 @@ function getDepartmentTreeData(departmentId) {
 
   /* 관리자 조직 관리 화면은 좌측 요약 패널을 고정 폭으로 두고 우측 조직도를 메인 영역으로 확장한다. */
   .organization-summary-grid {
-    grid-template-columns: 272px minmax(0, 1fr);
+    grid-template-columns: 300px minmax(0, 1fr);
   }
 }
 
@@ -2349,6 +2574,12 @@ function getDepartmentTreeData(departmentId) {
   .header-actions {
     width: 100%;
     justify-content: flex-start;
+  }
+
+  .organization-user-summary-modal__header,
+  .organization-user-summary-modal__body {
+    padding-left: 16px;
+    padding-right: 16px;
   }
 
   .organization-summary-grid {
