@@ -1790,7 +1790,8 @@ function getDepartmentTreeData(departmentId) {
 /* 콘텐츠 카드 및 그리드 스타일 */
 .organization-summary-grid {
   display: grid;
-  gap: 16px;
+  gap: 18px;
+  align-items: start;
 }
 
 .summary-card,
@@ -1806,6 +1807,7 @@ function getDepartmentTreeData(departmentId) {
   justify-content: space-between;
   align-items: flex-start;
   gap: 12px;
+  flex-wrap: wrap;
 }
 
 .summary-card-head p {
@@ -1818,6 +1820,7 @@ function getDepartmentTreeData(departmentId) {
   display: grid;
   gap: 12px;
   flex: 1;
+  min-height: 0;
 }
 
 .summary-item {
@@ -1833,7 +1836,16 @@ function getDepartmentTreeData(departmentId) {
 .summary-item-head {
   display: flex;
   justify-content: space-between;
-  align-items: center;
+  align-items: flex-start;
+  gap: 10px;
+}
+
+.summary-item-head strong {
+  flex: 1;
+  min-width: 0;
+  line-height: 1.5;
+  word-break: keep-all;
+  overflow-wrap: anywhere;
 }
 
 .summary-item strong {
@@ -1849,6 +1861,8 @@ function getDepartmentTreeData(departmentId) {
   font-size: 11px;
   font-weight: 700;
   color: var(--muted-foreground);
+  flex-shrink: 0;
+  white-space: nowrap;
 }
 
 .summary-item-body {
@@ -1856,6 +1870,8 @@ function getDepartmentTreeData(departmentId) {
   gap: 6px;
   padding-top: 8px;
   border-top: 1px dashed var(--border);
+  min-height: 0;
+  overflow: hidden;
 }
 
 .summary-member-name {
@@ -2036,6 +2052,8 @@ function getDepartmentTreeData(departmentId) {
   display: grid;
   gap: 16px;
   flex: 1;
+  min-width: 0;
+  min-height: 0;
 }
 
 .org-department-card {
@@ -2045,6 +2063,7 @@ function getDepartmentTreeData(departmentId) {
   padding: 16px;
   display: grid;
   gap: 16px;
+  min-width: 0;
   overflow-x: auto;
 }
 
@@ -2054,6 +2073,7 @@ function getDepartmentTreeData(departmentId) {
   align-items: center;
   position: relative;
   width: 100%;
+  min-width: max-content;
 }
 
 .org-tree-root {
@@ -2260,6 +2280,7 @@ function getDepartmentTreeData(departmentId) {
   margin-top: 12px;
   display: grid;
   gap: 4px;
+  min-width: 0;
 }
 
 .summary-team-group:first-child {
@@ -2284,6 +2305,9 @@ function getDepartmentTreeData(departmentId) {
   padding-left: 10px;
   display: grid;
   gap: 4px;
+  max-height: 168px;
+  overflow-y: auto;
+  min-width: 0;
 }
 
 .summary-member-empty {
@@ -2298,8 +2322,9 @@ function getDepartmentTreeData(departmentId) {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
+  /* 관리자 조직 관리 화면은 좌측 요약 패널을 고정 폭으로 두고 우측 조직도를 메인 영역으로 확장한다. */
   .organization-summary-grid {
-    grid-template-columns: 360px minmax(0, 1fr);
+    grid-template-columns: 272px minmax(0, 1fr);
   }
 }
 
@@ -2324,6 +2349,10 @@ function getDepartmentTreeData(departmentId) {
   .header-actions {
     width: 100%;
     justify-content: flex-start;
+  }
+
+  .organization-summary-grid {
+    gap: 16px;
   }
 
   .info-bar-new {
