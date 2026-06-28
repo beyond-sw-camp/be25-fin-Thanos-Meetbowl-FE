@@ -17,10 +17,8 @@
     </div>
     <div class="participant-chips">
       <span v-for="attendee in modelValue" :key="attendee.userId" class="participant-chip">
-        <span class="participant-chip-text">
-          {{ attendee.name }}
-          <small>{{ formatUserMeta(attendee) }}</small>
-        </span>
+        <strong>{{ attendee.name }}</strong>
+        <small>{{ formatUserMeta(attendee) }}</small>
         <button
           v-if="!fixedUserIdSet.has(attendee.userId)"
           type="button"
@@ -181,19 +179,18 @@ function formatUserMeta(user) {
 .participant-chip {
   display: inline-flex;
   align-items: center;
-  gap: 8px;
-  border-radius: 16px;
+  gap: 6px;
+  flex: 0 0 auto;
+  border-radius: 999px;
   background: #f3f4f6;
   color: var(--foreground);
   padding: 8px 12px;
+  font-size: 13px;
+  white-space: nowrap;
 }
-.participant-chip-text {
-  display: grid;
-  gap: 2px;
-}
-.participant-chip-text small {
+.participant-chip small {
   color: var(--muted-foreground);
-  font-size: 12px;
+  font-size: 13px;
 }
 .participant-chip button {
   border: 0;
