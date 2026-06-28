@@ -217,6 +217,7 @@ const reviewerOptions = computed(() => props.form.attendees.filter((attendee) =>
   color: var(--foreground);
   padding: 8px 12px;
   font-size: 13px;
+  white-space: nowrap;
 }
 .external-invitee-chip small {
   color: var(--muted-foreground);
