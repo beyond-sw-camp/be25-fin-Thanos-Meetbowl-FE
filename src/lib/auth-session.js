@@ -45,6 +45,7 @@ export function normalizeUser(user) {
   const userId = user.userId || user.id || null
   const loginId = user.loginId || user.username || ''
   const name = user.name || ''
+  const affiliateId = user.affiliateId || user.organizationId || ''
 
   return {
     ...user,
@@ -53,6 +54,8 @@ export function normalizeUser(user) {
     username: loginId,
     loginId,
     role,
+    affiliateId,
+    organizationId: user.organizationId || user.affiliateId || '',
     affiliate: user.affiliate || user.company || '',
     company: user.company || user.affiliate || '',
     department: user.department || '',

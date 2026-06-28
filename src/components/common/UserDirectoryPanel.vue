@@ -103,7 +103,7 @@ const isEditMode = computed(() => Boolean(editForm.value.userId))
 const isEditingCurrentUser = computed(
   () => Boolean(editForm.value.userId) && editForm.value.userId === auth.user?.userId,
 )
-const currentAdminAffiliateId = computed(() => auth.user?.affiliateId || '')
+const currentAdminAffiliateId = computed(() => auth.user?.affiliateId || auth.user?.organizationId || '')
 
 const availableAffiliates = computed(() => {
   if (!isEditMode.value && currentAdminAffiliateId.value) {
@@ -531,7 +531,9 @@ function buildSharedUserPayload(targetForm) {
     name: targetForm.name.trim(),
     email: targetForm.email.trim(),
     role: targetForm.role,
-    ...(isEditMode.value ? { affiliateId: targetForm.affiliateId || null } : {}),
+    ...(isEditMode.value
+      ? { affiliateId: targetForm.affiliateId || currentAdminAffiliateId.value || null }
+      : {}),
     departmentId: targetForm.departmentId || null,
     teamId: targetForm.teamId || null,
     positionId: targetForm.positionId || null,
