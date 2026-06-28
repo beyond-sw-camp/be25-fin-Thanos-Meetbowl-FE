@@ -21,8 +21,9 @@ const teams = [
 ]
 
 const positions = [
-  { positionId: 'position-1', sortOrder: 1, status: 'ACTIVE' },
-  { positionId: 'position-2', sortOrder: 2, status: 'INACTIVE' },
+  { positionId: 'position-1', affiliateId: 'affiliate-1', sortOrder: 1, status: 'ACTIVE' },
+  { positionId: 'position-2', affiliateId: 'affiliate-1', sortOrder: 2, status: 'INACTIVE' },
+  { positionId: 'position-3', affiliateId: 'affiliate-2', sortOrder: 2, status: 'ACTIVE' },
 ]
 
 test('department sort order validation blocks duplicates within the same affiliate', () => {
@@ -49,7 +50,7 @@ test('team sort order validation blocks duplicates within the same affiliate eve
 test('position sort order validation blocks duplicates including inactive items', () => {
   const message = validateOrganizationSortOrder({
     tab: 'position',
-    form: { sortOrder: 2 },
+    form: { affiliateId: 'affiliate-1', sortOrder: 2 },
     positions,
   })
 
@@ -74,7 +75,7 @@ test('edit mode allows keeping the current item sort order', () => {
 
   const positionMessage = validateOrganizationSortOrder({
     tab: 'position',
-    form: { sortOrder: 1 },
+    form: { affiliateId: 'affiliate-1', sortOrder: 1 },
     editingItem: { positionId: 'position-1' },
     positions,
   })
@@ -94,6 +95,16 @@ test('changing to another item sort order is blocked in edit mode', () => {
   })
 
   assert.equal(message, ORGANIZATION_SORT_ORDER_DUPLICATE_MESSAGE)
+})
+
+test('position sort order can be reused in another affiliate', () => {
+  const message = validateOrganizationSortOrder({
+    tab: 'position',
+    form: { affiliateId: 'affiliate-2', sortOrder: 1 },
+    positions,
+  })
+
+  assert.equal(message, '')
 })
 
 test('deleted items are excluded because only listed items are checked', () => {

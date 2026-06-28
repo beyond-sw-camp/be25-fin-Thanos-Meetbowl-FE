@@ -33,7 +33,7 @@ export function createPositionForm(item) {
     name: item?.name || '',
     sortOrder: item?.sortOrder ?? 0,
     status: item?.status || 'ACTIVE',
-    affiliateId: '',
+    affiliateId: item?.affiliateId || '',
     departmentId: '',
   }
 }
@@ -64,5 +64,6 @@ export function buildPositionPayload(form, normalizeSortOrder) {
     name: form.name.trim(),
     status: form.status,
     sortOrder: normalizeSortOrder(form.sortOrder),
+    affiliateId: form.affiliateId,
   }
 }

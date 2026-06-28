@@ -284,6 +284,7 @@ const teamTableRows = computed(() => {
 const positionRows = computed(() =>
   sortedPositions.value.map((position) => ({
     ...position,
+    affiliateName: findAffiliateName(position.affiliateId),
     userCount: users.value.filter((user) => user.positionId === position.positionId).length,
   })),
 )
@@ -381,7 +382,12 @@ function openCreateModal() {
   successMessage.value = ''
   form.value = createEmptyOrganizationForm()
 
-  if (activeTab.value === 'organization' || activeTab.value === 'department' || activeTab.value === 'team') {
+  if (
+    activeTab.value === 'organization' ||
+    activeTab.value === 'department' ||
+    activeTab.value === 'team' ||
+    activeTab.value === 'position'
+  ) {
     form.value.affiliateId =
       primaryAffiliate.value?.affiliateId || availableAffiliates.value[0]?.affiliateId || ''
   }
@@ -615,6 +621,7 @@ function normalizeTeam(item) {
 function normalizePosition(item) {
   return {
     positionId: item?.positionId || '',
+    affiliateId: item?.affiliateId || '',
     name: item?.name || '-',
     code: item?.code || '',
     status: normalizeStatus(item?.status),
@@ -1405,6 +1412,7 @@ function getDepartmentTreeData(departmentId) {
           <table>
             <thead>
               <tr>
+                <th>계열사</th>
                 <th>이름</th>
                 <th>순서</th>
                 <th>인원</th>
@@ -1413,9 +1421,10 @@ function getDepartmentTreeData(departmentId) {
             </thead>
             <tbody>
               <tr v-if="!positionRows.length">
-                <td colspan="4"><div class="empty-state">등록된 직급이 없습니다.</div></td>
+                <td colspan="5"><div class="empty-state">등록된 직급이 없습니다.</div></td>
               </tr>
               <tr v-for="position in positionRows" :key="position.positionId">
+                <td>{{ position.affiliateName }}</td>
                 <td>{{ position.name }}</td>
                 <td>{{ position.sortOrder ?? '-' }}</td>
                 <td>{{ position.userCount }}명</td>
