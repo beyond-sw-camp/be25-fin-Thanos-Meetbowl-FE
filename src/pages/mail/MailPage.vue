@@ -233,7 +233,7 @@ async function openMail(mail) {
   try {
     const detail = await getMail(mail.mailId)
     if (tab.value === 'inbox') mail.read = true
-    const recipients = await enrichRecipients(detail.recipientUserIds || mail.recipientUserIds || [])
+    const recipients = await buildRecipients(detail, mail)
     open.value = normalizeMail({
       ...mergeMailDetail(mail, detail),
       recipients,
@@ -263,6 +263,20 @@ async function enrichRecipients(userIds) {
       meta: [user?.department, user?.team, user?.position].filter(Boolean).join(' · '),
     }
   }))
+}
+
+async function buildRecipients(detail, mail) {
+  const externalRecipients = (detail.externalRecipients || mail.externalRecipients || []).map((recipient) => ({
+    userId: `external:${recipient.email}`,
+    name: recipient.name || recipient.email,
+    email: recipient.email || '',
+    meta: '외부 초대',
+    external: true,
+  }))
+  const internalRecipientIds = (detail.recipientUserIds || mail.recipientUserIds || [])
+    .filter((userId) => !(externalRecipients.length && userId === detail.senderUserId))
+  const internalRecipients = await enrichRecipients(internalRecipientIds)
+  return [...internalRecipients, ...externalRecipients]
 }
 
 function mergeMailDetail(listMail, detail) {
