@@ -103,10 +103,15 @@ const isEditMode = computed(() => Boolean(editForm.value.userId))
 const isEditingCurrentUser = computed(
   () => Boolean(editForm.value.userId) && editForm.value.userId === auth.user?.userId,
 )
+const currentAdminAffiliateId = computed(() => auth.user?.affiliateId || auth.user?.organizationId || '')
 
-const availableAffiliates = computed(() =>
-  filterActiveOrSelected(affiliates.value, editForm.value.affiliateId, 'affiliateId'),
-)
+const availableAffiliates = computed(() => {
+  if (!isEditMode.value && currentAdminAffiliateId.value) {
+    return affiliates.value.filter((item) => item.affiliateId === currentAdminAffiliateId.value)
+  }
+
+  return filterActiveOrSelected(affiliates.value, editForm.value.affiliateId, 'affiliateId')
+})
 const availableDepartments = computed(() =>
   filterActiveOrSelected(
     departments.value.filter((item) => !editForm.value.affiliateId || item.affiliateId === editForm.value.affiliateId),
@@ -114,15 +119,21 @@ const availableDepartments = computed(() =>
     'departmentId',
   ),
 )
-const availableTeams = computed(() =>
-  filterActiveOrSelected(
-    teams.value.filter((item) => !editForm.value.departmentId || item.departmentId === editForm.value.departmentId),
+const availableTeams = computed(() => {
+  if (!editForm.value.departmentId) return []
+
+  return filterActiveOrSelected(
+    teams.value.filter((item) => item.departmentId === editForm.value.departmentId),
     editForm.value.teamId,
     'teamId',
-  ),
-)
+  )
+})
 const availablePositions = computed(() =>
-  filterActiveOrSelected(positions.value, editForm.value.positionId, 'positionId'),
+  filterActiveOrSelected(
+    positions.value.filter((item) => !editForm.value.affiliateId || item.affiliateId === editForm.value.affiliateId),
+    editForm.value.positionId,
+    'positionId',
+  ),
 )
 
 onMounted(() => {
@@ -478,7 +489,7 @@ function createEmptyForm() {
     departmentId: '',
     teamId: '',
     positionId: '',
-    activeFrom: '',
+    activeFrom: getTodayDateInputValue(),
     activeUntil: '',
   }
 }
@@ -505,7 +516,7 @@ function buildUserCreatePayload(targetForm) {
     loginId: targetForm.loginId.trim(),
     ...buildSharedUserPayload({
       ...targetForm,
-      affiliateId: targetForm.affiliateId || auth.user?.affiliateId || availableAffiliates.value[0]?.affiliateId || '',
+      affiliateId: currentAdminAffiliateId.value || availableAffiliates.value[0]?.affiliateId || '',
     }),
     status: targetForm.status,
   }
@@ -520,7 +531,9 @@ function buildSharedUserPayload(targetForm) {
     name: targetForm.name.trim(),
     email: targetForm.email.trim(),
     role: targetForm.role,
-    affiliateId: targetForm.affiliateId || null,
+    ...(isEditMode.value
+      ? { affiliateId: targetForm.affiliateId || currentAdminAffiliateId.value || null }
+      : {}),
     departmentId: targetForm.departmentId || null,
     teamId: targetForm.teamId || null,
     positionId: targetForm.positionId || null,
@@ -536,6 +549,12 @@ function toDateInputValue(value) {
   if (Number.isNaN(date.getTime())) return ''
 
   return date.toISOString().slice(0, 10)
+}
+
+function getTodayDateInputValue() {
+  const now = new Date()
+  const localDate = new Date(now.getTime() - now.getTimezoneOffset() * 60 * 1000)
+  return localDate.toISOString().slice(0, 10)
 }
 
 function toInstantFromDateInput(value) {
@@ -650,7 +669,7 @@ function formatActionError(error, fallbackMessage) {
               <th>계열사</th>
               <th>부서</th>
               <th>팀</th>
-              <th>직책</th>
+              <th>직급</th>
               <th>권한</th>
               <th>상태</th>
               <th v-if="editable">액션</th>
@@ -775,7 +794,7 @@ function formatActionError(error, fallbackMessage) {
           <div class="form-row two">
             <label>
               계열사
-              <AppSelect v-model="editForm.affiliateId" :disabled="organizationLoading">
+              <AppSelect v-model="editForm.affiliateId" :disabled="organizationLoading || !isEditMode">
                 <option value="">선택 안 함</option>
                 <option v-for="affiliate in availableAffiliates" :key="affiliate.affiliateId" :value="affiliate.affiliateId">
                   {{ affiliate.name }}
@@ -795,7 +814,7 @@ function formatActionError(error, fallbackMessage) {
           <div class="form-row two">
             <label>
               팀
-              <AppSelect v-model="editForm.teamId" :disabled="organizationLoading">
+              <AppSelect v-model="editForm.teamId" :disabled="organizationLoading || !editForm.departmentId">
                 <option value="">선택 안 함</option>
                 <option v-for="team in availableTeams" :key="team.teamId" :value="team.teamId">
                   {{ team.name }}
@@ -803,7 +822,7 @@ function formatActionError(error, fallbackMessage) {
               </AppSelect>
             </label>
             <label>
-              직책
+              직급
               <AppSelect v-model="editForm.positionId" :disabled="organizationLoading">
                 <option value="">선택 안 함</option>
                 <option v-for="position in availablePositions" :key="position.positionId" :value="position.positionId">
@@ -968,6 +987,38 @@ function formatActionError(error, fallbackMessage) {
 .delete-confirm-target {
   color: var(--muted-foreground);
   font-size: 13px;
+}
+
+.admin-modal {
+  max-height: calc(100vh - 36px);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.admin-modal .form-grid {
+  display: grid;
+  row-gap: 22px;
+}
+
+.admin-modal .form-row.two {
+  gap: 14px;
+}
+
+.admin-modal label {
+  gap: 8px;
+  line-height: 1.35;
+}
+
+.admin-modal label > input,
+.admin-modal label > .app-select-wrap {
+  margin-top: 6px;
+}
+
+.admin-modal .modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+  padding-right: 6px;
 }
 
 .directory-row {

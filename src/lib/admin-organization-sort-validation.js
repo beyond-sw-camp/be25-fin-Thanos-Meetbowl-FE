@@ -45,7 +45,10 @@ export function validateOrganizationSortOrder({
   if (tab === 'position') {
     const duplicated = positions.some((position) => {
       if (position?.positionId && position.positionId === editingItem?.positionId) return false
-      return normalizeExistingSortOrder(position?.sortOrder) === normalizedSortOrder
+      return (
+        position?.affiliateId === form?.affiliateId &&
+        normalizeExistingSortOrder(position?.sortOrder) === normalizedSortOrder
+      )
     })
 
     return duplicated ? ORGANIZATION_SORT_ORDER_DUPLICATE_MESSAGE : ''

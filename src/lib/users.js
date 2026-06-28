@@ -1,4 +1,5 @@
 import { getJson } from './api-client'
+import { useAuthStore } from '../stores/auth'
 
 const failedSummaryUserIds = new Set()
 
@@ -9,9 +10,11 @@ function isSearchableMember(user) {
 
 export function searchUsers({ keyword = '', page = 1, size = 20 } = {}) {
   const params = new URLSearchParams()
+  const auth = useAuthStore()
   if (keyword.trim()) params.set('keyword', keyword.trim())
   params.set('page', String(page))
   params.set('size', String(size))
+  if (auth.user?.affiliateId) params.set('affiliateId', auth.user.affiliateId)
   return getJson(`/users/search?${params.toString()}`)
     .then((data) => ({
       ...data,

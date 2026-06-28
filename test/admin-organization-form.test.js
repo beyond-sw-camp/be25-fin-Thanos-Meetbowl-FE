@@ -46,6 +46,7 @@ test('organization form builders omit code fields from create and update payload
       code: 'P999',
       status: 'ACTIVE',
       sortOrder: '4',
+      affiliateId: 'affiliate-2',
       positionCode: 'P001',
     },
     normalizeSortOrder,
@@ -73,6 +74,7 @@ test('organization form builders omit code fields from create and update payload
     name: 'Manager',
     status: 'ACTIVE',
     sortOrder: 4,
+    affiliateId: 'affiliate-2',
   })
   assert.ok(!('code' in positionPayload))
   assert.ok(!('positionCode' in positionPayload))
@@ -130,12 +132,13 @@ test('organization form defaults and edit forms do not keep editable code state'
       code: 'P001',
       sortOrder: 4,
       status: 'ACTIVE',
+      affiliateId: 'affiliate-3',
     }),
     {
       name: 'Manager',
       sortOrder: 4,
       status: 'ACTIVE',
-      affiliateId: '',
+      affiliateId: 'affiliate-3',
       departmentId: '',
     },
   )

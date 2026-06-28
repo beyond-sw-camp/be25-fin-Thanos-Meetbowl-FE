@@ -347,7 +347,7 @@ function statusLabel(status) {
             <label>계열사<input :value="profile?.affiliate || '-'" readonly class="readonly"></label>
             <label>부서<input :value="profile?.department || '-'" readonly class="readonly"></label>
             <label>팀<input :value="profile?.team || '-'" readonly class="readonly"></label>
-            <label>직책<input :value="profile?.position || '-'" readonly class="readonly"></label>
+            <label>직급<input :value="profile?.position || '-'" readonly class="readonly"></label>
             <label>권한<input :value="roleLabel(profile?.role)" readonly class="readonly"></label>
             <label>상태<input :value="statusLabel(profile?.status)" readonly class="readonly"></label>
           </div>

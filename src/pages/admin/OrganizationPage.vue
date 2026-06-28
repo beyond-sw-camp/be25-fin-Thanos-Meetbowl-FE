@@ -284,6 +284,7 @@ const teamTableRows = computed(() => {
 const positionRows = computed(() =>
   sortedPositions.value.map((position) => ({
     ...position,
+    affiliateName: findAffiliateName(position.affiliateId),
     userCount: users.value.filter((user) => user.positionId === position.positionId).length,
   })),
 )
@@ -381,7 +382,12 @@ function openCreateModal() {
   successMessage.value = ''
   form.value = createEmptyOrganizationForm()
 
-  if (activeTab.value === 'organization' || activeTab.value === 'department' || activeTab.value === 'team') {
+  if (
+    activeTab.value === 'organization' ||
+    activeTab.value === 'department' ||
+    activeTab.value === 'team' ||
+    activeTab.value === 'position'
+  ) {
     form.value.affiliateId =
       primaryAffiliate.value?.affiliateId || availableAffiliates.value[0]?.affiliateId || ''
   }
@@ -615,6 +621,7 @@ function normalizeTeam(item) {
 function normalizePosition(item) {
   return {
     positionId: item?.positionId || '',
+    affiliateId: item?.affiliateId || '',
     name: item?.name || '-',
     code: item?.code || '',
     status: normalizeStatus(item?.status),
@@ -922,8 +929,6 @@ async function confirmExcelImport() {
 function normalizeExcelImportResult(result) {
   // BE 집계값이 비어 있더라도 UI에서는 항상 숫자 형태로 안정적으로 렌더링한다.
   return {
-    createdAffiliates: Number(result?.createdAffiliates) || 0,
-    updatedAffiliates: Number(result?.updatedAffiliates) || 0,
     createdDepartments: Number(result?.createdDepartments) || 0,
     updatedDepartments: Number(result?.updatedDepartments) || 0,
     createdTeams: Number(result?.createdTeams) || 0,
@@ -933,6 +938,10 @@ function normalizeExcelImportResult(result) {
     createdUsers: Number(result?.createdUsers) || 0,
     updatedUsers: Number(result?.updatedUsers) || 0,
   }
+}
+
+function formatExcelResultCount(created, updated) {
+  return `생성 ${Number(created) || 0}건 / 수정 ${Number(updated) || 0}건`
 }
 
 function normalizeExcelValidationErrors(details) {
@@ -1091,29 +1100,24 @@ function getDepartmentTreeData(departmentId) {
         </div>
         <div class="excel-result-grid">
           <div class="excel-result-item">
-            <strong>계열사</strong>
-            <p>생성/수정</p>
-            <span>{{ excelResult.createdAffiliates }} / {{ excelResult.updatedAffiliates }}</span>
-          </div>
-          <div class="excel-result-item">
             <strong>부서</strong>
             <p>생성/수정</p>
-            <span>{{ excelResult.createdDepartments }} / {{ excelResult.updatedDepartments }}</span>
+            <span>{{ formatExcelResultCount(excelResult.createdDepartments, excelResult.updatedDepartments) }}</span>
           </div>
           <div class="excel-result-item">
             <strong>팀</strong>
             <p>생성/수정</p>
-            <span>{{ excelResult.createdTeams }} / {{ excelResult.updatedTeams }}</span>
+            <span>{{ formatExcelResultCount(excelResult.createdTeams, excelResult.updatedTeams) }}</span>
           </div>
           <div class="excel-result-item">
             <strong>직급</strong>
             <p>생성/수정</p>
-            <span>{{ excelResult.createdPositions }} / {{ excelResult.updatedPositions }}</span>
+            <span>{{ formatExcelResultCount(excelResult.createdPositions, excelResult.updatedPositions) }}</span>
           </div>
           <div class="excel-result-item">
             <strong>회원</strong>
             <p>생성/수정</p>
-            <span>{{ excelResult.createdUsers }} / {{ excelResult.updatedUsers }}</span>
+            <span>{{ formatExcelResultCount(excelResult.createdUsers, excelResult.updatedUsers) }}</span>
           </div>
         </div>
       </div>
@@ -1405,6 +1409,7 @@ function getDepartmentTreeData(departmentId) {
           <table>
             <thead>
               <tr>
+                <th>계열사</th>
                 <th>이름</th>
                 <th>순서</th>
                 <th>인원</th>
@@ -1413,9 +1418,10 @@ function getDepartmentTreeData(departmentId) {
             </thead>
             <tbody>
               <tr v-if="!positionRows.length">
-                <td colspan="4"><div class="empty-state">등록된 직급이 없습니다.</div></td>
+                <td colspan="5"><div class="empty-state">등록된 직급이 없습니다.</div></td>
               </tr>
               <tr v-for="position in positionRows" :key="position.positionId">
+                <td>{{ position.affiliateName }}</td>
                 <td>{{ position.name }}</td>
                 <td>{{ position.sortOrder ?? '-' }}</td>
                 <td>{{ position.userCount }}명</td>
