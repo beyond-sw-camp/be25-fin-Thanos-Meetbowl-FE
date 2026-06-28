@@ -1,4 +1,4 @@
-import { addMinutes, timeToMinutes, utcToKstClock } from './dateTime'
+import { addMinutes, timeToMinutes, utcToKstClock } from './dateTime.js'
 
 // 회의실 예약 운영 시간은 KST 09:00~24:00 구간을 사용한다.
 export const TIMELINE = {

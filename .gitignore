@@ -29,6 +29,7 @@ dist/
 dist-ssr/
 *.local
 tasks/
+task/
 
 # Editor and OS
 .DS_Store
