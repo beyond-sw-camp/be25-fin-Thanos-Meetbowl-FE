@@ -929,8 +929,6 @@ async function confirmExcelImport() {
 function normalizeExcelImportResult(result) {
   // BE 집계값이 비어 있더라도 UI에서는 항상 숫자 형태로 안정적으로 렌더링한다.
   return {
-    createdAffiliates: Number(result?.createdAffiliates) || 0,
-    updatedAffiliates: Number(result?.updatedAffiliates) || 0,
     createdDepartments: Number(result?.createdDepartments) || 0,
     updatedDepartments: Number(result?.updatedDepartments) || 0,
     createdTeams: Number(result?.createdTeams) || 0,
@@ -940,6 +938,10 @@ function normalizeExcelImportResult(result) {
     createdUsers: Number(result?.createdUsers) || 0,
     updatedUsers: Number(result?.updatedUsers) || 0,
   }
+}
+
+function formatExcelResultCount(created, updated) {
+  return `생성 ${Number(created) || 0}건 / 수정 ${Number(updated) || 0}건`
 }
 
 function normalizeExcelValidationErrors(details) {
@@ -1098,29 +1100,24 @@ function getDepartmentTreeData(departmentId) {
         </div>
         <div class="excel-result-grid">
           <div class="excel-result-item">
-            <strong>계열사</strong>
-            <p>생성/수정</p>
-            <span>{{ excelResult.createdAffiliates }} / {{ excelResult.updatedAffiliates }}</span>
-          </div>
-          <div class="excel-result-item">
             <strong>부서</strong>
             <p>생성/수정</p>
-            <span>{{ excelResult.createdDepartments }} / {{ excelResult.updatedDepartments }}</span>
+            <span>{{ formatExcelResultCount(excelResult.createdDepartments, excelResult.updatedDepartments) }}</span>
           </div>
           <div class="excel-result-item">
             <strong>팀</strong>
             <p>생성/수정</p>
-            <span>{{ excelResult.createdTeams }} / {{ excelResult.updatedTeams }}</span>
+            <span>{{ formatExcelResultCount(excelResult.createdTeams, excelResult.updatedTeams) }}</span>
           </div>
           <div class="excel-result-item">
             <strong>직급</strong>
             <p>생성/수정</p>
-            <span>{{ excelResult.createdPositions }} / {{ excelResult.updatedPositions }}</span>
+            <span>{{ formatExcelResultCount(excelResult.createdPositions, excelResult.updatedPositions) }}</span>
           </div>
           <div class="excel-result-item">
             <strong>회원</strong>
             <p>생성/수정</p>
-            <span>{{ excelResult.createdUsers }} / {{ excelResult.updatedUsers }}</span>
+            <span>{{ formatExcelResultCount(excelResult.createdUsers, excelResult.updatedUsers) }}</span>
           </div>
         </div>
       </div>
