@@ -83,6 +83,7 @@ import {
   searchMails,
   sendMail,
 } from '../../lib/mail'
+import { extractTiptapText } from '../../lib/minutes-content.js'
 import { getUserSummary, searchUsers } from '../../lib/users'
 import { formatKstDateTime } from '../../utils/dateTime'
 import { useConfirmDialog } from '../../composables/useConfirmDialog'
@@ -358,7 +359,7 @@ async function sendDraft(draft) {
 function startReply(mail) {
   composeDraft.value = {
     subject: mail.subject?.startsWith('Re:') ? mail.subject : `Re: ${mail.subject || ''}`,
-    body: `\n\n----- 원본 메일 -----\n보낸 사람: ${mail.senderName || mail.senderUserId || '-'}\n제목: ${mail.subject || '-'}\n\n${mail.body || ''}`,
+    body: buildQuotedMailBody('원본 메일', mail),
   }
   composeRecipients.value = [{
     userId: mail.senderUserId,
@@ -373,7 +374,7 @@ function startReply(mail) {
 function startForward(mail) {
   composeDraft.value = {
     subject: mail.subject?.startsWith('Fwd:') ? mail.subject : `Fwd: ${mail.subject || ''}`,
-    body: `\n\n----- 전달 메일 -----\n보낸 사람: ${mail.senderName || mail.senderUserId || '-'}\n제목: ${mail.subject || '-'}\n\n${mail.body || ''}`,
+    body: buildQuotedMailBody('전달 메일', mail),
     attachments: mail.attachments || mail.attachmentSummaries || [],
   }
   composeRecipients.value = []
@@ -384,6 +385,15 @@ function closeCompose() {
   compose.value = false
   composeDraft.value = {}
   composeRecipients.value = []
+}
+
+function buildQuotedMailBody(label, mail) {
+  const bodyText = extractMailText(mail.body)
+  return `\n\n----- ${label} -----\n보낸 사람: ${mail.senderName || mail.senderUserId || '-'}\n제목: ${mail.subject || '-'}\n\n${bodyText}`
+}
+
+function extractMailText(value) {
+  return extractTiptapText(value) || String(value || '')
 }
 
 function printMail() {

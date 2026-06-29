@@ -43,7 +43,9 @@
           <dd><time class="mail-date-text">{{ displayDate(mail.sentAt) }}</time></dd>
         </div>
       </dl>
-      <pre class="mail-body-text">{{ compactBody(mail.body || mail.summary) }}</pre>
+      <div class="mail-body-rich">
+        <MinutesEditor :modelValue="mail.body || mail.summary" readonly />
+      </div>
       <div class="backup-origin-note">
         <Archive :size="16" />
         <span>
@@ -59,6 +61,7 @@
 import { onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { Archive, ArrowLeft, Printer } from '@lucide/vue'
+import MinutesEditor from '../../components/minutes/MinutesEditor.vue'
 import { getMail } from '../../lib/mail'
 import { getBackupDetail } from '../../lib/workspace'
 import { getUserSummary } from '../../lib/users'
@@ -111,10 +114,6 @@ async function enrichRecipients(userIds) {
     const user = await getUserSummary(userId).catch(() => null)
     return { userId, name: user?.name || userId, email: user?.email || '' }
   }))
-}
-
-function compactBody(value) {
-  return String(value || '').replace(/\r\n/g, '\n').replace(/\n\s*\n+/g, '\n').trim()
 }
 
 function displayDate(value) {

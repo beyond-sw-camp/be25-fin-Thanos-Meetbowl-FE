@@ -1706,6 +1706,8 @@ input:focus { border-color: var(--primary); box-shadow: 0 0 0 3px rgba(243,115,3
 .compose-modal header, .share-mail-modal header { padding: 14px 18px; border-bottom: 1px solid var(--border); }
 .compose-modal footer, .share-mail-modal footer { padding: 12px 18px; border-top: 1px solid var(--border); }
 .compose-modal footer div, .share-mail-modal footer div { display: flex; gap: 8px; }
+.compose-modal .minutes-editor { min-width: 0; }
+.compose-modal .minutes-editor-content .ProseMirror { min-height: 280px; }
 .template-menu { position: relative; display: flex; align-items: center; gap: 8px; }
 .mail-template-button { min-height: 32px; display: inline-flex; align-items: center; gap: 5px; border: 1px solid var(--border); border-radius: 8px; background: white; padding: 0 10px; color: var(--foreground); font-size: 12px; font-weight: 800; }
 .mail-template-button:hover { background: var(--muted); }
@@ -1751,7 +1753,7 @@ input:focus { border-color: var(--primary); box-shadow: 0 0 0 3px rgba(243,115,3
 .attachment-chips span small { color: var(--primary-dark); font-size: 10.5px; font-weight: 700; }
 .attachment-chips span button { min-height: 20px; border-radius: 999px; padding: 0 4px; font-size: 11px; font-weight: 900; }
 .mail-detail-toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; margin-bottom: 16px; }
-.mail-detail-toolbar button, .mail-message-card header button { min-height: 32px; display: inline-flex; align-items: center; justify-content: center; gap: 6px; border: 0; border-radius: 8px; background: transparent; color: var(--foreground); padding: 0 10px; font-size: 13px; font-weight: 800; }
+.mail-detail-toolbar button, .mail-message-card header button { min-height: 32px; display: inline-flex; align-items: center; justify-content: center; gap: 6px; border: 1px solid var(--border); border-radius: 8px; background: white; color: var(--foreground); padding: 0 10px; font-size: 13px; font-weight: 800; }
 .mail-detail-toolbar button:hover, .mail-message-card header button:hover { background: var(--muted); }
 .mail-detail-toolbar .mail-back-button { width: 32px; padding: 0; }
 .mail-toolbar-separator { width: 1px; height: 20px; margin: 0 5px; background: var(--border); }
