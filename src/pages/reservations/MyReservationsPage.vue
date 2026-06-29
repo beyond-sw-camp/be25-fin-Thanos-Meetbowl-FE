@@ -5,6 +5,7 @@
     header-description="다가오는 회의실 예약을 확인하고 관리합니다."
     count-label="예약된 회의"
     :allow-cancel="true"
+    :room-only="true"
   />
 </template>
 
