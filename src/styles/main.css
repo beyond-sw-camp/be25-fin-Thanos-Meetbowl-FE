@@ -1826,21 +1826,21 @@ input:focus { border-color: var(--primary); box-shadow: 0 0 0 3px rgba(243,115,3
 .minutes-summary-text { margin: 0; color: var(--foreground) !important; font-size: 14px; line-height: 1.75 !important; white-space: pre-wrap; }
 .minute-edit-label { color: var(--muted-foreground); font-size: 12px; font-weight: 800; }
 .minutes-editor { overflow: hidden; border: 1px solid var(--border); border-radius: 14px; background: white; }
-.minutes-editor-toolbar { position: relative; display: flex; flex-wrap: nowrap; align-items: center; gap: 6px; border-bottom: 1px solid var(--border); background: white; padding: 8px 10px; overflow: visible; }
-.minutes-toolbar-group { display: inline-flex; flex-wrap: nowrap; align-items: center; gap: 3px; border-right: 1px solid #e9edf5; padding-right: 6px; flex: 0 0 auto; }
+.minutes-editor-toolbar { position: relative; display: flex; flex-wrap: nowrap; align-items: center; gap: 4px; border-bottom: 1px solid var(--border); background: white; padding: 6px 8px; overflow: visible; }
+.minutes-toolbar-group { display: inline-flex; flex-wrap: nowrap; align-items: center; gap: 2px; border-right: 1px solid #e9edf5; padding-right: 4px; flex: 0 0 auto; }
 .minutes-toolbar-group:last-child { border-right: 0; padding-right: 0; }
 .minutes-toolbar-group > span { padding: 0 4px; color: var(--muted-foreground); font-size: 10.5px; font-weight: 800; }
-.minutes-editor-toolbar button, .minutes-editor-toolbar select { min-height: 32px; border: 1px solid transparent; border-radius: 8px; background: white; padding: 0 8px; color: var(--foreground); font-size: 11px; font-weight: 700; flex: 0 0 auto; }
-.minutes-editor-toolbar button { min-width: 32px; display: inline-flex; align-items: center; justify-content: center; }
-.minutes-editor-toolbar select { outline: none; border-color: var(--border); min-width: 68px; }
+.minutes-editor-toolbar button, .minutes-editor-toolbar select { min-height: 30px; border: 1px solid transparent; border-radius: 8px; background: white; padding: 0 6px; color: var(--foreground); font-size: 10.5px; font-weight: 700; flex: 0 0 auto; }
+.minutes-editor-toolbar button { min-width: 30px; display: inline-flex; align-items: center; justify-content: center; }
+.minutes-editor-toolbar select { outline: none; border-color: var(--border); min-width: 62px; }
 .minutes-editor-toolbar button:hover:not(:disabled), .minutes-editor-toolbar select:hover { border-color: #fdba74; background: #fff7ed; }
 .minutes-editor-toolbar button:disabled { cursor: not-allowed; opacity: .4; }
 .minutes-editor-toolbar button.active { border-color: var(--primary); background: #fff7ed; color: var(--primary-dark); }
 .minutes-editor-toolbar button.danger { color: var(--danger); }
-.minutes-color-control { min-height: 32px; display: inline-flex; align-items: center; gap: 5px; border: 1px solid var(--border); border-radius: 8px; background: white; padding: 0 6px; color: var(--foreground); font-size: 10px; font-weight: 700; flex: 0 0 auto; }
-.minutes-color-control input { width: 18px; height: 18px; border: 0; background: transparent; padding: 0; cursor: pointer; }
+.minutes-color-control { min-height: 30px; display: inline-flex; align-items: center; gap: 4px; border: 1px solid var(--border); border-radius: 8px; background: white; padding: 0 5px; color: var(--foreground); font-size: 9.5px; font-weight: 700; flex: 0 0 auto; }
+.minutes-color-control input { width: 16px; height: 16px; border: 0; background: transparent; padding: 0; cursor: pointer; }
 .minutes-toolbar-more-button { position: relative; }
-.minutes-more-menu { position: absolute; top: calc(100% + 8px); right: 10px; z-index: 20; display: grid; min-width: 180px; gap: 4px; border: 1px solid var(--border); border-radius: 14px; background: white; box-shadow: 0 18px 40px rgba(15,23,42,.14); padding: 6px; }
+.minutes-more-menu { position: absolute; top: calc(100% + 8px); right: 8px; z-index: 20; display: grid; min-width: 170px; gap: 4px; border: 1px solid var(--border); border-radius: 14px; background: white; box-shadow: 0 18px 40px rgba(15,23,42,.14); padding: 6px; }
 .minutes-more-menu button { min-height: 36px; justify-content: flex-start; border: 0; border-radius: 10px; padding: 0 12px; font-size: 12px; }
 .minutes-more-menu button:hover { background: #fff7ed; border-color: transparent; }
 .minutes-more-menu-divider { height: 1px; margin: 4px 4px; background: #e9edf5; }

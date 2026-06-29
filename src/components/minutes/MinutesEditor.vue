@@ -51,13 +51,15 @@
       </div>
 
       <div class="minutes-toolbar-group">
-        <button type="button" aria-label="링크" title="링크" :class="{ active: editor?.isActive('link') }" @click="setLink"><LinkIcon :size="15" /></button>
         <button type="button" aria-label="더보기" title="더보기" class="minutes-toolbar-more-button" :class="{ active: moreMenuOpen }" @click="toggleMoreMenu">
           <MoreHorizontal :size="15" />
         </button>
       </div>
 
       <div v-if="moreMenuOpen" ref="moreMenuRef" class="minutes-more-menu">
+        <button type="button" :class="{ active: editor?.isActive('link') }" @click="setLink(); closeMoreMenu()">
+          링크
+        </button>
         <button type="button" :class="{ active: editor?.isActive('highlight') }" @click="editor?.chain().focus().toggleHighlight({ color: '#fef08a' }).run(); closeMoreMenu()">
           형광펜
         </button>
@@ -119,7 +121,6 @@ import {
   Bold,
   Highlighter,
   Italic,
-  Link as LinkIcon,
   List,
   ListOrdered,
   ListTodo,
