@@ -145,6 +145,11 @@ const emit = defineEmits(['update:modelValue'])
 
 const moreMenuOpen = ref(false)
 const moreMenuRef = ref(null)
+const INLINE_HEADING_PRESETS = {
+  1: { fontSize: '24px' },
+  2: { fontSize: '20px' },
+  3: { fontSize: '18px' },
+}
 
 const editor = useEditor({
   extensions: [
@@ -179,6 +184,10 @@ const blockType = computed(() => {
   if (editor.value?.isActive('heading', { level: 1 })) return 'heading-1'
   if (editor.value?.isActive('heading', { level: 2 })) return 'heading-2'
   if (editor.value?.isActive('heading', { level: 3 })) return 'heading-3'
+  const fontSize = editor.value?.getAttributes('textStyle')?.fontSize || ''
+  if (fontSize === INLINE_HEADING_PRESETS[1].fontSize && editor.value?.isActive('bold')) return 'heading-1'
+  if (fontSize === INLINE_HEADING_PRESETS[2].fontSize && editor.value?.isActive('bold')) return 'heading-2'
+  if (fontSize === INLINE_HEADING_PRESETS[3].fontSize && editor.value?.isActive('bold')) return 'heading-3'
   return 'paragraph'
 })
 
@@ -201,6 +210,20 @@ watch(() => props.modelValue, (value) => {
 
 function setBlockType(value) {
   if (!editor.value) return
+  const { empty } = editor.value.state.selection
+
+  if (!empty) {
+    if (value === 'paragraph') {
+      editor.value.chain().focus().setFontSize('16px').unsetBold().run()
+      return
+    }
+    const level = Number(value.replace('heading-', ''))
+    const preset = INLINE_HEADING_PRESETS[level]
+    if (!preset) return
+    editor.value.chain().focus().setFontSize(preset.fontSize).setBold().run()
+    return
+  }
+
   if (value === 'paragraph') {
     editor.value.chain().focus().setParagraph().run()
     return
