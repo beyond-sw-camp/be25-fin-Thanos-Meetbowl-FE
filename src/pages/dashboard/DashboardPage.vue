@@ -1,5 +1,17 @@
 <script>
 import { computed, defineComponent, onMounted, ref } from 'vue'
+import { useRouter } from 'vue-router'
+import {
+  Calendar,
+  CalendarCheck2,
+  CalendarDays,
+  Clock3,
+  FileText,
+  Mail,
+  MapPin,
+  MoreVertical,
+  Users,
+} from '@lucide/vue'
 import { openMeetingWindow } from '../../lib/meeting-route'
 import { useAuthStore } from '../../stores/auth'
 import { getMeetings, getRooms } from '../../lib/reservations'
@@ -17,8 +29,20 @@ const statusLabel = {
 }
 
 export default defineComponent({
+  components: {
+    Calendar,
+    CalendarCheck2,
+    CalendarDays,
+    Clock3,
+    FileText,
+    Mail,
+    MapPin,
+    MoreVertical,
+    Users,
+  },
   setup() {
     const auth = useAuthStore()
+    const router = useRouter()
     const myUserId = computed(() => auth.user?.userId || '')
     const { nameMap, resolveNames } = useUserNames()
 
@@ -26,6 +50,7 @@ export default defineComponent({
     const workspaceEvents = ref([])
     const rooms = ref([])
     const selectedId = ref('')
+    const timelineExpanded = ref(false)
     const unreadMailCount = ref(0)
     const minutesCount = ref(0)
     const loadError = ref(false)
@@ -61,6 +86,7 @@ export default defineComponent({
         room: meeting.meetingRoomId ? roomNameMap.value[meeting.meetingRoomId] || '회의실' : '원격',
         attendees: attendees.map((attendee) => nameMap[attendee.userId] || '이름 미확인'),
         attendeeCount: attendees.length,
+        attendeeLabel: `${attendees.length ? attendees.map((attendee) => nameMap[attendee.userId] || '이름 미확인')[0] : '참석자 없음'} 외 ${Math.max(attendees.length - 1, 0)}명`,
       }
     }
 
@@ -71,6 +97,10 @@ export default defineComponent({
       meetings.value
         .filter((meeting) => meeting.dateKst === todayKst() && meeting.status !== 'cancelled')
         .sort((a, b) => compareByEpochAsc(a.scheduledAt, b.scheduledAt)),
+    )
+    const hasMoreTodays = computed(() => todays.value.length > 3)
+    const visibleTodays = computed(() =>
+      timelineExpanded.value ? todays.value : todays.value.slice(0, 3),
     )
     // 현재 진행 중 — 날짜 무관, 모든 IN_PROGRESS.
     const liveMeetings = computed(() => meetings.value.filter((meeting) => meeting.status === 'live'))
@@ -140,10 +170,38 @@ export default defineComponent({
     })
 
     const kpis = computed(() => [
-      { label: '읽지 않은 메일', value: unreadMailCount.value, to: '/app/mail' },
-      { label: '오늘 예정된 회의', value: todayScheduledCount.value, to: '/app/meetings?tab=active' },
-      { label: '최근 내 회의록', value: minutesCount.value, to: '/app/minutes' },
-      { label: '현재 진행 중', value: liveMeetings.value.length, to: '/app/meetings?tab=active' },
+      {
+        label: '읽지 않은 메일',
+        value: unreadMailCount.value,
+        note: '건',
+        to: '/app/mail',
+        icon: Mail,
+        tone: 'mail',
+      },
+      {
+        label: '오늘 예정된 회의',
+        value: todayScheduledCount.value,
+        note: '오늘 예정된 회의',
+        to: '/app/meetings?tab=active',
+        icon: CalendarCheck2,
+        tone: 'schedule',
+      },
+      {
+        label: '최근 내 회의록',
+        value: minutesCount.value,
+        note: '최근 7일 기준',
+        to: '/app/minutes',
+        icon: FileText,
+        tone: 'minutes',
+      },
+      {
+        label: '현재 진행 중',
+        value: liveMeetings.value.length,
+        note: '진행 중인 회의',
+        to: '/app/meetings?tab=active',
+        icon: Users,
+        tone: 'live',
+      },
     ])
 
     async function load() {
@@ -191,17 +249,39 @@ export default defineComponent({
     }
     onMounted(load)
 
-    const openSelectedMeeting = () => {
-      if (selected.value?.status !== 'live') return
-      openMeetingWindow(selected.value.id, {
-        scheduledAt: selected.value.scheduledAtMs,
-        title: selected.value.title,
+    function timelineActionLabel(meeting) {
+      return meeting.status === 'ended' ? '회의록 보기' : '입장하기'
+    }
+
+    function timelineBadgeLabel(meeting) {
+      if (meeting.status === 'live') return '진행 중'
+      if (meeting.status === 'ended') return '종료'
+      return '예정'
+    }
+
+    function openMeetingFromTimeline(meeting) {
+      if (!meeting) return
+      if (meeting.status === 'ended') {
+        router.push(`/app/minutes/${meeting.id}`)
+        return
+      }
+      openMeetingWindow(meeting.id, {
+        scheduledAt: meeting.scheduledAtMs,
+        title: meeting.title,
       })
+    }
+
+    function toggleTimelineExpanded() {
+      if (!hasMoreTodays.value) return
+      timelineExpanded.value = !timelineExpanded.value
     }
 
     return {
       user: auth.user,
       todays,
+      visibleTodays,
+      hasMoreTodays,
+      timelineExpanded,
       selectedId,
       selected,
       kpis,
@@ -210,50 +290,104 @@ export default defineComponent({
       statusLabel,
       loadError,
       scheduleLoadError,
-      openSelectedMeeting,
+      timelineActionLabel,
+      timelineBadgeLabel,
+      openMeetingFromTimeline,
+      toggleTimelineExpanded,
     }
   },
   template: `
-    <section class="page">
-      <header class="page-header"><h1>안녕하세요, {{ user?.name }}님</h1><p>오늘의 회의 일정과 업무 현황을 한 눈에 확인하세요.</p></header>
+    <section class="page dashboard-page">
+      <header class="page-header dashboard-hero">
+        <div>
+          <h1>안녕하세요, {{ user?.name }}님 <span class="dashboard-wave">👋</span></h1>
+          <p>오늘도 효율적인 회의와 협업을 시작해볼까요?</p>
+        </div>
+      </header>
       <div class="metric-grid dashboard-metric-grid">
-        <RouterLink v-for="kpi in kpis" :key="kpi.label" :to="kpi.to" class="metric-card">
-          <span>{{ kpi.label }}</span><strong>{{ kpi.value }}</strong>
+        <RouterLink v-for="kpi in kpis" :key="kpi.label" :to="kpi.to" class="metric-card dashboard-metric-card">
+          <span :class="['dashboard-kpi-icon', kpi.tone]"><component :is="kpi.icon" :size="24" /></span>
+          <div class="dashboard-kpi-copy">
+            <span>{{ kpi.label }}</span>
+            <strong>{{ kpi.value }}</strong>
+            <em>{{ kpi.note }}</em>
+          </div>
         </RouterLink>
       </div>
-      <div class="split-grid">
+      <div class="split-grid dashboard-main-grid">
         <article class="card tall dashboard-timeline-card">
-          <div class="card-head"><div><h2>오늘의 회의 타임라인</h2><p>내가 참여·생성한 회의 · {{ todayLabel }}</p></div><RouterLink to="/app/meetings">전체 회의</RouterLink></div>
-          <button v-for="meeting in todays" :key="meeting.id" class="timeline-row" :class="{ selected: selectedId === meeting.id }" @click="selectedId = meeting.id">
-            <span class="timeline-time">{{ meeting.startClock }}</span>
-            <i :class="meeting.status"></i>
-            <div class="timeline-copy">
+          <div class="card-head">
+            <div class="dashboard-section-heading">
+              <span class="dashboard-section-icon"><Calendar :size="20" /></span>
+              <div><h2>오늘의 회의 타임라인</h2><p>{{ todayLabel }}</p></div>
+            </div>
+            <RouterLink to="/app/meetings" class="dashboard-card-button">전체 회의 보기</RouterLink>
+          </div>
+          <article
+            v-for="meeting in visibleTodays"
+            :key="meeting.id"
+            class="dashboard-timeline-entry"
+            :class="{ selected: selectedId === meeting.id }"
+            @click="selectedId = meeting.id"
+          >
+            <div class="dashboard-timeline-time">
+              <strong>{{ meeting.startClock }}</strong>
+              <span :class="['badge', meeting.status === 'ended' ? 'muted' : 'primary']">{{ timelineBadgeLabel(meeting) }}</span>
+            </div>
+            <div class="dashboard-timeline-line">
+              <i :class="meeting.status"></i>
+            </div>
+            <div class="dashboard-timeline-main">
               <strong>{{ meeting.title }}</strong>
-              <div class="timeline-meta">
-                <em>{{ meeting.room }}</em>
-                <small>{{ meeting.role === 'host' ? '주최' : '참석' }}</small>
+              <div class="dashboard-timeline-meta">
+                <span><CalendarDays :size="14" /> {{ meeting.room }}</span>
+                <span><Users :size="14" /> {{ meeting.attendeeLabel }}</span>
               </div>
             </div>
-          </button>
+            <div class="dashboard-timeline-actions">
+              <button class="ghost-button dashboard-timeline-action" type="button" @click.stop="openMeetingFromTimeline(meeting)">{{ timelineActionLabel(meeting) }}</button>
+              <button class="dashboard-timeline-more" type="button" @click.stop="selectedId = meeting.id"><MoreVertical :size="18" /></button>
+            </div>
+          </article>
           <p v-if="loadError" class="empty-text">회의 정보를 불러오지 못했습니다.</p>
-          <p v-else-if="!todays.length" class="empty-text">오늘 예정된 회의가 없습니다.</p>
+          <p v-else-if="!visibleTodays.length" class="empty-text">오늘 예정된 회의가 없습니다.</p>
+          <div v-if="hasMoreTodays" class="dashboard-timeline-footer">
+            <button type="button" class="dashboard-card-button dashboard-expand-button" @click="toggleTimelineExpanded">
+              {{ timelineExpanded ? '접기' : '내 회의 더 보기' }}
+            </button>
+          </div>
         </article>
-        <aside class="stack">
-          <article class="card"><div class="card-head"><h2>회의 상세</h2></div>
+        <aside class="stack dashboard-side-stack">
+          <article class="card dashboard-detail-card">
+            <div class="card-head">
+              <div class="dashboard-section-heading">
+                <span class="dashboard-section-icon"><CalendarDays :size="18" /></span>
+                <div><h2>회의 상세</h2></div>
+              </div>
+              <RouterLink to="/app/meetings" class="dashboard-card-button dashboard-more-button">더 보기</RouterLink>
+            </div>
             <template v-if="selected">
-              <dl class="detail-list">
-                <div><dt>주제</dt><dd>{{ selected.title }}</dd></div>
-                <div><dt>상태</dt><dd>{{ statusLabel[selected.status] }}</dd></div>
-                <div><dt>일시</dt><dd>{{ selected.dateKst }} · {{ selected.startClock }} ~ {{ selected.endClock }}</dd></div>
-                <div><dt>장소</dt><dd>{{ selected.room }}</dd></div>
-                <div><dt>참여자</dt><dd>{{ selected.attendees.join(', ') || '-' }} ({{ selected.attendeeCount }}명)</dd></div>
+              <div class="dashboard-detail-title-row">
+                <strong>{{ selected.title }}</strong>
+                <span class="badge primary">{{ selected.status === 'live' ? '진행 중' : '예정' }}</span>
+              </div>
+              <dl class="dashboard-detail-list">
+                <div><dt><Clock3 :size="15" /> 상태</dt><dd>{{ statusLabel[selected.status] }}</dd></div>
+                <div><dt><Calendar :size="15" /> 일시</dt><dd>{{ selected.dateKst }} {{ selected.startClock }} - {{ selected.endClock }}</dd></div>
+                <div><dt><MapPin :size="15" /> 장소</dt><dd>{{ selected.room }}</dd></div>
+                <div><dt><Users :size="15" /> 참석자</dt><dd>{{ selected.attendees.join(', ') || '-' }} ({{ selected.attendeeCount }}명)</dd></div>
               </dl>
-              <button v-if="selected.status === 'live'" class="primary-button small" @click="openSelectedMeeting">회의 입장</button>
             </template>
             <p v-else-if="loadError" class="empty-text">회의 정보를 불러오지 못했습니다.</p>
             <p v-else class="empty-text">예정된 회의가 없습니다.</p>
           </article>
-          <article class="card"><div class="card-head"><h2>개인 일정</h2></div>
+          <article class="card dashboard-schedule-card">
+            <div class="card-head">
+              <div class="dashboard-section-heading">
+                <span class="dashboard-section-icon"><Calendar :size="18" /></span>
+                <div><h2>개인 일정</h2></div>
+              </div>
+            </div>
             <ul v-if="personalSchedules.length" class="compact-list dashboard-schedule-list"><li v-for="event in personalSchedules" :key="event.id"><div class="dashboard-schedule-row"><div class="dashboard-schedule-main"><strong>{{ event.title }}</strong><span>{{ event.timeLabel }}</span></div><span :class="['badge', event.badgeTone]">{{ event.badgeLabel }}</span></div><small v-if="event.description" class="dashboard-schedule-note">{{ event.description }}</small></li></ul>
             <p v-else-if="scheduleLoadError" class="empty-text">일정 정보를 불러오지 못했습니다.</p>
             <p v-else class="empty-text">표시할 개인 일정이 없습니다.</p>

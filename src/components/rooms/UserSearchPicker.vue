@@ -1,7 +1,10 @@
 <template>
   <div class="member-picker">
-    <div v-if="warning" class="member-picker-warning">{{ warning }}</div>
-    <label>참석자 검색<input v-model="query" placeholder="이름, 부서, 이메일"></label>
+    <div v-if="warning" class="member-picker-warning" role="alert">
+      <span class="member-picker-warning__icon">!</span>
+      <span>{{ warning }}</span>
+    </div>
+    <label>참석자 검색<input v-model="query" placeholder="이름, 부서, 이메일로 검색하세요"></label>
     <div v-if="results.length" class="member-picker-results">
       <button
         v-for="user in results"
@@ -128,33 +131,56 @@ function formatUserMeta(user) {
 </script>
 
 <style scoped>
-/* '참석자 검색' 라벨 바로 위에 폼(참석자 영역) 너비로 뜨는 중앙 오버레이. 레이아웃을 밀지 않도록 absolute로 띄운다. */
 .member-picker {
-  position: relative;
+  display: grid;
+  gap: 10px;
+}
+.member-picker label {
+  display: grid;
+  gap: 8px;
+  color: var(--foreground);
+  font-size: 14px;
+  font-weight: 700;
+}
+.member-picker label input {
+  width: 100%;
+  min-height: 46px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: #fff;
+  padding: 12px 14px;
+  color: var(--foreground);
+  font: inherit;
 }
 .member-picker-warning {
-  position: absolute;
-  left: 50%;
-  bottom: calc(100% + 8px);
-  transform: translateX(-50%);
-  z-index: 2;
-  width: 100%;
-  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  gap: 10px;
   border: 1px solid #fdba74;
-  border-radius: 10px;
+  border-radius: 12px;
   background: #fff7ed;
   color: #c2410c;
-  padding: 10px 12px;
+  padding: 11px 13px;
   font-size: 13px;
   font-weight: 700;
-  text-align: center;
-  box-shadow: 0 12px 28px rgba(194, 65, 12, 0.16);
-  pointer-events: none;
+  line-height: 1.45;
+}
+.member-picker-warning__icon {
+  width: 22px;
+  height: 22px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  background: rgba(249, 115, 22, 0.12);
+  color: #ea580c;
+  font-size: 12px;
+  font-weight: 900;
+  flex-shrink: 0;
 }
 .member-picker-results {
   display: grid;
   gap: 8px;
-  margin-top: 8px;
 }
 .member-picker-result-button {
   display: grid;
@@ -174,7 +200,6 @@ function formatUserMeta(user) {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
-  margin-top: 10px;
 }
 .participant-chip {
   display: inline-flex;

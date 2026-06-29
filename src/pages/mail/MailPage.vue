@@ -13,35 +13,145 @@
   />
 
   <section v-else class="page mail-page-full">
-    <header class="page-header rooms-header">
-      <div><h1>내부 메일</h1><p>사내 사용자에게 메일을 보내고 받은 메일을 관리합니다.</p></div>
-      <button class="primary-button" @click="compose = true"><PenSquare :size="16" /> 새 메일 작성</button>
+    <header class="page-header mail-page-header">
+      <div>
+        <h1>내부 메일</h1>
+        <p>사내 구성원에게 메일을 보내고 받은 메일을 관리합니다.</p>
+      </div>
+      <ActionButton variant="primary" class="mail-compose-button" @click="compose = true">
+        <PenSquare :size="16" />
+        새 메일 작성
+      </ActionButton>
     </header>
 
-    <div class="mail-tabs">
-      <button v-for="item in tabs" :key="item.id" :class="{ active: tab === item.id }" @click="changeTab(item.id)">{{ item.label }}</button>
-      <AppSelect v-model="sort" size="sm"><option value="latest">최신순</option><option value="oldest">오래된 순</option></AppSelect>
-      <label class="toolbar-search mail-search">
-        <Search :size="15" />
-        <input v-model="q" placeholder="메일 검색">
-      </label>
-      <button type="button" class="secondary-button small" @click="loadMails"><RefreshCw :size="14" /> 새로고침</button>
-    </div>
+    <nav class="mailbox-tabs">
+      <button
+        v-for="item in tabs"
+        :key="item.id"
+        type="button"
+        class="mailbox-tab"
+        :class="{ active: tab === item.id }"
+        @click="changeTab(item.id)"
+      >
+        <component :is="item.icon" :size="18" />
+        <span>{{ item.label }}</span>
+        <em>{{ mailboxCounts[item.id] }}</em>
+      </button>
+    </nav>
 
-    <div class="mail-bulkbar">
-      <label><input type="checkbox" :checked="allChecked" @change="toggleAll"> 전체 선택</label>
-      <template v-if="selected.size > 0">
-        <span>{{ selected.size }}개 선택</span>
-        <button @click="backupSelected"><Archive :size="14" /> 백업하기</button>
-        <button class="danger-text" @click="deleteSelected"><Trash2 :size="14" /> {{ tab === 'trash' ? '영구 삭제' : '삭제' }}</button>
-      </template>
-      <em v-if="loading">불러오는 중...</em>
-      <em v-else>총 {{ totalElements }}건</em>
-    </div>
+    <section class="card mail-board-card">
+      <div class="mail-toolbar">
+        <div class="mail-toolbar-left">
+          <AppSelect v-model="sort" size="md" class="mail-sort-select">
+            <option value="latest">최신순</option>
+            <option value="oldest">오래된 순</option>
+          </AppSelect>
+          <label class="mail-toolbar-search">
+            <Search :size="18" />
+            <input v-model="q" placeholder="메일 검색">
+          </label>
+        </div>
 
-    <div v-if="errorMessage" class="error-box">{{ errorMessage }}</div>
-    <MailList :items="pageItems" :selected-ids="selected" @open="openMail" @toggle="toggleOne" />
-    <Pagination v-model="pageNo" :total-pages="totalPages" />
+        <div class="mail-toolbar-right">
+          <ActionButton variant="secondary" @click="loadMails">
+            <RefreshCw :size="15" />
+            새로고침
+          </ActionButton>
+          <div v-if="selected.size > 0" class="mail-selection-actions">
+            <span class="mail-selection-summary">선택 {{ selected.size }}건</span>
+            <AppSelect v-model="bulkAction" size="md" class="mail-action-select" @change="applyBulkAction">
+              <option value="">작업 선택</option>
+              <option value="mark-read">읽음 처리</option>
+              <option value="backup">백업하기</option>
+              <option :value="tab === 'trash' ? 'permanent-delete' : 'delete'">{{ tab === 'trash' ? '영구 삭제' : '삭제' }}</option>
+            </AppSelect>
+          </div>
+        </div>
+      </div>
+
+      <div v-if="errorMessage" class="error-box mail-error-box">{{ errorMessage }}</div>
+
+      <div class="mail-list-table">
+        <div class="mail-list-head">
+          <label class="mail-check-cell">
+            <input type="checkbox" :checked="allChecked" @change="toggleAll">
+          </label>
+          <span>보낸 사람</span>
+          <span>제목</span>
+          <button type="button" class="mail-time-sort" @click="toggleSortDirection">
+            받은 시간
+            <ArrowDown :size="15" />
+          </button>
+        </div>
+
+        <button
+          v-for="mail in pageItems"
+          :key="mail.mailId"
+          type="button"
+          class="mail-list-row"
+          :class="{ unread: !mail.read }"
+          @click="openMail(mail)"
+        >
+          <span class="mail-list-cell mail-check-cell" @click.stop>
+            <input type="checkbox" :checked="selected.has(mail.mailId)" @change="toggleOne(mail.mailId)">
+          </span>
+
+          <span class="mail-list-cell mail-sender-cell">
+            <span class="mail-avatar">{{ senderInitial(mail) }}</span>
+            <span class="mail-sender-copy">
+              <strong>{{ mail.senderName || mail.senderUserId }}</strong>
+              <small>{{ senderMetaLabel(mail) }}</small>
+            </span>
+          </span>
+
+          <span class="mail-list-cell mail-subject-cell">
+            <strong>
+              {{ mail.subject || '(제목 없음)' }}
+              <span v-if="mail.hasAttachments || mail.attachmentCount" class="mail-attachment-indicator">
+                <Paperclip :size="13" />
+              </span>
+            </strong>
+            <small>{{ mail.previewText || '내용 미리보기가 없습니다.' }}</small>
+          </span>
+
+          <span class="mail-list-cell mail-time-cell">
+            <time>{{ mail.displayDateShort }}</time>
+            <i class="mail-read-dot" :class="{ unread: !mail.read }"></i>
+          </span>
+        </button>
+
+        <div v-if="!pageItems.length && !loading" class="empty-state mail-empty-state">메일이 없습니다.</div>
+        <div v-if="loading" class="empty-state mail-empty-state">메일을 불러오는 중입니다.</div>
+      </div>
+
+      <div class="mail-board-footer">
+        <span>전체 {{ totalElements }}개</span>
+
+        <div class="mail-pagination">
+          <button type="button" :disabled="pageNo <= 1" @click="pageNo = Math.max(1, pageNo - 1)">
+            <ChevronLeft :size="16" />
+          </button>
+          <button
+            v-for="page in visiblePageNumbers"
+            :key="page"
+            type="button"
+            :class="{ active: page === pageNo }"
+            @click="pageNo = page"
+          >
+            {{ page }}
+          </button>
+          <button type="button" :disabled="pageNo >= totalPages" @click="pageNo = Math.min(totalPages, pageNo + 1)">
+            <ChevronRight :size="16" />
+          </button>
+        </div>
+
+        <AppSelect v-model.number="pageSize" size="md" class="mail-page-size-select">
+          <option :value="10">10개씩 보기</option>
+          <option :value="20">20개씩 보기</option>
+          <option :value="50">50개씩 보기</option>
+        </AppSelect>
+      </div>
+    </section>
   </section>
   <ComposeModal
     v-if="compose"
@@ -54,23 +164,31 @@
     @send="sendDraft"
   />
   <ConfirmDialog v-if="confirmDialog" v-bind="confirmDialog" @cancel="cancelConfirm" @confirm="acceptConfirm" />
-  <div class="toast-stack" aria-live="polite">
-    <div v-for="toast in toasts" :key="toast.id" class="toast-card">
-      <strong>{{ toast.title }}</strong>
-      <span>{{ toast.message }}</span>
-    </div>
-  </div>
+  <AppToastStack :items="toasts" @dismiss="dismissToast" />
 </template>
 
 <script setup>
-import AppSelect from '../../components/common/AppSelect.vue'
 import { computed, onMounted, ref, watch } from 'vue'
-import { Archive, PenSquare, RefreshCw, Search, Trash2 } from '@lucide/vue'
-import Pagination from '../../components/common/Pagination.vue'
+import { useRoute, useRouter } from 'vue-router'
+import AppSelect from '../../components/common/AppSelect.vue'
+import ActionButton from '../../components/common/ActionButton.vue'
+import AppToastStack from '../../components/common/AppToastStack.vue'
+import {
+  Archive,
+  ArrowDown,
+  ChevronLeft,
+  ChevronRight,
+  Inbox,
+  PenSquare,
+  Paperclip,
+  RefreshCw,
+  Search,
+  Send,
+  Trash2,
+} from '@lucide/vue'
 import ConfirmDialog from '../../components/common/ConfirmDialog.vue'
 import ComposeModal from '../../components/mail/ComposeModal.vue'
 import MailDetail from '../../components/mail/MailDetail.vue'
-import MailList from '../../components/mail/MailList.vue'
 import {
   backupMails,
   changeMailRead,
@@ -83,11 +201,14 @@ import {
   searchMails,
   sendMail,
 } from '../../lib/mail'
+import { extractTiptapText } from '../../lib/minutes-content.js'
 import { getUserSummary, searchUsers } from '../../lib/users'
 import { formatKstDateTime } from '../../utils/dateTime'
 import { useConfirmDialog } from '../../composables/useConfirmDialog'
 import { useAuthStore } from '../../stores/auth'
 
+const route = useRoute()
+const router = useRouter()
 const auth = useAuthStore()
 const selfRecipient = computed(() => auth.user ? {
   ...auth.user,
@@ -103,12 +224,13 @@ const mailTemplates = [
 ]
 
 const tabs = [
-  { id: 'inbox', label: '받은 메일함' },
-  { id: 'sent', label: '보낸 메일함' },
-  { id: 'trash', label: '휴지통' },
+  { id: 'inbox', label: '받은 메일함', icon: Inbox },
+  { id: 'sent', label: '보낸 메일함', icon: Send },
+  { id: 'trash', label: '휴지통', icon: Trash2 },
 ]
 
 const mailList = ref([])
+const mailboxCounts = ref({ inbox: 0, sent: 0, trash: 0 })
 const tab = ref('inbox')
 const open = ref(null)
 const compose = ref(false)
@@ -120,11 +242,12 @@ const pageNo = ref(1)
 const totalPages = ref(1)
 const totalElements = ref(0)
 const selected = ref(new Set())
+const bulkAction = ref('')
 const loading = ref(false)
 const errorMessage = ref('')
 const toasts = ref([])
 const { confirmDialog, requestConfirm, cancelConfirm, acceptConfirm } = useConfirmDialog()
-const pageSize = 15
+const pageSize = ref(10)
 
 const pageItems = computed(() => {
   const copied = [...mailList.value]
@@ -133,19 +256,38 @@ const pageItems = computed(() => {
     : String(a.requestedAt || '').localeCompare(String(b.requestedAt || '')))
   return copied
 })
+const visiblePageNumbers = computed(() => {
+  const total = totalPages.value
+  const current = pageNo.value
+  const start = Math.max(1, current - 2)
+  const end = Math.min(total, start + 4)
+  return Array.from({ length: end - start + 1 }, (_, index) => start + index)
+})
 const allChecked = computed(() => pageItems.value.length > 0 && pageItems.value.every((mail) => selected.value.has(mail.mailId)))
 
-watch(pageNo, () => loadMails())
 let searchTimer = null
 watch(q, () => {
   clearTimeout(searchTimer)
   searchTimer = setTimeout(() => {
     pageNo.value = 1
-    loadMails()
+    syncQueryToRoute()
   }, 250)
 })
 
+watch(pageNo, () => loadMails())
+watch(pageSize, () => {
+  pageNo.value = 1
+  loadMails()
+})
+watch(() => route.query.q, () => {
+  syncQueryFromRoute()
+  pageNo.value = 1
+  loadMails()
+})
+
 onMounted(async () => {
+  syncQueryFromRoute()
+  await refreshMailboxCounts()
   await loadMails()
 })
 
@@ -153,13 +295,14 @@ async function loadMails() {
   loading.value = true
   errorMessage.value = ''
   selected.value = new Set()
+  bulkAction.value = ''
   try {
     const data = q.value.trim()
-      ? await searchMails(q.value.trim(), { page: pageNo.value, size: pageSize })
-      : await listMails(tab.value, { page: pageNo.value, size: pageSize })
+      ? await searchMails(q.value.trim(), { page: pageNo.value, size: pageSize.value })
+      : await listMails(tab.value, { page: pageNo.value, size: pageSize.value })
     await applyMailPage(data)
   } catch (error) {
-    await applyMailPage({ items: [], page: 1, size: pageSize, totalElements: 0, totalPages: 1 })
+    await applyMailPage({ items: [], page: 1, size: pageSize.value, totalElements: 0, totalPages: 1 })
     errorMessage.value = error?.message || '메일을 불러오지 못했습니다.'
   } finally {
     loading.value = false
@@ -169,8 +312,25 @@ async function loadMails() {
 async function applyMailPage(data) {
   const items = data.items || []
   mailList.value = await enrichMails(items)
-  totalPages.value = Math.max(1, data.totalPages || Math.ceil(mailList.value.length / pageSize) || 1)
+  totalPages.value = Math.max(1, data.totalPages || Math.ceil(mailList.value.length / pageSize.value) || 1)
   totalElements.value = data.totalElements || mailList.value.length
+}
+
+async function refreshMailboxCounts() {
+  try {
+    const [inbox, sent, trash] = await Promise.all([
+      listMails('inbox', { page: 1, size: 1 }),
+      listMails('sent', { page: 1, size: 1 }),
+      listMails('trash', { page: 1, size: 1 }),
+    ])
+    mailboxCounts.value = {
+      inbox: inbox?.totalElements || 0,
+      sent: sent?.totalElements || 0,
+      trash: trash?.totalElements || 0,
+    }
+  } catch {
+    mailboxCounts.value = { inbox: 0, sent: 0, trash: 0 }
+  }
 }
 
 async function enrichMails(items) {
@@ -196,13 +356,16 @@ async function searchRecipientUsers(options) {
 }
 
 function normalizeMail(mail, sender) {
+  const previewText = extractMailText(mail.body).replace(/\s+/g, ' ').trim()
   return {
     ...mail,
     senderName: sender?.name || mail.senderName || '',
     senderMeta: [sender?.department, sender?.team, sender?.position].filter(Boolean).join(' · ') || mail.senderMeta || '',
     senderEmail: sender?.email || mail.senderEmail || '',
+    previewText,
     displayDate: mail.requestedAt ? formatKstDateTime(mail.requestedAt) : '',
     displayDateTime: mail.requestedAt ? formatKstDateTime(mail.requestedAt, { second: '2-digit' }) : '',
+    displayDateShort: formatMailListDate(mail.requestedAt),
   }
 }
 
@@ -211,8 +374,24 @@ function changeTab(value) {
   selected.value = new Set()
   pageNo.value = 1
   open.value = null
-  q.value = ''
   loadMails()
+}
+
+function syncQueryFromRoute() {
+  const nextQuery = typeof route.query.q === 'string' ? route.query.q : ''
+  if (q.value !== nextQuery) {
+    q.value = nextQuery
+  }
+}
+
+function syncQueryToRoute() {
+  const nextQuery = q.value.trim()
+  const currentQuery = typeof route.query.q === 'string' ? route.query.q : ''
+  if (nextQuery === currentQuery) return
+  router.replace({
+    path: '/app/mail',
+    query: nextQuery ? { q: nextQuery } : {},
+  })
 }
 
 function toggleAll() {
@@ -226,6 +405,47 @@ function toggleOne(id) {
   const next = new Set(selected.value)
   next.has(id) ? next.delete(id) : next.add(id)
   selected.value = next
+}
+
+function senderInitial(mail) {
+  return String(mail.senderName || mail.senderUserId || '?').trim().slice(0, 1)
+}
+
+function senderMetaLabel(mail) {
+  return mail.senderMeta || '사내 사용자'
+}
+
+function formatMailListDate(instant) {
+  if (!instant) return '-'
+  return formatKstDateTime(instant)
+}
+
+function toggleSortDirection() {
+  sort.value = sort.value === 'latest' ? 'oldest' : 'latest'
+}
+
+async function applyBulkAction() {
+  if (!bulkAction.value || selected.value.size === 0) {
+    bulkAction.value = ''
+    return
+  }
+
+  if (bulkAction.value === 'mark-read') {
+    await Promise.all([...selected.value].map((id) => changeMailRead(id, true)))
+    showToast('읽음 처리 완료', `${selected.value.size}개의 메일을 읽음 처리했어요.`)
+  }
+
+  if (bulkAction.value === 'backup') {
+    await backupSelected()
+  }
+
+  if (bulkAction.value === 'delete' || bulkAction.value === 'permanent-delete') {
+    await deleteSelected()
+  }
+
+  bulkAction.value = ''
+  await refreshMailboxCounts()
+  await loadMails()
 }
 
 async function openMail(mail) {
@@ -302,6 +522,7 @@ async function deleteSelected() {
   if (!confirmed) return
   const ids = [...selected.value]
   await Promise.all(ids.map((id) => tab.value === 'trash' ? permanentlyDeleteMail(id) : moveMailToTrash(id)))
+  await refreshMailboxCounts()
   await loadMails()
   showToast('삭제 완료', `${ids.length}개의 메일을 정리했어요.`)
 }
@@ -319,6 +540,7 @@ async function deleteOne(mailId) {
   if (open.value?.trashed || tab.value === 'trash') await permanentlyDeleteMail(mailId)
   else await moveMailToTrash(mailId)
   open.value = null
+  await refreshMailboxCounts()
   await loadMails()
   showToast('삭제 완료', '선택한 메일을 정리했어요.')
 }
@@ -326,6 +548,7 @@ async function deleteOne(mailId) {
 async function restoreOne(mailId) {
   await restoreMail(mailId)
   open.value = null
+  await refreshMailboxCounts()
   await loadMails()
 }
 
@@ -347,6 +570,7 @@ async function sendDraft(draft) {
     closeCompose()
     tab.value = 'sent'
     pageNo.value = 1
+    await refreshMailboxCounts()
     await loadMails()
     showToast('메일 전송 완료', '메일을 보냈습니다.')
   } catch (error) {
@@ -358,7 +582,7 @@ async function sendDraft(draft) {
 function startReply(mail) {
   composeDraft.value = {
     subject: mail.subject?.startsWith('Re:') ? mail.subject : `Re: ${mail.subject || ''}`,
-    body: `\n\n----- 원본 메일 -----\n보낸 사람: ${mail.senderName || mail.senderUserId || '-'}\n제목: ${mail.subject || '-'}\n\n${mail.body || ''}`,
+    body: buildQuotedMailBody('원본 메일', mail),
   }
   composeRecipients.value = [{
     userId: mail.senderUserId,
@@ -373,7 +597,7 @@ function startReply(mail) {
 function startForward(mail) {
   composeDraft.value = {
     subject: mail.subject?.startsWith('Fwd:') ? mail.subject : `Fwd: ${mail.subject || ''}`,
-    body: `\n\n----- 전달 메일 -----\n보낸 사람: ${mail.senderName || mail.senderUserId || '-'}\n제목: ${mail.subject || '-'}\n\n${mail.body || ''}`,
+    body: buildQuotedMailBody('전달 메일', mail),
     attachments: mail.attachments || mail.attachmentSummaries || [],
   }
   composeRecipients.value = []
@@ -384,6 +608,15 @@ function closeCompose() {
   compose.value = false
   composeDraft.value = {}
   composeRecipients.value = []
+}
+
+function buildQuotedMailBody(label, mail) {
+  const bodyText = extractMailText(mail.body)
+  return `\n\n----- ${label} -----\n보낸 사람: ${mail.senderName || mail.senderUserId || '-'}\n제목: ${mail.subject || '-'}\n\n${bodyText}`
+}
+
+function extractMailText(value) {
+  return extractTiptapText(value) || String(value || '')
 }
 
 function printMail() {
@@ -426,4 +659,421 @@ function showToast(title, message) {
   }, 2600)
 }
 
+function dismissToast(id) {
+  toasts.value = toasts.value.filter((item) => item.id !== id)
+}
+
 </script>
+
+<style scoped>
+.mail-page-full {
+  max-width: 1320px;
+}
+
+.mail-page-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 20px;
+  margin-bottom: 24px;
+}
+
+.mail-compose-button {
+  min-width: 156px;
+  min-height: 46px;
+  border-radius: 14px;
+}
+
+.mailbox-tabs {
+  display: flex;
+  align-items: center;
+  gap: 22px;
+  border-bottom: 1px solid #e9edf5;
+  margin-bottom: 22px;
+  padding: 0 2px 14px;
+}
+
+.mailbox-tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  background: transparent;
+  padding: 0 12px 14px;
+  color: #69758c;
+  font-size: 15px;
+  font-weight: 800;
+}
+
+.mailbox-tab em {
+  min-width: 26px;
+  height: 26px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  background: #f3f6fb;
+  color: inherit;
+  font-style: normal;
+  font-size: 13px;
+}
+
+.mailbox-tab.active {
+  border-bottom-color: var(--primary);
+  color: var(--primary);
+}
+
+.mailbox-tab.active em {
+  background: #fff1e8;
+}
+
+.mail-board-card {
+  border-radius: 22px;
+  padding: 0;
+  overflow: hidden;
+}
+
+.mail-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 20px;
+  border-bottom: 1px solid #edf1f7;
+}
+
+.mail-toolbar-left,
+.mail-toolbar-right {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.mail-selection-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.mail-selection-summary {
+  color: #69758c;
+  font-size: 13px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.mail-sort-select {
+  width: 142px;
+}
+
+.mail-toolbar-search {
+  width: min(392px, 100%);
+  min-width: 280px;
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.mail-toolbar-search svg {
+  position: absolute;
+  left: 14px;
+  color: var(--muted-foreground);
+  pointer-events: none;
+}
+
+.mail-toolbar-search input {
+  width: 100%;
+  height: 44px;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: white;
+  padding: 0 14px 0 42px;
+  font: inherit;
+}
+
+.mail-toolbar-search input:focus {
+  outline: none;
+  border-color: rgba(243, 115, 33, 0.5);
+  box-shadow: 0 0 0 3px rgba(243, 115, 33, 0.12);
+}
+
+.mail-action-select {
+  width: 158px;
+}
+
+.mail-error-box {
+  margin: 16px 20px 0;
+}
+
+.mail-list-table {
+  display: grid;
+}
+
+.mail-list-head,
+.mail-list-row {
+  display: grid;
+  grid-template-columns: 56px minmax(220px, 320px) minmax(0, 1fr) 170px;
+  align-items: center;
+  gap: 10px;
+  padding: 0 20px;
+}
+
+.mail-list-head {
+  min-height: 52px;
+  color: #69758c;
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.mail-list-row {
+  min-height: 66px;
+  border-top: 1px solid #edf1f7;
+  background: white;
+  text-align: left;
+  border-left: 0;
+  border-right: 0;
+  border-bottom: 0;
+  outline: none;
+  appearance: none;
+}
+
+.mail-list-row:hover {
+  background: #fbfcfe;
+}
+
+.mail-list-row:focus,
+.mail-list-row:focus-visible {
+  outline: none;
+  box-shadow: none;
+}
+
+.mail-list-row.unread {
+  background: #fffdfa;
+}
+
+.mail-check-cell {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.mail-check-cell input {
+  width: 18px;
+  height: 18px;
+  accent-color: var(--primary);
+}
+
+.mail-sender-cell {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+}
+
+.mail-avatar {
+  width: 30px;
+  height: 30px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #fff1e8, #fff9f4);
+  color: #2d3748;
+  font-size: 14px;
+  font-weight: 800;
+}
+
+.mail-sender-copy,
+.mail-subject-cell {
+  min-width: 0;
+  display: grid;
+  gap: 2px;
+}
+
+.mail-sender-copy strong,
+.mail-subject-cell strong {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.mail-sender-copy strong {
+  font-size: 14px;
+}
+
+.mail-sender-copy small,
+.mail-subject-cell small {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--muted-foreground);
+  font-size: 13px;
+}
+
+.mail-subject-cell strong {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 15px;
+}
+
+.mail-list-row.unread .mail-subject-cell strong {
+  font-weight: 900;
+}
+
+.mail-attachment-indicator {
+  display: inline-flex;
+  align-items: center;
+  color: #94a3b8;
+}
+
+.mail-time-cell {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 12px;
+  color: #69758c;
+  font-size: 13px;
+}
+
+.mail-time-cell time {
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
+.mail-read-dot {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: #d6dce7;
+}
+
+.mail-read-dot.unread {
+  background: var(--primary);
+}
+
+.mail-time-sort {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 6px;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+}
+
+.mail-empty-state {
+  padding: 48px 20px;
+}
+
+.mail-board-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  border-top: 1px solid #edf1f7;
+  padding: 16px 20px;
+  color: #69758c;
+  font-size: 14px;
+}
+
+.mail-pagination {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.mail-pagination button {
+  width: 36px;
+  height: 36px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: white;
+  color: var(--foreground);
+  font-size: 14px;
+  font-weight: 800;
+}
+
+.mail-pagination button.active {
+  border-color: var(--primary);
+  background: var(--primary);
+  color: white;
+}
+
+.mail-pagination button:disabled {
+  opacity: 0.45;
+}
+
+.mail-page-size-select {
+  width: 132px;
+}
+
+@media (max-width: 1100px) {
+  .mail-toolbar {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .mail-toolbar-left,
+  .mail-toolbar-right {
+    flex-wrap: wrap;
+  }
+
+  .mail-toolbar-search {
+    min-width: 0;
+    width: 100%;
+  }
+
+  .mail-list-head,
+  .mail-list-row {
+    grid-template-columns: 56px minmax(0, 1fr) 120px;
+  }
+
+  .mail-sender-cell {
+    grid-column: 2;
+  }
+
+  .mail-subject-cell {
+    grid-column: 2;
+  }
+}
+
+@media (max-width: 760px) {
+  .mail-page-header,
+  .mail-board-footer {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .mailbox-tabs {
+    overflow-x: auto;
+    padding-bottom: 10px;
+  }
+
+  .mail-list-head {
+    display: none;
+  }
+
+  .mail-list-row {
+    grid-template-columns: 32px minmax(0, 1fr);
+    gap: 10px;
+    padding: 14px 16px;
+  }
+
+  .mail-time-cell {
+    grid-column: 2;
+    justify-content: flex-start;
+  }
+
+  .mail-pagination {
+    justify-content: center;
+  }
+}
+</style>

@@ -1,14 +1,15 @@
 <template>
-  <div class="room-row" :class="{ restricted: !room.isAvailable, selected }">
+  <div class="room-row" :class="{ restricted: !room.isAvailable, selected, compact: compactMeta }">
     <div class="room-row-meta">
       <strong>{{ room.name }}</strong>
-      <small>{{ room.siteName }} · {{ room.buildingName }} · {{ room.floor === null ? '-' : room.floor + '층' }} · {{ room.capacity }}명</small>
+      <small><Users :size="14" /> 1~{{ room.capacity }}명</small>
+      <small v-if="!compactMeta"><MapPin :size="14" /> {{ room.siteName }} {{ room.buildingName }}{{ room.floor === null ? '' : ' ' + room.floor + '층' }}</small>
       <em v-if="!room.isAvailable" class="badge warning">사용 제한</em>
       <em v-else-if="showAvailability" class="badge" :class="available ? 'success' : 'danger'">{{ available ? '가능' : '불가' }}</em>
     </div>
     <div ref="trackEl" class="room-track" @mousedown="onTrackMouseDown">
       <span v-for="hour in timelineHours" :key="hour" class="hour-line"></span>
-      <span v-if="isToday" class="now-marker" :style="nowMarkerStyle()"><em>현재</em></span>
+      <span v-if="isToday" class="now-marker" :style="nowMarkerStyle()"><em v-if="showNowLabel">{{ nowLabel }}</em></span>
       <span v-if="dragRange" class="drag-selection" :class="{ invalid: dragInvalid }" :style="dragStyle"></span>
       <span
         v-if="displayPreviewBlock"
@@ -45,7 +46,16 @@
         class="room-track-empty"
         :class="{ restricted: !room.isAvailable }"
       >
-        {{ room.isAvailable ? '예약 없음' : '사용 제한' }}
+        <template v-if="room.isAvailable">
+          <CalendarDays :size="54" />
+          <strong>예약 없음</strong>
+          <small>선택한 날짜에 예약된 회의가 없습니다.</small>
+        </template>
+        <template v-else>
+          <CalendarDays :size="54" />
+          <strong>사용 제한</strong>
+          <small>현재 이 회의실은 예약할 수 없습니다.</small>
+        </template>
       </span>
     </div>
   </div>
@@ -53,6 +63,7 @@
 
 <script setup>
 import { computed, onBeforeUnmount, ref } from 'vue'
+import { CalendarDays, MapPin, Users } from '@lucide/vue'
 import ReservationBlock from './ReservationBlock.vue'
 import { blockStyle, nowMarkerStyle, slotRangeFromOffsets, slotTimeFromOffset, timelineHours } from '../../utils/timeline'
 import { addMinutes, kstToUtcIso, overlaps, todayKst } from '../../utils/dateTime'
@@ -65,8 +76,11 @@ const props = defineProps({
   selectedRange: { type: Object, default: null },
   previewBlock: { type: Object, default: null },
   showEmptyLabel: { type: Boolean, default: true },
+  showNowLabel: { type: Boolean, default: true },
+  showNowTime: { type: Boolean, default: false },
   selected: { type: Boolean, default: false },
   selectable: { type: Boolean, default: false },
+  compactMeta: { type: Boolean, default: false },
   // 타임라인이 보고 있는 날짜(KST 'YYYY-MM-DD'). 과거 판정에 날짜를 포함하기 위해 사용.
   date: { type: String, default: '' },
 })
@@ -75,6 +89,15 @@ const emit = defineEmits(['block-click', 'track-click', 'track-drag', 'select', 
 // '현재' 세로 마커는 보고 있는 날짜가 오늘(KST)일 때만. 다른 날짜를 봐도 현재 시각 위치에 뜨던 버그 방지.
 // date 미지정 시(타임라인이 날짜 개념 없이 쓰이는 경우)는 기존처럼 표시한다.
 const isToday = computed(() => !props.date || props.date === todayKst())
+const nowLabel = computed(() => {
+  if (!props.showNowTime) return '현재'
+  return new Intl.DateTimeFormat('en-GB', {
+    timeZone: 'Asia/Seoul',
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false,
+  }).format(new Date())
+})
 
 // 폼이 고른 시간대(selectedRange)와 겹치는 예약이 없으면 '가능'. start/end만 바뀌어도 즉시 재계산된다.
 const available = computed(() => {
@@ -252,16 +275,75 @@ onBeforeUnmount(() => {
   left: 0;
   right: 0;
   top: 50%;
+  display: grid;
+  justify-items: center;
+  gap: 10px;
   transform: translateY(-50%);
   text-align: center;
   color: var(--muted-foreground);
-  font-size: 16px;
+  font-size: 15px;
   font-weight: 500;
+}
+.room-track-empty strong {
+  color: var(--foreground);
+  font-size: 18px;
+  font-weight: 800;
+}
+.room-track-empty small {
+  font-size: 14px;
 }
 /* 사용 제한 회의실 트랙 안내 */
 .room-track-empty.restricted {
-  color: var(--warning);
+  color: #64748b;
   font-weight: 600;
+}
+.room-track-empty.restricted strong,
+.room-track-empty.restricted small {
+  color: #64748b;
+}
+.room-row.compact {
+  border-bottom: 1px solid var(--border);
+}
+.room-row.compact .room-row-meta {
+  min-height: 56px;
+  gap: 4px;
+  padding: 12px 12px 10px;
+}
+.room-row.compact .room-row-meta strong {
+  font-size: 18px;
+  line-height: 1.25;
+}
+.room-row.compact .room-row-meta small {
+  font-size: 13px;
+}
+.room-row.compact .room-track {
+  min-height: 56px;
+}
+.room-row.compact .now-marker em {
+  display: none;
+}
+.room-row.compact .room-track-empty {
+  gap: 6px;
+}
+.room-row.compact .room-track-empty :deep(svg) {
+  width: 32px;
+  height: 32px;
+}
+.room-row.compact :deep(.reservation-block) {
+  top: 8px;
+  min-height: 40px;
+  border-radius: 8px;
+  padding: 6px 8px;
+  box-shadow: none;
+}
+.room-row.compact :deep(.reservation-block strong) {
+  font-size: 11px;
+}
+.room-row.compact :deep(.reservation-block span) {
+  font-size: 10px;
+}
+.room-row.compact :deep(.reservation-block small) {
+  display: none;
 }
 /* 드래그 중 텍스트 선택 방지 */
 .room-track {

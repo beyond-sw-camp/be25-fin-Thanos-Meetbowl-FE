@@ -2,11 +2,10 @@
   <section class="page mail-detail-page">
     <div class="mail-detail-toolbar">
       <button class="mail-back-button" type="button" aria-label="목록으로 돌아가기" @click="$emit('back')"><ArrowLeft :size="16" /></button>
-      <span class="mail-toolbar-separator" aria-hidden="true"></span>
+      <button type="button" @click="$emit('reply', mail)"><Reply :size="16" /> 답장</button>
       <button type="button" @click="$emit('backup', mail.mailId)"><Archive :size="16" /> 백업</button>
-      <button v-if="mail.trashed" type="button" @click="$emit('restore', mail.mailId)"><RotateCcw :size="16" /> 복구</button>
       <button type="button" @click="$emit('delete', mail.mailId)"><Trash2 :size="16" /> {{ mail.trashed ? '영구 삭제' : '삭제' }}</button>
-      <span class="mail-toolbar-separator" aria-hidden="true"></span>
+      <button v-if="mail.trashed" type="button" @click="$emit('restore', mail.mailId)"><RotateCcw :size="16" /> 복구</button>
       <button type="button" @click="$emit('print')"><Printer :size="16" /> 인쇄</button>
     </div>
     <article class="card mail-message-card">
@@ -38,7 +37,9 @@
           <dd><time class="mail-date-text">{{ mail.displayDateTime || mail.displayDate }}</time></dd>
         </div>
       </dl>
-      <pre class="mail-body-text">{{ mail.body }}</pre>
+      <div class="mail-body-rich">
+        <MinutesEditor :modelValue="mail.body" readonly />
+      </div>
       <div v-if="attachmentCount" class="mail-attachments">
         <strong>첨부파일 {{ attachmentCount }}개</strong>
         <div v-if="attachments.length" class="mail-attachments-list">
@@ -50,7 +51,6 @@
         <p v-if="!attachments.length">첨부파일 메타데이터가 아직 상세 응답에 포함되지 않았습니다.</p>
       </div>
       <div class="mail-message-actions">
-        <button class="secondary-button" type="button" @click="$emit('reply', mail)"><Reply :size="16" /> 답장</button>
         <button class="secondary-button" type="button" @click="$emit('forward', mail)"><Forward :size="16" /> 전달</button>
       </div>
     </article>
@@ -60,6 +60,7 @@
 <script setup>
 import { computed } from 'vue'
 import { Archive, ArrowLeft, Forward, Paperclip, Printer, Reply, RotateCcw, Trash2 } from '@lucide/vue'
+import MinutesEditor from '../minutes/MinutesEditor.vue'
 
 const props = defineProps({
   mail: { type: Object, required: true },

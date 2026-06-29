@@ -14,7 +14,11 @@ export function isValidTiptapDocument(content) {
 
 export function parseTiptapDocument(content) {
   const document = parseContent(content)
-  return isValidTiptapDocument(document) ? document : emptyTiptapDocument()
+  if (isValidTiptapDocument(document)) return document
+  if (typeof content === 'string' && content.trim()) {
+    return textTiptapDocument(content.trim())
+  }
+  return emptyTiptapDocument()
 }
 
 export function stringifyTiptapDocument(document) {
@@ -28,6 +32,23 @@ export function emptyTiptapDocument() {
       {
         type: 'paragraph',
         content: [],
+      },
+    ],
+  }
+}
+
+function textTiptapDocument(text) {
+  return {
+    type: 'doc',
+    content: [
+      {
+        type: 'paragraph',
+        content: [
+          {
+            type: 'text',
+            text,
+          },
+        ],
       },
     ],
   }
