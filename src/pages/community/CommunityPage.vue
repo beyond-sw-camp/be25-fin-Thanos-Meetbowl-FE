@@ -1,6 +1,7 @@
 <script>
 import { defineComponent, onMounted, ref, watch } from 'vue'
 import AppSelect from '../../components/common/AppSelect.vue'
+import MinutesEditor from '../../components/minutes/MinutesEditor.vue'
 import {
   COMMUNITY_CATEGORIES,
   createComment,
@@ -16,11 +17,12 @@ import {
   updateComment,
   updatePost,
 } from '../../lib/community'
+import { emptyTiptapDocument, extractTiptapText, stringifyTiptapDocument } from '../../lib/minutes-content.js'
 import { utcToKstClock, utcToKstDate } from '../../utils/dateTime'
 import { Eye, Heart, MessageSquare } from '@lucide/vue'
 
 export default defineComponent({
-  components: { AppSelect, Eye, Heart, MessageSquare },
+  components: { AppSelect, MinutesEditor, Eye, Heart, MessageSquare },
   setup() {
     // '전체'는 필터 미적용, 'Hot'은 카테고리가 아니라 hot=true(좋아요 N개 이상) 모드. 나머지는 백엔드 enum 라벨.
     const categories = ['전체', ...COMMUNITY_CATEGORIES.map((item) => item.label), 'Hot']
@@ -44,13 +46,31 @@ export default defineComponent({
     const commentText = ref('')
     const editingCommentId = ref(null)
     const editText = ref('')
-    const draft = ref({ title: '', content: '', category: '자유' }) // 새 글 작성 모달용
+    const draft = ref({ title: '', content: createEmptyRichContent(), category: '자유' }) // 새 글 작성 모달용
     const editingPost = ref(false) // 상세에서 인라인 수정 중 여부
     const postDraft = ref({ title: '', content: '', category: '자유' }) // 인라인 수정 입력값
 
     function formatDateTime(instant) {
       if (!instant) return ''
       return `${utcToKstDate(instant)} ${utcToKstClock(instant)}`
+    }
+
+    function createEmptyRichContent() {
+      return stringifyTiptapDocument(emptyTiptapDocument())
+    }
+
+    function getRichText(value) {
+      return extractTiptapText(value).replace(/\s+/g, ' ').trim()
+    }
+
+    function summarizeRichText(value, maxLength = 110) {
+      const text = getRichText(value)
+      if (!text) return '내용 없음'
+      return text.length > maxLength ? `${text.slice(0, maxLength).trimEnd()}…` : text
+    }
+
+    function hasRichText(value) {
+      return Boolean(getRichText(value))
     }
 
     async function loadPosts() {
@@ -209,18 +229,17 @@ export default defineComponent({
     }
 
     function openWriteModal() {
-      draft.value = { title: '', content: '', category: '자유' }
+      draft.value = { title: '', content: createEmptyRichContent(), category: '자유' }
       actionError.value = ''
       writing.value = true
     }
 
     async function savePost() {
       const title = draft.value.title.trim()
-      const content = draft.value.content.trim()
-      if (!title || !content) return
+      if (!title || !hasRichText(draft.value.content)) return
       actionError.value = ''
       try {
-        await createPost({ category: draft.value.category, title, content })
+        await createPost({ category: draft.value.category, title, content: draft.value.content })
         writing.value = false
         page.value = 1 // 새 글은 최신순 맨 앞이므로 1페이지로 돌아가 보이게 한다.
         await Promise.all([loadPosts(), loadHot()])
@@ -261,14 +280,13 @@ export default defineComponent({
 
     async function savePostEdit() {
       const title = postDraft.value.title.trim()
-      const content = postDraft.value.content.trim()
-      if (!title || !content) return
+      if (!title || !hasRichText(postDraft.value.content)) return
       actionError.value = ''
       try {
         const result = await updatePost(openPost.value.id, {
           category: postDraft.value.category,
           title,
-          content,
+          content: postDraft.value.content,
         })
         // 상세 본문/카테고리를 갱신한다(조회수/좋아요/댓글·작성시각은 그대로 유지).
         openPost.value = {
@@ -301,6 +319,7 @@ export default defineComponent({
       draft,
       editingPost,
       postDraft,
+      summarizeRichText,
       filteredPosts: posts,
       page,
       totalPages,
@@ -346,6 +365,7 @@ export default defineComponent({
           <button v-for="(post, index) in hotPosts" :key="post.id" class="hot-card" type="button" @click="openPostDetail(post)">
             <div class="hot-meta"><strong>#{{ index + 1 }}</strong><span class="badge warning">{{ post.categoryLabel }}</span><span v-if="post.mine" class="community-mine-tag">내 글</span></div>
             <h3>{{ post.title }}</h3>
+            <p class="community-hot-summary">{{ summarizeRichText(post.content, 72) }}</p>
             <div class="community-stats">
               <span class="community-stat"><Eye :size="14" /> {{ post.viewCount.toLocaleString() }}</span>
               <span class="community-stat" :class="{ liked: post.liked }"><Heart :size="14" :fill="post.liked ? 'currentColor' : 'none'" /> {{ post.likeCount }}</span>
@@ -379,7 +399,7 @@ export default defineComponent({
                 <span v-if="post.mine" class="community-mine-tag">내 글</span>
               </div>
               <strong>{{ post.title }}</strong>
-              <p>{{ post.content }}</p>
+              <p>{{ summarizeRichText(post.content) }}</p>
               <small>{{ post.authorAlias }} · {{ formatDateTime(post.createdAt) }}</small>
             </div>
             <div class="community-row-stats">
@@ -415,7 +435,7 @@ export default defineComponent({
             <option v-for="item in categories.filter((item) => item !== '전체' && item !== 'Hot')" :key="item">{{ item }}</option>
           </AppSelect>
           <input v-model="draft.title" placeholder="제목">
-          <textarea v-model="draft.content" rows="8" placeholder="내용을 입력하세요. 작성자는 익명으로 표시됩니다."></textarea>
+          <MinutesEditor v-model="draft.content" />
           <p v-if="actionError" class="warning-text">{{ actionError }}</p>
           <p class="modal-note">비방·인신공격 게시물은 관리자에 의해 삭제될 수 있습니다.</p>
           <footer>
@@ -440,7 +460,9 @@ export default defineComponent({
             <span class="community-stat"><Eye :size="14" /> {{ openPost.viewCount.toLocaleString() }}</span>
             <span class="community-stat"><MessageSquare :size="14" /> {{ openPost.comments.length }}</span>
           </div>
-          <p class="post-body">{{ openPost.content }}</p>
+          <div class="post-body community-rich-content">
+            <MinutesEditor :modelValue="openPost.content" readonly />
+          </div>
           <div class="like-row">
             <button type="button" class="like-button" :class="{ active: openPost.liked }" @click="toggleLike(openPost)">
               <Heart :size="16" :fill="openPost.liked ? 'currentColor' : 'none'" /> {{ openPost.likeCount }}
@@ -457,7 +479,7 @@ export default defineComponent({
             <option v-for="item in categories.filter((item) => item !== '전체' && item !== 'Hot')" :key="item">{{ item }}</option>
           </AppSelect>
           <input v-model="postDraft.title" placeholder="제목">
-          <textarea v-model="postDraft.content" rows="8" placeholder="내용을 입력하세요. 작성자는 익명으로 표시됩니다."></textarea>
+          <MinutesEditor v-model="postDraft.content" />
           <p v-if="actionError" class="warning-text">{{ actionError }}</p>
           <div class="community-edit-actions">
             <button type="button" class="ghost-button" @click="cancelEditPost">취소</button>
@@ -512,11 +534,22 @@ export default defineComponent({
 .community-stat.liked { color: #e11d48; }
 .community-detail .like-button { display: inline-flex; align-items: center; gap: 6px; }
 .community-edit-form { display: grid; gap: 12px; }
+.community-edit-form .minutes-editor,
+.write-modal .minutes-editor { min-width: 0; }
+.community-edit-form .minutes-editor-content,
+.write-modal .minutes-editor-content { min-height: 0; }
+.community-edit-form .minutes-editor-content .ProseMirror,
+.write-modal .minutes-editor-content .ProseMirror { min-height: 220px; }
 .community-edit-actions { display: flex; justify-content: flex-end; gap: 8px; }
 .community-search-box { display: flex; align-items: center; gap: 6px; }
 .community-search-box input { font-size: 14px; flex: 1; min-width: 0; }
 .community-search-box button { flex: 0 0 auto; height: 40px; padding: 0 14px; border: 0; border-radius: 8px; background: var(--primary); color: #fff; font-weight: 700; font-size: 14px; cursor: pointer; white-space: nowrap; }
 .community-mine-tag { margin-left: 6px; padding: 4px 9px; border-radius: 999px; background: #eef2ff; color: var(--primary-dark); font-size: 11px; font-weight: 700; vertical-align: middle; white-space: nowrap; }
+.community-hot-summary { margin: 8px 0 0; color: var(--muted-foreground); font-size: 12px; line-height: 1.5; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.community-rich-content { margin: 22px 0; }
+.community-rich-content .minutes-editor { border: 0; border-radius: 0; }
+.community-rich-content .minutes-editor-content { min-height: 0; }
+.community-rich-content .minutes-editor-content .ProseMirror { min-height: 0; padding: 0; }
 /* 목록 페이지네이션: 가운데 정렬된 페이지 버튼 줄. active는 현재 페이지 강조. */
 .community-pagination { display: flex; justify-content: center; align-items: center; gap: 6px; margin-top: 16px; flex-wrap: wrap; }
 .community-pagination .page-btn { min-width: 36px; height: 36px; padding: 0 10px; border: 1px solid var(--border); border-radius: 8px; background: var(--background); color: var(--foreground); font-size: 14px; font-weight: 600; cursor: pointer; }
