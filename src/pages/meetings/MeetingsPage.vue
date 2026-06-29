@@ -2,7 +2,7 @@
   <section class="page meetings-page">
     <header class="page-header rooms-header">
       <div><h1>회의</h1><p>내가 주최하거나 초대된 회의를 확인하고 새 회의를 생성합니다.</p></div>
-      <button class="primary-button" @click="openCreate">내 회의 생성</button>
+      <ActionButton variant="primary" @click="openCreate">내 회의 생성</ActionButton>
     </header>
 
     <div class="card meetings-filter-card">
@@ -10,13 +10,9 @@
         <button v-for="item in tabs" :key="item.key" class="chip" :class="{ active: tab === item.key }" @click="changeTab(item.key)">{{ item.label }}</button>
       </div>
       <div class="meeting-filter-controls">
-        <label class="meeting-filter-checkbox">
-          <input v-model="excludeEnded" type="checkbox">
-          종료·취소된 회의 제외
-        </label>
-        <AppSelect v-model="range"><option value="all">전체 기간</option><option value="3m">최근 3개월</option><option value="6m">최근 6개월</option></AppSelect>
-        <AppSelect v-model="sort"><option value="latest">최신순</option><option value="oldest">오래된순</option></AppSelect>
-        <span>총 {{ filtered.length }}건</span>
+        <AppSelect v-model="range" class="meeting-filter-select"><option value="all">전체 기간</option><option value="3m">최근 3개월</option><option value="6m">최근 6개월</option></AppSelect>
+        <AppSelect v-model="sort" class="meeting-filter-select"><option value="latest">최신순</option><option value="oldest">오래된순</option></AppSelect>
+        <span class="meeting-filter-count">총 {{ filtered.length }}건</span>
       </div>
     </div>
 
@@ -146,6 +142,7 @@
 <script setup>
 
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import ActionButton from '../../components/common/ActionButton.vue'
 import AppSelect from '../../components/common/AppSelect.vue'
 import { useRoute, useRouter } from 'vue-router'
 import Pagination from '../../components/common/Pagination.vue'
@@ -201,8 +198,6 @@ const tab = ref(['all', 'host', 'attendee', 'active'].includes(route.query.tab) 
 const range = ref('all')
 // 기본 정렬: 최신순(scheduledAt 내림차순) — 최근/다가오는 회의가 위로.
 const sort = ref('latest')
-// 종료/취소된 회의 숨기기 체크박스 상태(기본: 전체 표시).
-const excludeEnded = ref(false)
 const pageNo = ref(1)
 const pageSize = 10
 
@@ -291,9 +286,6 @@ const filtered = computed(() => {
   if (tab.value === 'active') {
     list = list.filter((meeting) => meeting.status === 'upcoming' || meeting.status === 'live')
   }
-  if (excludeEnded.value) {
-    list = list.filter((meeting) => meeting.status !== 'ended' && meeting.status !== 'cancelled')
-  }
   list.sort((a, b) => (sort.value === 'latest' ? b.scheduledAtMs - a.scheduledAtMs : a.scheduledAtMs - b.scheduledAtMs))
   return list
 })
@@ -358,8 +350,14 @@ watch([tab, range], () => {
   loadMeetings()
 })
 
-watch(excludeEnded, () => {
+watch(sort, () => {
   pageNo.value = 1
+})
+
+watch(totalPages, (nextTotalPages) => {
+  if (pageNo.value > nextTotalPages) {
+    pageNo.value = nextTotalPages
+  }
 })
 
 // 워크스페이스에서 회의 수정으로 직접 진입하는 쿼리 변화를 감시한다.
@@ -503,18 +501,10 @@ function handleVisibilityChange() {
   font-size: 13px;
   align-self: center;
 }
-.meeting-filter-checkbox {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  color: var(--muted-foreground);
-  font-size: 13px;
-  font-weight: 600;
-}
-.meeting-filter-checkbox input {
-  width: 16px;
-  height: 16px;
-  accent-color: var(--primary);
+.meeting-filter-count {
+  font-size: 14px;
+  font-weight: 700;
+  line-height: 1;
 }
 /* 입장 대기(참석자, 시작 15분 이상 남음): 비활성 입장 버튼 + 안내 문구. */
 .modal-actions .primary-button:disabled,
