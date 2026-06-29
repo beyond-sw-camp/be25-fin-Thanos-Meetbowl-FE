@@ -12,11 +12,11 @@
           <span class="minute-meta-item">{{ minute.date }}</span>
           <span class="minute-meta-item">{{ minute.duration }}</span>
           <button type="button" class="minute-meta-chip minute-meta-participants" @click="openParticipants">
-            <small>참여자</small>
+            <span class="minute-meta-chip-label">참여자</span>
             <strong>{{ minute.attendees }}명</strong>
           </button>
           <span class="minute-meta-chip">
-            <small>검토자</small>
+            <span class="minute-meta-chip-label">검토자</span>
             <strong>{{ minute.reviewer }}</strong>
           </span>
           <span class="minute-status">{{ minute.statusLabel }}</span>
@@ -47,6 +47,10 @@
         </div>
       </template>
       <template v-else>
+        <div class="minutes-section-heading minutes-section-heading-static">
+          <span>AI 요약 회의록</span>
+          <small>{{ minute.statusLabel }}</small>
+        </div>
         <section class="minutes-document-section">
           <h3>회의 요약</h3>
           <p class="minutes-summary-text">{{ minute.summary || '요약이 없습니다.' }}</p>
