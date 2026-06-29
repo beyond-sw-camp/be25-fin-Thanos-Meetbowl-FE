@@ -102,10 +102,11 @@
       <article class="card workspace-memo-editor">
         <template v-if="memoDraft.memoId">
           <div class="workspace-memo-title-row">
-            <input v-model="memoDraft.title" @change="saveActiveMemo">
+            <input v-model="memoDraft.title" @input="memoDirty = true">
+            <button type="button" class="primary-button small" @click="saveActiveMemo">저장</button>
             <button type="button" class="danger-text" @click="deleteActiveMemo">삭제</button>
           </div>
-          <MinutesEditor v-model="memoDraft.content" @update:modelValue="scheduleMemoSave" />
+          <MinutesEditor v-model="memoDraft.content" @update:modelValue="memoDirty = true" />
           <small>최근 수정: {{ displayDate(activeMemo?.updatedAt || activeMemo?.createdAt) }}</small>
         </template>
         <div v-else class="workspace-empty-state">
@@ -386,7 +387,7 @@ const minuteItems = ref([])
 const minutesLoading = ref(false)
 const { confirmDialog, requestConfirm, cancelConfirm, acceptConfirm } = useConfirmDialog()
 let backupSearchTimer = null
-let memoSaveTimer = null
+const memoDirty = ref(false)
 
 const cells = computed(() => workspaceMonthCells(cursor.value.getFullYear(), cursor.value.getMonth()).map((date) => ({
   date,
@@ -459,16 +460,11 @@ function summarizeRichText(value, maxLength = 90) {
   return text.length > maxLength ? `${text.slice(0, maxLength).trimEnd()}…` : text
 }
 
-function hasRichText(value) {
-  return Boolean(getRichText(value))
-}
-
-function scheduleMemoSave() {
-  clearTimeout(memoSaveTimer)
-  memoSaveTimer = setTimeout(() => {
-    saveActiveMemo()
-  }, 450)
-}
+watch(activeTab, async (next, prev) => {
+  if (prev === 'memo' && next !== 'memo' && memoDirty.value) {
+    await saveActiveMemo({ silent: true })
+  }
+})
 
 onMounted(async () => {
   document.addEventListener('mousedown', closeSubscriptionSearchOnOutside)
@@ -478,7 +474,9 @@ onMounted(async () => {
 onUnmounted(() => {
   document.removeEventListener('mousedown', closeSubscriptionSearchOnOutside)
   clearTimeout(backupSearchTimer)
-  clearTimeout(memoSaveTimer)
+  if (memoDirty.value) {
+    saveActiveMemo({ silent: true })
+  }
   clearDrivePreviewUrl()
 })
 
@@ -506,7 +504,7 @@ async function loadMemos() {
     memos.value = []
     errorMessage.value = error?.message || '개인 메모를 불러오지 못했습니다.'
   }
-  if (!activeMemoId.value && memos.value[0]) selectMemo(memos.value[0].memoId)
+  if (!activeMemoId.value && memos.value[0]) await selectMemo(memos.value[0].memoId)
 }
 
 async function loadBackups() {
@@ -643,29 +641,37 @@ function eventKey(event) {
   ].join(':')
 }
 
-function selectMemo(memoId) {
+async function selectMemo(memoId) {
+  if (memoDirty.value && memoDraft.value.memoId && memoDraft.value.memoId !== memoId) {
+    await saveActiveMemo({ silent: true })
+  }
   activeMemoId.value = memoId
   const memo = memos.value.find((item) => item.memoId === memoId)
   memoDraft.value = memo ? { memoId: memo.memoId, title: memo.title, content: memo.content } : { memoId: '', title: '', content: createEmptyRichContent() }
+  memoDirty.value = false
 }
 
 async function createNewMemo() {
+  if (memoDirty.value) {
+    await saveActiveMemo({ silent: true })
+  }
   const memo = await createMemo({ title: '새 메모', content: createEmptyRichContent() })
   memos.value.unshift(memo)
   memoPage.value = 1
-  selectMemo(memo.memoId)
+  await selectMemo(memo.memoId)
   showToast('메모 생성 완료', memo.title)
 }
 
-async function saveActiveMemo() {
-  if (!memoDraft.value.memoId || !memoDraft.value.title.trim() || !hasRichText(memoDraft.value.content)) return
+async function saveActiveMemo({ silent = false } = {}) {
+  if (!memoDraft.value.memoId || !memoDraft.value.title.trim()) return
   const updated = await updateMemo(memoDraft.value.memoId, {
     title: memoDraft.value.title.trim(),
     content: memoDraft.value.content,
   })
   memos.value = memos.value.map((memo) => memo.memoId === updated.memoId ? updated : memo)
-  selectMemo(updated.memoId)
-  showToast('메모 수정 완료', updated.title)
+  memoDraft.value = { memoId: updated.memoId, title: updated.title, content: updated.content }
+  memoDirty.value = false
+  if (!silent) showToast('메모 저장 완료', updated.title)
 }
 
 async function deleteActiveMemo() {
@@ -678,7 +684,7 @@ async function deleteActiveMemo() {
   if (!confirmed) return
   await deleteMemo(memoDraft.value.memoId)
   memos.value = memos.value.filter((memo) => memo.memoId !== memoDraft.value.memoId)
-  selectMemo(memos.value[0]?.memoId || '')
+  await selectMemo(memos.value[0]?.memoId || '')
   showToast('메모 삭제 완료', '선택한 메모를 삭제했습니다.')
 }
 
