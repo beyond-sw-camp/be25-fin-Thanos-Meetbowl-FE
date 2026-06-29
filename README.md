@@ -72,7 +72,9 @@
 
 ## 3. WBS
 
-[WBS 링크](https://docs.google.com/spreadsheets/d/1nOWCJmpTlyvO9L5ES9-pbAvM8WLmR13WEBstjrw-yW8/edit?usp=sharing)
+[WBS](https://docs.google.com/spreadsheets/d/1nOWCJmpTlyvO9L5ES9-pbAvM8WLmR13WEBstjrw-yW8/edit?usp=sharing)
+
+<img width="4963" height="3509" alt="beyond SW camp 25기 - 3팀 Meetbowl 문서 - WBS v 2_page-0001" src="https://github.com/user-attachments/assets/f7318701-178b-452b-87a9-04aeb5989a56" />
 
 
 <br/>
