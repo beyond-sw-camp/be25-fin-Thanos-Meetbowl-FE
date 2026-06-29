@@ -93,7 +93,7 @@
         </label>
         <button v-for="memo in pagedMemos" :key="memo.memoId" type="button" class="workspace-memo-item" :class="{ active: activeMemoId === memo.memoId }" @click="selectMemo(memo.memoId)">
           <strong>{{ memo.title }}</strong>
-          <span>{{ memo.content.split('\n')[0] || '내용 없음' }}</span>
+          <span>{{ summarizeRichText(memo.content) }}</span>
           <small>{{ displayDate(memo.updatedAt || memo.createdAt) }}</small>
         </button>
         <div v-if="filteredMemos.length === 0" class="empty-state workspace-compact-empty">검색된 메모가 없습니다.</div>
@@ -105,10 +105,14 @@
             <input v-model="memoDraft.title" @change="saveActiveMemo">
             <button type="button" class="danger-text" @click="deleteActiveMemo">삭제</button>
           </div>
-          <textarea v-model="memoDraft.content" placeholder="메모를 작성하세요..." @change="saveActiveMemo"></textarea>
+          <MinutesEditor v-model="memoDraft.content" @update:modelValue="scheduleMemoSave" />
           <small>최근 수정: {{ displayDate(activeMemo?.updatedAt || activeMemo?.createdAt) }}</small>
         </template>
-        <div v-else class="empty-state">메모를 선택하거나 새로 만들어 보세요.</div>
+        <div v-else class="workspace-empty-state">
+          <span class="workspace-empty-icon"><StickyNote :size="34" /></span>
+          <strong>메모를 선택하거나 새로 만들어 보세요.</strong>
+          <p>아이디어를 자유롭게 기록하고, 중요한 내용을 한눈에 관리하세요.</p>
+        </div>
       </article>
     </div>
 
@@ -292,6 +296,7 @@
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { BookmarkCheck, CalendarDays, Download, FileText, Folder, Info, Mail, MoreHorizontal, Plus, Search, StickyNote, Trash2, Upload, UserMinus, X } from '@lucide/vue'
+import MinutesEditor from '../../components/minutes/MinutesEditor.vue'
 import Pagination from '../../components/common/Pagination.vue'
 import ConfirmDialog from '../../components/common/ConfirmDialog.vue'
 import {
@@ -316,6 +321,7 @@ import {
 } from '../../lib/workspace'
 import { previewKind, resolveBlobFileName, saveBlob } from '../../lib/file-actions'
 import { getUserSummary, searchUsers } from '../../lib/users'
+import { emptyTiptapDocument, extractTiptapText, stringifyTiptapDocument } from '../../lib/minutes-content.js'
 import { formatKstDateTime, formatKstTime } from '../../utils/dateTime'
 import { workspaceDateKey, workspaceMonthCells, workspaceNow } from '../../data/workspaceData'
 import { listMinutes, removeMinutesFavorite } from '../../lib/minutes'
@@ -346,7 +352,7 @@ const memoKeyword = ref('')
 // 메모는 한 페이지에 5개씩 보여주고 나머지는 페이지네이션으로 넘긴다.
 const MEMO_PAGE_SIZE = 5
 const memoPage = ref(1)
-const memoDraft = ref({ memoId: '', title: '', content: '' })
+const memoDraft = ref({ memoId: '', title: '', content: createEmptyRichContent() })
 const backups = ref([])
 const backupKeyword = ref('')
 const driveFiles = ref([])
@@ -380,6 +386,7 @@ const minuteItems = ref([])
 const minutesLoading = ref(false)
 const { confirmDialog, requestConfirm, cancelConfirm, acceptConfirm } = useConfirmDialog()
 let backupSearchTimer = null
+let memoSaveTimer = null
 
 const cells = computed(() => workspaceMonthCells(cursor.value.getFullYear(), cursor.value.getMonth()).map((date) => ({
   date,
@@ -403,7 +410,7 @@ const activeMemo = computed(() => memos.value.find((memo) => memo.memoId === act
 const filteredMemos = computed(() => {
   const keyword = memoKeyword.value.trim().toLowerCase()
   if (!keyword) return memos.value
-  return memos.value.filter((memo) => `${memo.title} ${memo.content}`.toLowerCase().includes(keyword))
+  return memos.value.filter((memo) => `${memo.title} ${getRichText(memo.content)}`.toLowerCase().includes(keyword))
 })
 const memoTotalPages = computed(() => Math.max(1, Math.ceil(filteredMemos.value.length / MEMO_PAGE_SIZE)))
 const pagedMemos = computed(() => {
@@ -438,6 +445,31 @@ watch(userKeyword, async () => {
   await loadUserCandidates(userKeyword.value)
 })
 
+function createEmptyRichContent() {
+  return stringifyTiptapDocument(emptyTiptapDocument())
+}
+
+function getRichText(value) {
+  return extractTiptapText(value).replace(/\s+/g, ' ').trim()
+}
+
+function summarizeRichText(value, maxLength = 90) {
+  const text = getRichText(value)
+  if (!text) return '내용 없음'
+  return text.length > maxLength ? `${text.slice(0, maxLength).trimEnd()}…` : text
+}
+
+function hasRichText(value) {
+  return Boolean(getRichText(value))
+}
+
+function scheduleMemoSave() {
+  clearTimeout(memoSaveTimer)
+  memoSaveTimer = setTimeout(() => {
+    saveActiveMemo()
+  }, 450)
+}
+
 onMounted(async () => {
   document.addEventListener('mousedown', closeSubscriptionSearchOnOutside)
   await Promise.all([loadCalendar(), loadSubscriptions(), loadMemos(), loadBackups(), loadDriveFiles(), loadMinutes()])
@@ -446,6 +478,7 @@ onMounted(async () => {
 onUnmounted(() => {
   document.removeEventListener('mousedown', closeSubscriptionSearchOnOutside)
   clearTimeout(backupSearchTimer)
+  clearTimeout(memoSaveTimer)
   clearDrivePreviewUrl()
 })
 
@@ -613,11 +646,11 @@ function eventKey(event) {
 function selectMemo(memoId) {
   activeMemoId.value = memoId
   const memo = memos.value.find((item) => item.memoId === memoId)
-  memoDraft.value = memo ? { memoId: memo.memoId, title: memo.title, content: memo.content } : { memoId: '', title: '', content: '' }
+  memoDraft.value = memo ? { memoId: memo.memoId, title: memo.title, content: memo.content } : { memoId: '', title: '', content: createEmptyRichContent() }
 }
 
 async function createNewMemo() {
-  const memo = await createMemo({ title: '새 메모', content: '내용을 입력하세요.' })
+  const memo = await createMemo({ title: '새 메모', content: createEmptyRichContent() })
   memos.value.unshift(memo)
   memoPage.value = 1
   selectMemo(memo.memoId)
@@ -625,10 +658,10 @@ async function createNewMemo() {
 }
 
 async function saveActiveMemo() {
-  if (!memoDraft.value.memoId || !memoDraft.value.title.trim() || !memoDraft.value.content.trim()) return
+  if (!memoDraft.value.memoId || !memoDraft.value.title.trim() || !hasRichText(memoDraft.value.content)) return
   const updated = await updateMemo(memoDraft.value.memoId, {
     title: memoDraft.value.title.trim(),
-    content: memoDraft.value.content.trim(),
+    content: memoDraft.value.content,
   })
   memos.value = memos.value.map((memo) => memo.memoId === updated.memoId ? updated : memo)
   selectMemo(updated.memoId)
