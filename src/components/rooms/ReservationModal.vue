@@ -1,10 +1,10 @@
 <template>
   <ModalShell :modal-class="['room-modal', { 'has-timeline': roomTimelineVisible, compact: !roomTimelineVisible }]" @close="$emit('close')">
-    <template #overlay>
-      <div v-if="actionError" class="reservation-warning-overlay">{{ actionError }}</div>
-    </template>
-    <header>
-      <div><h2>{{ isEdit ? '회의 수정' : '새 회의 예약' }}</h2></div>
+    <header class="reservation-modal-header">
+      <div class="reservation-modal-title">
+        <h2>{{ isEdit ? '회의 수정' : '새 회의 예약' }}</h2>
+        <p>회의 정보를 입력하고 적합한 회의실을 확인하세요.</p>
+      </div>
       <button class="modal-close" type="button" aria-label="닫기" @click="$emit('close')">×</button>
     </header>
     <div class="room-modal-grid">
@@ -17,6 +17,8 @@
         :allow-remote="allowRemote"
         :attendee-validate="validateAttendeeAdd"
         :attendee-warning="attendeeWarning"
+        :general-warning="generalWarningMessage"
+        :reviewer-warning="reviewerWarningMessage"
         @submit="save"
         @enable-room-usage="enableRoomUsage"
         @disable-room-usage="disableRoomUsage"
@@ -99,11 +101,8 @@ const roomUsageEnabled = ref(!props.allowRemote || Boolean(props.initialRoomId) 
 const saving = ref(false)
 const loading = ref(false)
 const actionError = ref('')
-// 참석자 겹침 경고는 모달 오버레이 대신 '참석자 검색' 라벨 위 오버레이(폼 너비)에 따로 띄운다.
 const attendeeWarning = ref('')
 const blocksByRoom = ref({})
-let errorOverlayTimerId = null
-let attendeeWarningTimerId = null
 // 초기 prefill/마운트가 끝나기 전에는 참석자 시간 재검사를 돌리지 않는다(열자마자 기존 참석자가 빠지는 것 방지).
 const ready = ref(false)
 let attendeeRecheckTimer = null
@@ -114,6 +113,12 @@ const submitLabel = computed(() => {
   if (saving.value) return isEdit.value ? '수정 중...' : '예약 중...'
   return isEdit.value ? '회의 수정하기' : '회의 예약하기'
 })
+const reviewerWarningMessage = computed(() =>
+  actionError.value === '회의록 검토자를 선택해 주세요.' ? actionError.value : '',
+)
+const generalWarningMessage = computed(() =>
+  actionError.value && actionError.value !== reviewerWarningMessage.value ? actionError.value : '',
+)
 const timelineRange = computed(() => ({
   start: form.value.start,
   end:
@@ -234,31 +239,6 @@ watch(
   },
   { immediate: true },
 )
-
-watch(actionError, (message) => {
-  if (errorOverlayTimerId) {
-    window.clearTimeout(errorOverlayTimerId)
-    errorOverlayTimerId = null
-  }
-  if (!message) return
-  errorOverlayTimerId = window.setTimeout(() => {
-    actionError.value = ''
-    errorOverlayTimerId = null
-  }, 3000)
-})
-
-// 참석자 경고도 동일하게 일정 시간 뒤 자동으로 사라진다(제외 안내를 읽을 수 있게 조금 더 길게).
-watch(attendeeWarning, (message) => {
-  if (attendeeWarningTimerId) {
-    window.clearTimeout(attendeeWarningTimerId)
-    attendeeWarningTimerId = null
-  }
-  if (!message) return
-  attendeeWarningTimerId = window.setTimeout(() => {
-    attendeeWarning.value = ''
-    attendeeWarningTimerId = null
-  }, 4000)
-})
 
 // 참석자에서 빠진 사용자가 검토자였다면 검토자 선택을 비운다.
 watch(
@@ -652,19 +632,33 @@ async function save() {
 }
 
 onBeforeUnmount(() => {
-  if (errorOverlayTimerId) {
-    window.clearTimeout(errorOverlayTimerId)
-    errorOverlayTimerId = null
-  }
-  if (attendeeWarningTimerId) {
-    window.clearTimeout(attendeeWarningTimerId)
-    attendeeWarningTimerId = null
-  }
   window.clearTimeout(attendeeRecheckTimer)
 })
 </script>
 
 <style scoped>
+.reservation-modal-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.reservation-modal-title {
+  display: grid;
+  gap: 6px;
+}
+
+.reservation-modal-title h2 {
+  margin: 0;
+}
+
+.reservation-modal-title p {
+  margin: 0;
+  color: var(--muted-foreground);
+  font-size: 14px;
+}
+
 .modal-close {
   width: 32px;
   height: 32px;
@@ -679,22 +673,5 @@ onBeforeUnmount(() => {
 .modal-close:hover {
   background: var(--muted);
   color: var(--foreground);
-}
-.reservation-warning-overlay {
-  position: absolute;
-  left: 50%;
-  top: calc(50% - 360px);
-  z-index: 2;
-  width: min(860px, calc(100vw - 64px));
-  transform: translateX(-50%);
-  border: 1px solid #fdba74;
-  border-radius: 10px;
-  background: #fff7ed;
-  color: #c2410c;
-  padding: 12px 14px;
-  font-size: 13px;
-  font-weight: 700;
-  box-shadow: 0 12px 28px rgba(194, 65, 12, 0.16);
-  pointer-events: none;
 }
 </style>

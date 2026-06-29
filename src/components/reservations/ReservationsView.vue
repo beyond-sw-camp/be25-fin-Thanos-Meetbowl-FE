@@ -2,6 +2,12 @@
   <section class="page my-reservations-page">
     <header class="page-header"><h1>{{ headerTitle }}</h1><p>{{ headerDescription }}</p></header>
 
+    <nav class="page-route-tabs reservation-route-tabs">
+      <RouterLink to="/app/rooms" class="page-route-tab" active-class="active">전체 예약 현황</RouterLink>
+      <RouterLink to="/app/my-reservations" class="page-route-tab" active-class="active">내 예약</RouterLink>
+      <RouterLink to="/app/my-attending" class="page-route-tab" active-class="active">참석 회의</RouterLink>
+    </nav>
+
     <article v-if="loading" class="card empty-state">예약 현황을 불러오는 중입니다.</article>
 
     <article v-else-if="errorMessage" class="card">
@@ -277,6 +283,10 @@ function inPeriod(meeting, period) {
 </script>
 
 <style scoped>
+.reservation-route-tabs {
+  margin-bottom: 28px;
+}
+
 .count-grid {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
