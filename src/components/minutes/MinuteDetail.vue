@@ -4,7 +4,7 @@
       <div class="minute-heading">
         <div class="minute-title-row">
           <h2>{{ minute.title }}</h2>
-          <button class="minute-favorite-button" aria-label="즐겨찾기 전환" @click="$emit('toggle-favorite', minute.id)">
+          <button v-if="!readonlyMode" class="minute-favorite-button" aria-label="즐겨찾기 전환" @click="$emit('toggle-favorite', minute.id)">
             {{ favorites[minute.id] ? '★' : '☆' }}
           </button>
         </div>
@@ -26,9 +26,9 @@
         <button class="secondary-button minute-action-button" :disabled="pdfPending || editing" @click="downloadPdf">
           {{ pdfPending ? 'PDF 생성 중...' : 'PDF 다운로드' }}
         </button>
-        <button v-if="!editing" class="secondary-button minute-action-button" :disabled="!canEdit || actionPending" @click="$emit('start-edit')">수정</button>
-        <button class="primary-button minute-action-button" :disabled="!canApprove || actionPending" @click="$emit('approve')">승인</button>
-        <button class="primary-button minute-action-button" :disabled="!canShare || actionPending" @click="$emit('share')">내부 메일 공유</button>
+        <button v-if="!readonlyMode && !editing" class="secondary-button minute-action-button" :disabled="!canEdit || actionPending" @click="$emit('start-edit')">수정</button>
+        <button v-if="!readonlyMode" class="primary-button minute-action-button" :disabled="!canApprove || actionPending" @click="$emit('approve')">승인</button>
+        <button v-if="!readonlyMode" class="primary-button minute-action-button" :disabled="!canShare || actionPending" @click="$emit('share')">내부 메일 공유</button>
       </div>
     </header>
     <section class="ai-minutes-box">
@@ -104,6 +104,7 @@ const props = defineProps({
   canApprove: { type: Boolean, default: false },
   canShare: { type: Boolean, default: false },
   actionPending: { type: Boolean, default: false },
+  readonlyMode: { type: Boolean, default: false },
 })
 
 defineEmits(['toggle-favorite', 'start-edit', 'cancel-edit', 'save-edit', 'approve', 'toggle-transcript', 'share'])

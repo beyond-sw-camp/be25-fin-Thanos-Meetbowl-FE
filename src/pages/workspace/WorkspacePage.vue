@@ -139,24 +139,64 @@
       <div v-if="backups.length === 0" class="empty-state">백업한 메일이 없습니다.</div>
     </article>
 
-    <article v-else-if="activeTab === 'minutes'" class="card workspace-panel workspace-minutes-panel">
-      <div class="workspace-panel-head">
-        <h2>즐겨찾기 회의록</h2>
-        <span class="badge primary">{{ favoriteMinuteItems.length }}건</span>
-      </div>
-      <div v-for="minute in favoriteMinuteItems" :key="minute.id" class="workspace-minute-row">
-        <RouterLink :to="`/app/minutes/${minute.meetingId}`">
+    <div v-else-if="activeTab === 'minutes'" class="workspace-minutes-grid">
+      <aside class="card workspace-minutes-list">
+        <div class="workspace-panel-head">
+          <h2>보관된 회의록</h2>
+          <span class="badge primary">{{ workspaceMinuteItems.length }}건</span>
+        </div>
+        <button
+          v-for="minute in workspaceMinuteItems"
+          :key="minute.id"
+          type="button"
+          class="workspace-minute-item"
+          :class="{ active: workspaceMinuteId === minute.id }"
+          @click="selectWorkspaceMinute(minute.id)"
+        >
           <span class="workspace-file-icon minutes"><FileText :size="17" /></span>
           <span>
             <strong>{{ minute.title }}</strong>
-            <small>{{ minute.date }} · {{ minute.duration }} · 참석 {{ minute.attendees }}명 · 검토자 {{ minute.reviewer }}</small>
+            <small>{{ minute.date }} · {{ minute.duration }}</small>
+            <small>참석 {{ minute.attendees }}명 · 검토자 {{ minute.reviewer }}</small>
           </span>
-        </RouterLink>
-        <button type="button" title="즐겨찾기 해제" @click="removeFavoriteMinute(minute.id)"><BookmarkCheck :size="16" /> 해제</button>
-      </div>
-      <div v-if="minutesLoading" class="empty-state">회의록을 불러오는 중입니다.</div>
-      <div v-else-if="favoriteMinuteItems.length === 0" class="empty-state">내 회의록에서 별표를 누르면 이곳에 표시됩니다.</div>
-    </article>
+        </button>
+        <div v-if="minutesLoading" class="empty-state workspace-compact-empty">회의록을 불러오는 중입니다.</div>
+        <div v-else-if="workspaceMinuteItems.length === 0" class="empty-state workspace-compact-empty">보관된 회의록이 없습니다.</div>
+      </aside>
+
+      <article v-if="minutesLoading" class="card minute-detail-panel empty-state workspace-minute-empty-state">회의록 상세를 불러오는 중입니다.</article>
+      <article v-else-if="workspaceMinuteDetailLoading" class="card minute-detail-panel empty-state workspace-minute-empty-state">회의록 상세를 불러오는 중입니다.</article>
+      <article v-else-if="workspaceMinuteDetailError" class="card minute-detail-panel empty-state workspace-minute-empty-state">
+        <p>{{ workspaceMinuteDetailError }}</p>
+        <button class="secondary-button" type="button" @click="loadWorkspaceMinuteDetail">다시 시도</button>
+      </article>
+      <MinuteDetail
+        v-else-if="selectedWorkspaceMinute"
+        :minute="selectedWorkspaceMinute"
+        :editing="workspaceMinuteEditing"
+        :favorites="workspaceFavorites"
+        :transcript-open="workspaceTranscriptOpen"
+        :transcript="workspaceTranscriptLines"
+        :transcript-loading="workspaceTranscriptLoading"
+        :transcript-error="workspaceTranscriptError"
+        :can-edit="canEditWorkspaceMinute"
+        :can-approve="canApproveWorkspaceMinute"
+        :action-pending="workspaceMinuteActionPending"
+        :can-share="canShareWorkspaceMinute"
+        :readonly-mode="true"
+        @toggle-favorite="toggleWorkspaceMinuteFavorite"
+        @start-edit="workspaceMinuteEditing = true"
+        @cancel-edit="workspaceMinuteEditing = false"
+        @save-edit="saveWorkspaceMinuteEdit"
+        @approve="approveWorkspaceMinute"
+        @toggle-transcript="toggleWorkspaceMinuteTranscript"
+        @share="openWorkspaceMinuteShare"
+      />
+      <article v-else class="card minute-detail-panel empty-state workspace-minute-empty-state">
+        <strong>표시할 회의록이 없습니다.</strong>
+        <p>회의록을 선택하면 이 영역에 상세 내용이 표시됩니다.</p>
+      </article>
+    </div>
 
     <article v-else class="card workspace-panel">
       <div class="workspace-panel-head">
@@ -283,12 +323,8 @@
         </footer>
       </article>
     </div>
-    <div class="toast-stack" aria-live="polite">
-      <div v-for="toast in toasts" :key="toast.id" class="toast-card">
-        <strong>{{ toast.title }}</strong>
-        <span>{{ toast.message }}</span>
-      </div>
-    </div>
+    <AppToastStack :items="toasts" @dismiss="dismissToast" />
+    <ShareMailModal v-if="workspaceShareOpen" :draft="workspaceShare" @close="closeWorkspaceMinuteShare" @send="sendWorkspaceMinuteShare" />
     <ConfirmDialog v-if="confirmDialog" v-bind="confirmDialog" @cancel="cancelConfirm" @confirm="acceptConfirm" />
   </section>
 </template>
@@ -298,8 +334,11 @@ import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { BookmarkCheck, CalendarDays, Download, FileText, Folder, Info, Mail, MoreHorizontal, Plus, Search, StickyNote, Trash2, Upload, UserMinus, X } from '@lucide/vue'
 import MinutesEditor from '../../components/minutes/MinutesEditor.vue'
+import MinuteDetail from '../../components/minutes/MinuteDetail.vue'
+import ShareMailModal from '../../components/minutes/ShareMailModal.vue'
 import Pagination from '../../components/common/Pagination.vue'
 import ConfirmDialog from '../../components/common/ConfirmDialog.vue'
+import AppToastStack from '../../components/common/AppToastStack.vue'
 import {
   createMemo,
   createWorkspaceEvent,
@@ -325,8 +364,18 @@ import { getUserSummary, searchUsers } from '../../lib/users'
 import { emptyTiptapDocument, extractTiptapText, stringifyTiptapDocument } from '../../lib/minutes-content.js'
 import { formatKstDateTime, formatKstTime } from '../../utils/dateTime'
 import { workspaceDateKey, workspaceMonthCells, workspaceNow } from '../../data/workspaceData'
-import { listMinutes, removeMinutesFavorite } from '../../lib/minutes'
+import {
+  addMinutesFavorite,
+  approveMeetingMinutes,
+  getMeetingMinutes,
+  getMeetingTranscript,
+  listMinutes,
+  removeMinutesFavorite,
+  reviseMeetingMinutes,
+  shareMeetingMinutes,
+} from '../../lib/minutes'
 import { useConfirmDialog } from '../../composables/useConfirmDialog'
+import { isValidTiptapDocument } from '../../lib/minutes-content'
 
 const router = useRouter()
 const route = useRoute()
@@ -385,6 +434,18 @@ const toasts = ref([])
 const todayKey = workspaceDateKey(workspaceToday)
 const minuteItems = ref([])
 const minutesLoading = ref(false)
+const workspaceMinuteId = ref('')
+const workspaceMinuteDetailByMeetingId = ref({})
+const workspaceMinuteDetailLoading = ref(false)
+const workspaceMinuteDetailError = ref('')
+const workspaceMinuteEditing = ref(false)
+const workspaceMinuteActionPending = ref(false)
+const workspaceTranscriptOpen = ref(false)
+const workspaceTranscriptLoading = ref(false)
+const workspaceTranscriptError = ref('')
+const workspaceTranscriptLines = ref([])
+const workspaceShareOpen = ref(false)
+const workspaceShare = ref({ recipients: [], query: '', subject: '', body: '', error: '', sending: false })
 const { confirmDialog, requestConfirm, cancelConfirm, acceptConfirm } = useConfirmDialog()
 let backupSearchTimer = null
 const memoDirty = ref(false)
@@ -430,7 +491,24 @@ const pagedDriveFiles = computed(() => {
 watch(driveTotalPages, (total) => {
   if (drivePage.value > total) drivePage.value = total
 })
-const favoriteMinuteItems = computed(() => minuteItems.value.filter((minute) => minute.favorite))
+const workspaceMinuteItems = computed(() => minuteItems.value.slice().sort((a, b) => {
+  if (Boolean(a.favorite) !== Boolean(b.favorite)) return a.favorite ? -1 : 1
+  const aTime = Date.parse(a.approvedAt || a.meetingStartedAt || '') || 0
+  const bTime = Date.parse(b.approvedAt || b.meetingStartedAt || '') || 0
+  return bTime - aTime
+}))
+const workspaceFavorites = computed(() => Object.fromEntries(minuteItems.value.map((minute) => [minute.id, minute.favorite])))
+const selectedWorkspaceMinuteListItem = computed(() =>
+  workspaceMinuteItems.value.find((minute) => minute.id === workspaceMinuteId.value) || workspaceMinuteItems.value[0] || null,
+)
+const selectedWorkspaceMinute = computed(() => {
+  if (!selectedWorkspaceMinuteListItem.value) return null
+  const detail = workspaceMinuteDetailByMeetingId.value[selectedWorkspaceMinuteListItem.value.meetingId]
+  return normalizeWorkspaceMinute(detail || selectedWorkspaceMinuteListItem.value)
+})
+const canEditWorkspaceMinute = computed(() => false)
+const canApproveWorkspaceMinute = computed(() => false)
+const canShareWorkspaceMinute = computed(() => false)
 
 watch(cursor, loadCalendar)
 watch(memoKeyword, () => { memoPage.value = 1 })
@@ -444,6 +522,22 @@ watch(userKeyword, async () => {
     return
   }
   await loadUserCandidates(userKeyword.value)
+})
+watch(workspaceMinuteItems, (items) => {
+  if (!items.length) {
+    workspaceMinuteId.value = ''
+    return
+  }
+  if (!items.some((minute) => minute.id === workspaceMinuteId.value)) {
+    workspaceMinuteId.value = items[0].id
+  }
+})
+watch(workspaceMinuteId, async () => {
+  workspaceMinuteEditing.value = false
+  workspaceTranscriptOpen.value = false
+  workspaceTranscriptLines.value = []
+  workspaceTranscriptError.value = ''
+  if (workspaceMinuteId.value) await loadWorkspaceMinuteDetail()
 })
 
 function createEmptyRichContent() {
@@ -523,10 +617,35 @@ async function loadMinutes() {
   minutesLoading.value = true
   try {
     minuteItems.value = (await listMinutes()).map(normalizeWorkspaceMinute)
+    if (!workspaceMinuteId.value && minuteItems.value.length > 0) {
+      workspaceMinuteId.value = workspaceMinuteItems.value[0]?.id || ''
+    }
   } catch {
     minuteItems.value = []
   } finally {
     minutesLoading.value = false
+  }
+}
+
+function selectWorkspaceMinute(minuteId) {
+  workspaceMinuteId.value = minuteId
+}
+
+async function loadWorkspaceMinuteDetail() {
+  if (!selectedWorkspaceMinuteListItem.value?.meetingId) return
+  workspaceMinuteDetailLoading.value = true
+  workspaceMinuteDetailError.value = ''
+  try {
+    const detail = await getMeetingMinutes(selectedWorkspaceMinuteListItem.value.meetingId)
+    workspaceMinuteDetailByMeetingId.value = {
+      ...workspaceMinuteDetailByMeetingId.value,
+      [selectedWorkspaceMinuteListItem.value.meetingId]: detail,
+    }
+    replaceWorkspaceMinuteItem(normalizeWorkspaceMinute(detail))
+  } catch (error) {
+    workspaceMinuteDetailError.value = error?.message || '회의록 상세를 불러오지 못했습니다.'
+  } finally {
+    workspaceMinuteDetailLoading.value = false
   }
 }
 
@@ -710,6 +829,138 @@ async function removeFavoriteMinute(minuteId) {
   if (!confirmed) return
   await removeMinutesFavorite(minuteId)
   minuteItems.value = minuteItems.value.map((minute) => minute.id === minuteId ? { ...minute, favorite: false } : minute)
+}
+
+async function toggleWorkspaceMinuteFavorite(minuteId) {
+  const item = minuteItems.value.find((minute) => minute.id === minuteId)
+  if (!item) return
+  const next = !item.favorite
+  replaceWorkspaceMinuteItem({ ...item, favorite: next })
+  try {
+    if (next) await addMinutesFavorite(minuteId)
+    else await removeMinutesFavorite(minuteId)
+  } catch {
+    replaceWorkspaceMinuteItem({ ...item, favorite: !next })
+  }
+}
+
+async function saveWorkspaceMinuteEdit(draft) {
+  if (!selectedWorkspaceMinute.value) return
+  if (!isValidTiptapDocument(draft.content)) {
+    workspaceMinuteDetailError.value = '본문은 올바른 회의록 형식이어야 합니다.'
+    return
+  }
+  workspaceMinuteActionPending.value = true
+  workspaceMinuteDetailError.value = ''
+  try {
+    const updated = await reviseMeetingMinutes(selectedWorkspaceMinute.value.meetingId, {
+      summary: draft.summary,
+      content: draft.content,
+    })
+    workspaceMinuteDetailByMeetingId.value = {
+      ...workspaceMinuteDetailByMeetingId.value,
+      [updated.meetingId]: updated,
+    }
+    replaceWorkspaceMinuteItem(normalizeWorkspaceMinute(updated))
+    workspaceMinuteEditing.value = false
+    showToast('회의록 수정 완료', selectedWorkspaceMinute.value.title)
+  } catch (error) {
+    workspaceMinuteDetailError.value = error?.message || '회의록 수정 저장에 실패했습니다.'
+  } finally {
+    workspaceMinuteActionPending.value = false
+  }
+}
+
+async function approveWorkspaceMinute() {
+  if (!selectedWorkspaceMinute.value) return
+  workspaceMinuteActionPending.value = true
+  workspaceMinuteDetailError.value = ''
+  try {
+    const approved = await approveMeetingMinutes(selectedWorkspaceMinute.value.meetingId)
+    workspaceMinuteDetailByMeetingId.value = {
+      ...workspaceMinuteDetailByMeetingId.value,
+      [approved.meetingId]: approved,
+    }
+    replaceWorkspaceMinuteItem(normalizeWorkspaceMinute(approved))
+    workspaceMinuteEditing.value = false
+    showToast('회의록 승인 완료', selectedWorkspaceMinute.value.title)
+  } catch (error) {
+    workspaceMinuteDetailError.value = error?.message || '회의록 승인에 실패했습니다.'
+  } finally {
+    workspaceMinuteActionPending.value = false
+  }
+}
+
+async function toggleWorkspaceMinuteTranscript() {
+  if (!selectedWorkspaceMinute.value) return
+  workspaceTranscriptOpen.value = !workspaceTranscriptOpen.value
+  if (!workspaceTranscriptOpen.value || workspaceTranscriptLines.value.length > 0) return
+  workspaceTranscriptLoading.value = true
+  workspaceTranscriptError.value = ''
+  try {
+    const transcript = await getMeetingTranscript(selectedWorkspaceMinute.value.meetingId)
+    workspaceTranscriptLines.value = (transcript?.segments || []).map((segment) => ({
+      t: formatOffset(segment.startedAtMs),
+      who: `#${segment.sequence}`,
+      text: segment.sourceText,
+    }))
+  } catch (error) {
+    workspaceTranscriptError.value = error?.message || '회의 원문 STT를 불러오지 못했습니다.'
+  } finally {
+    workspaceTranscriptLoading.value = false
+  }
+}
+
+function openWorkspaceMinuteShare() {
+  if (!selectedWorkspaceMinute.value) return
+  if (!canShareWorkspaceMinute.value) {
+    workspaceMinuteDetailError.value = '승인된 회의록만 공유할 수 있습니다.'
+    return
+  }
+  workspaceShare.value = {
+    recipients: [],
+    query: '',
+    subject: `[회의록 공유] ${selectedWorkspaceMinute.value.title}`,
+    body: `안녕하세요,\n\n${selectedWorkspaceMinute.value.title} 회의록을 공유드립니다.\n\n[AI 요약]\n${selectedWorkspaceMinute.value.summary}\n\n확인 부탁드립니다.`,
+    error: '',
+    sending: false,
+  }
+  workspaceShareOpen.value = true
+}
+
+function closeWorkspaceMinuteShare() {
+  if (workspaceShare.value.sending) return
+  workspaceShareOpen.value = false
+}
+
+async function sendWorkspaceMinuteShare() {
+  if (!selectedWorkspaceMinute.value || workspaceShare.value.sending) return
+  const recipientUserIds = workspaceShare.value.recipients.map((recipient) => recipient.userId)
+  if (!recipientUserIds.length) {
+    workspaceShare.value.error = '받는 사람을 1명 이상 선택하세요.'
+    return
+  }
+  workspaceShare.value.sending = true
+  workspaceShare.value.error = ''
+  try {
+    const shared = await shareMeetingMinutes(selectedWorkspaceMinute.value.meetingId, {
+      recipientUserIds,
+      subject: workspaceShare.value.subject,
+      body: workspaceShare.value.body,
+      idempotencyKey: randomUuid(),
+    })
+    workspaceMinuteDetailByMeetingId.value = {
+      ...workspaceMinuteDetailByMeetingId.value,
+      [shared.meetingId]: shared,
+    }
+    replaceWorkspaceMinuteItem(normalizeWorkspaceMinute(shared))
+    workspaceShareOpen.value = false
+    showToast('회의록 공유 완료', selectedWorkspaceMinute.value.title)
+  } catch (error) {
+    workspaceShare.value.error = error?.message || '회의록 공유 메일 발송에 실패했습니다.'
+  } finally {
+    workspaceShare.value.sending = false
+  }
 }
 
 function onDriveDrop(event) {
@@ -901,19 +1152,60 @@ function compactText(value) {
 function normalizeWorkspaceMinute(raw) {
   const startedAt = raw.meetingStartedAt || null
   const endedAt = raw.meetingEndedAt || null
-  const durationMinutes = startedAt && endedAt
-    ? Math.max(1, Math.round((new Date(endedAt) - new Date(startedAt)) / 60000))
-    : 0
   return {
     id: raw.minutesId,
+    minutesId: raw.minutesId,
     meetingId: raw.meetingId,
+    meetingStartedAt: startedAt,
+    meetingEndedAt: endedAt,
+    reviewerUserId: raw.reviewerUserId,
     title: raw.meetingTitle || '회의록',
-    date: startedAt ? displayDate(startedAt) : '-',
-    duration: durationMinutes ? `${durationMinutes}분` : '-',
+    date: startedAt ? displayDate(startedAt) : formatDate(raw.approvedAt),
+    duration: formatDuration(startedAt, endedAt),
     attendees: Number(raw.attendeeCount || 0),
+    summary: raw.summary || '',
+    content: raw.content || '',
     reviewer: raw.reviewerName || raw.reviewerDepartment || '-',
+    reviewerDepartment: raw.reviewerDepartment || '',
+    rawStatus: raw.status,
+    statusLabel: statusLabel(raw.status),
+    approvedAt: raw.approvedAt || null,
     favorite: Boolean(raw.favorite),
   }
+}
+
+function replaceWorkspaceMinuteItem(next) {
+  minuteItems.value = minuteItems.value.map((minute) => minute.meetingId === next.meetingId ? { ...minute, ...next } : minute)
+}
+
+function statusLabel(status) {
+  return {
+    DRAFT: '초안',
+    IN_REVIEW: '검토중',
+    APPROVED: '승인됨',
+    SHARED: '공유됨',
+    DELETION_SCHEDULED: '삭제 예정',
+  }[status] || status || '-'
+}
+
+function formatDate(value) {
+  if (!value) return '-'
+  return new Intl.DateTimeFormat('ko-KR', { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(value))
+}
+
+function formatDuration(startedAt, endedAt) {
+  if (!startedAt || !endedAt) return '-'
+  const minutes = Math.max(1, Math.round((new Date(endedAt) - new Date(startedAt)) / 60000))
+  if (minutes < 60) return `${minutes}분`
+  return `${Math.floor(minutes / 60)}시간 ${minutes % 60}분`
+}
+
+function formatOffset(ms) {
+  if (!Number.isFinite(Number(ms))) return '--:--'
+  const totalSeconds = Math.floor(Number(ms) / 1000)
+  const minutes = String(Math.floor(totalSeconds / 60)).padStart(2, '0')
+  const seconds = String(totalSeconds % 60).padStart(2, '0')
+  return `${minutes}:${seconds}`
 }
 
 function formatSize(bytes) {
@@ -928,11 +1220,23 @@ function toTimeInput(value) {
   return `${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}`
 }
 
+function randomUuid() {
+  if (globalThis.crypto?.randomUUID) return globalThis.crypto.randomUUID()
+  return '10000000-1000-4000-8000-100000000000'.replace(/[018]/g, (char) => {
+    const random = globalThis.crypto.getRandomValues(new Uint8Array(1))[0]
+    return (Number(char) ^ (random & (15 >> (Number(char) / 4)))).toString(16)
+  })
+}
+
 function showToast(title, message) {
   const toast = { id: crypto.randomUUID?.() || String(Date.now()), title, message }
   toasts.value = [toast, ...toasts.value].slice(0, 3)
   setTimeout(() => {
     toasts.value = toasts.value.filter((item) => item.id !== toast.id)
   }, 2600)
+}
+
+function dismissToast(id) {
+  toasts.value = toasts.value.filter((item) => item.id !== id)
 }
 </script>
