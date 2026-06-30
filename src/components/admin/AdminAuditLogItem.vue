@@ -10,7 +10,6 @@ const props = defineProps({
   log: { type: Object, required: true },
 })
 
-const actorName = computed(() => props.log.actorName || '-')
 const actionLabel = computed(() => formatActionTypeLabel(props.log.actionType))
 const targetLabel = computed(() => formatTargetTypeLabel(props.log.targetType))
 const targetName = computed(() => props.log.targetName || '-')
@@ -43,13 +42,15 @@ function formatCompactDateTime(value) {
 
 <template>
   <li class="admin-audit-log-item">
-    <strong class="admin-audit-log-actor">{{ actorName }}</strong>
+    <!-- 대시보드 최근 작업 이력 카드에서는 관리자명 반복 노출을 숨긴다. -->
     <div class="admin-audit-log-summary">
       <span class="admin-audit-log-action">{{ actionLabel }}</span>
       <span class="admin-audit-log-target">{{ targetLabel }}</span>
       <span class="admin-audit-log-field">{{ targetName }}</span>
-      <span :class="['badge', resultTone]">{{ resultLabel }}</span>
       <span class="admin-audit-log-time">{{ createdAt }}</span>
+    </div>
+    <div class="admin-audit-log-meta">
+      <span :class="['badge', resultTone]">{{ resultLabel }}</span>
       <RouterLink to="/admin/logs" class="admin-audit-log-link">상세 보기</RouterLink>
     </div>
   </li>
