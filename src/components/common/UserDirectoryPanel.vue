@@ -1,5 +1,6 @@
 <script setup>
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { Building2, CircleUserRound, Search, UserCheck, UserX } from '@lucide/vue'
 import AppSelect from './AppSelect.vue'
 import {
   createAdminUser,
@@ -18,7 +19,6 @@ import {
   getAdminTeams,
 } from '../../lib/admin-organizations'
 import { useUserSuggestions } from '../../composables/useUserSuggestions.js'
-import { getOrganizationUserSummary } from '../../lib/user-directory'
 import { useAuthStore } from '../../stores/auth'
 import ModalShell from './ModalShell.vue'
 import Pagination from './Pagination.vue'
@@ -32,6 +32,8 @@ const props = defineProps({
   pageSize: { type: Number, default: 20 },
   editable: { type: Boolean, default: false },
 })
+
+const DEFAULT_ACTIVE_UNTIL = '2999-12-31'
 
 defineExpose({
   openCreate,
@@ -104,6 +106,43 @@ const isEditingCurrentUser = computed(
   () => Boolean(editForm.value.userId) && editForm.value.userId === auth.user?.userId,
 )
 const currentAdminAffiliateId = computed(() => auth.user?.affiliateId || auth.user?.organizationId || '')
+const uniqueDepartmentCount = computed(() =>
+  new Set(
+    users.value
+      .map((user) => user.department)
+      .filter((department) => department && department !== '-'),
+  ).size,
+)
+const summaryCards = computed(() => [
+  {
+    label: '전체 회원 수',
+    value: `${totalElements.value}명`,
+    description: '전체 등록된 회원 수',
+    icon: CircleUserRound,
+    tone: 'orange',
+  },
+  {
+    label: '활성 회원',
+    value: `${users.value.filter((user) => user.status === 'ACTIVE').length}명`,
+    description: '현재 활성 상태의 회원 수',
+    icon: UserCheck,
+    tone: 'green',
+  },
+  {
+    label: '비활성 회원',
+    value: `${users.value.filter((user) => user.status === 'INACTIVE').length}명`,
+    description: '현재 비활성 상태의 회원 수',
+    icon: UserX,
+    tone: 'slate',
+  },
+  {
+    label: '소속 부서 수',
+    value: `${uniqueDepartmentCount.value}개`,
+    description: '등록된 부서 기준',
+    icon: Building2,
+    tone: 'blue',
+  },
+])
 
 const availableAffiliates = computed(() => {
   if (!isEditMode.value && currentAdminAffiliateId.value) {
@@ -249,7 +288,7 @@ async function openDetail(user) {
   detailErrorMessage.value = ''
 
   try {
-    const data = await getOrganizationUserSummary(user.userId)
+    const data = await getAdminUser(user.userId)
     selectedUser.value = normalizeUserSummary(data)
   } catch (error) {
     if (error?.status === 403) {
@@ -458,6 +497,9 @@ function normalizeUserSummary(user) {
     status: resolveAdminUserStatus(user),
     activeFrom: user?.activeFrom || user?.activeStartDate || null,
     activeUntil: user?.activeUntil || user?.activeEndDate || null,
+    createdAt: user?.createdAt || null,
+    updatedAt: user?.updatedAt || null,
+    initialPasswordChangeRequired: Boolean(user?.initialPasswordChangeRequired),
     affiliateId: user?.affiliateId || '',
     departmentId: user?.departmentId || '',
     teamId: user?.teamId || '',
@@ -490,7 +532,8 @@ function createEmptyForm() {
     teamId: '',
     positionId: '',
     activeFrom: getTodayDateInputValue(),
-    activeUntil: '',
+    activeUntil: DEFAULT_ACTIVE_UNTIL,
+    createdAt: getTodayDateInputValue(),
   }
 }
 
@@ -508,6 +551,7 @@ function createFormFromUser(user) {
     positionId: user?.positionId || '',
     activeFrom: toDateInputValue(user?.activeFrom || user?.activeStartDate),
     activeUntil: toDateInputValue(user?.activeUntil || user?.activeEndDate),
+    createdAt: toDateInputValue(user?.createdAt),
   }
 }
 
@@ -551,6 +595,14 @@ function toDateInputValue(value) {
   return date.toISOString().slice(0, 10)
 }
 
+function formatDisplayDate(value) {
+  const normalized = toDateInputValue(value)
+  if (!normalized) return '-'
+
+  const [year, month, day] = normalized.split('-')
+  return `${year}.${month}.${day}`
+}
+
 function getTodayDateInputValue() {
   const now = new Date()
   const localDate = new Date(now.getTime() - now.getTimezoneOffset() * 60 * 1000)
@@ -586,104 +638,116 @@ function formatActionError(error, fallbackMessage) {
 </script>
 
 <template>
-  <article class="card directory-panel">
-    <div class="directory-head">
-      <div>
-        <h2>{{ title }}</h2>
-        <p>{{ description }}</p>
-      </div>
-      <span class="badge navy">총 {{ totalElements }}명</span>
+  <section class="directory-panel">
+    <div v-if="!loading && !forbidden && !errorMessage" class="metric-grid directory-metric-grid">
+      <article v-for="card in summaryCards" :key="card.label" class="metric-card directory-metric-card">
+        <div :class="['directory-metric-icon', `tone-${card.tone}`]">
+          <component :is="card.icon" :size="22" />
+        </div>
+        <div class="directory-metric-copy">
+          <span>{{ card.label }}</span>
+          <strong>{{ card.value }}</strong>
+          <em>{{ card.description }}</em>
+        </div>
+      </article>
     </div>
 
-    <div class="admin-toolbar directory-toolbar">
-      <div ref="suggestionFieldRef" class="user-suggestion-field directory-search-field">
-        <input
-          v-model="keyword"
-          @input="handleSuggestionInput"
-          @compositionupdate="handleSuggestionInput"
-          @compositionend="handleSuggestionInput"
-          placeholder="이름, 로그인 ID, 이메일, 부서로 검색"
-          @keydown="handleSuggestionKeydown($event, applySuggestion)"
-        />
-        <div v-if="showSuggestionDropdown" class="user-suggestion-dropdown">
-          <div v-if="suggestionLoading" class="user-suggestion-status">검색 중...</div>
-          <div v-else-if="suggestionError" class="user-suggestion-status">{{ suggestionError }}</div>
-          <div v-else-if="!suggestions.length" class="user-suggestion-status">검색 결과가 없습니다.</div>
+    <article class="card directory-shell">
+      <div class="directory-head">
+        <div>
+          <h2>{{ title }}</h2>
+          <p>{{ description }}</p>
+        </div>
+        <span class="badge navy">총 {{ totalElements }}명</span>
+      </div>
+
+      <div class="directory-toolbar-row">
+        <div ref="suggestionFieldRef" class="user-suggestion-field directory-search-field">
+          <Search :size="18" class="directory-search-icon" />
+          <input
+            v-model="keyword"
+            @input="handleSuggestionInput"
+            @compositionupdate="handleSuggestionInput"
+            @compositionend="handleSuggestionInput"
+            placeholder="이름, 로그인 ID, 이메일, 부서로 검색"
+            @keydown="handleSuggestionKeydown($event, applySuggestion)"
+          />
+          <div v-if="showSuggestionDropdown" class="user-suggestion-dropdown">
+            <div v-if="suggestionLoading" class="user-suggestion-status">검색 중...</div>
+            <div v-else-if="suggestionError" class="user-suggestion-status">{{ suggestionError }}</div>
+            <div v-else-if="!suggestions.length" class="user-suggestion-status">검색 결과가 없습니다.</div>
+            <button
+              v-for="(user, index) in suggestions"
+              v-else
+              :key="user.userId"
+              type="button"
+              class="user-suggestion-item"
+              :class="{ active: activeSuggestionIndex === index }"
+              @mouseenter="setActiveSuggestion(index)"
+              @click="selectSuggestion(user, applySuggestion)"
+            >
+              <div class="user-suggestion-main">
+                <strong>{{ user.name || '-' }}</strong>
+                <span>{{ user.email || '-' }}</span>
+                <small>{{ user.loginId || '-' }}</small>
+                <small>{{ [user.affiliate, user.department, user.team, user.position].filter(Boolean).join(' · ') || '-' }}</small>
+              </div>
+              <span class="badge navy">{{ roleLabel(user.role) }}</span>
+            </button>
+          </div>
+        </div>
+        <div class="toolbar directory-status-toolbar">
           <button
-            v-for="(user, index) in suggestions"
-            v-else
-            :key="user.userId"
-            type="button"
-            class="user-suggestion-item"
-            :class="{ active: activeSuggestionIndex === index }"
-            @mouseenter="setActiveSuggestion(index)"
-            @click="selectSuggestion(user, applySuggestion)"
+            v-for="option in statusFilterOptions"
+            :key="option.value"
+            class="chip"
+            :class="{ active: status === option.value }"
+            @click="status = option.value"
           >
-            <div class="user-suggestion-main">
-              <strong>{{ user.name || '-' }}</strong>
-              <span>{{ user.email || '-' }}</span>
-              <!-- 관리자 회원 관리 화면에서만 로그인 ID를 노출한다. -->
-              <small>{{ user.loginId || '-' }}</small>
-              <small>{{ [user.affiliate, user.department, user.team, user.position].filter(Boolean).join(' · ') || '-' }}</small>
-            </div>
-            <span class="badge navy">{{ roleLabel(user.role) }}</span>
+            {{ option.label }}
           </button>
         </div>
       </div>
-      <div class="toolbar">
-        <button
-          v-for="option in statusFilterOptions"
-          :key="option.value"
-          class="chip"
-          :class="{ active: status === option.value }"
-          @click="status = option.value"
-        >
-          {{ option.label }}
-        </button>
+
+      <div v-if="loading" class="empty-state">사용자 검색 결과를 불러오는 중입니다.</div>
+      <div v-else-if="forbidden" class="empty-state">
+        <h3>접근 권한 없음</h3>
+        <p>이 기능을 사용할 수 있는 권한이 없습니다.</p>
       </div>
-    </div>
+      <div v-else-if="errorMessage" class="error-box">{{ errorMessage }}</div>
 
-    <div v-if="loading" class="empty-state">사용자 검색 결과를 불러오는 중입니다.</div>
-    <div v-else-if="forbidden" class="empty-state">
-      <h3>접근 권한 없음</h3>
-      <p>이 기능을 사용할 수 있는 권한이 없습니다.</p>
-    </div>
-    <div v-else-if="errorMessage" class="error-box">{{ errorMessage }}</div>
+      <template v-else>
+        <div v-if="successMessage" class="settings-success directory-feedback">
+          {{ successMessage }}
+        </div>
 
-    <template v-else>
-      <div v-if="successMessage" class="settings-success" style="margin-bottom: 12px;">
-        {{ successMessage }}
-      </div>
+        <div v-if="actionError" class="error-box action-feedback directory-feedback">
+          {{ actionError }}
+        </div>
 
-      <div v-if="actionError" class="error-box action-feedback" style="margin-bottom: 12px;">
-        {{ actionError }}
-      </div>
-
-      <div class="table-card admin-data-table directory-table">
-        <table>
-          <thead>
-            <tr>
-              <th>이름</th>
-              <th>loginId</th>
-              <th>이메일</th>
-              <th>계열사</th>
-              <th>부서</th>
-              <th>팀</th>
-              <th>직급</th>
-              <th>권한</th>
-              <th>상태</th>
+        <div class="table-card admin-data-table directory-table">
+          <table>
+            <thead>
+              <tr>
+                <th>이름</th>
+                <th>loginId</th>
+                <th>이메일</th>
+                <th>부서</th>
+                <th>팀</th>
+                <th>직급</th>
+                <th>권한</th>
+                <th>상태</th>
               <th v-if="editable">액션</th>
             </tr>
           </thead>
           <tbody>
             <tr v-if="!hasUsers">
-              <td :colspan="editable ? 10 : 9"><div class="empty-state">검색 결과가 없습니다.</div></td>
+              <td :colspan="editable ? 9 : 8"><div class="empty-state">검색 결과가 없습니다.</div></td>
             </tr>
             <tr v-for="user in users" :key="user.userId" class="directory-row" @click="openDetail(user)">
               <td><span class="table-avatar">{{ user.name?.[0] || '?' }}</span>{{ user.name }}</td>
               <td>{{ user.loginId }}</td>
               <td>{{ user.email }}</td>
-              <td>{{ user.affiliate }}</td>
               <td>{{ user.department }}</td>
               <td>{{ user.team }}</td>
               <td>{{ user.position }}</td>
@@ -694,22 +758,36 @@ function formatActionError(error, fallbackMessage) {
                 </span>
               </td>
               <td v-if="editable">
-                <button class="icon-text directory-action-link" @click.stop="openEdit(user)">수정</button>
+                <div class="directory-action-group">
+                  <button class="icon-text directory-action-link muted" @click.stop="openDetail(user)">상세 보기</button>
+                  <span>|</span>
+                  <button class="icon-text directory-action-link" @click.stop="openEdit(user)">수정</button>
+                </div>
               </td>
             </tr>
           </tbody>
         </table>
-      </div>
+        </div>
 
-      <Pagination v-model="pageNo" :total-pages="totalPages" />
-    </template>
+        <Pagination v-model="pageNo" :total-pages="totalPages" />
+      </template>
+    </article>
 
     <div v-if="detailOpen" class="modal-backdrop" @click.self="detailOpen = false">
       <article class="card write-modal detail-modal directory-detail-modal">
         <header class="directory-detail-modal__header">
-          <div>
-            <h2>{{ detailLoading ? '사용자 요약 조회 중' : selectedUser?.name || '-' }}</h2>
-            <p v-if="!detailLoading">{{ selectedUser?.department || '-' }} · {{ selectedUser?.position || '-' }}</p>
+          <div v-if="selectedUser" class="directory-detail-modal__profile">
+            <div class="directory-detail-modal__avatar">{{ selectedUser.name?.[0] || '?' }}</div>
+            <div class="directory-detail-modal__profile-copy">
+              <h2>{{ detailLoading ? '사용자 요약 조회 중' : selectedUser.name || '-' }}</h2>
+              <p v-if="!detailLoading">{{ selectedUser.department || '-' }} · {{ selectedUser.position || '-' }}</p>
+            </div>
+          </div>
+          <div v-else class="directory-detail-modal__profile">
+            <div class="directory-detail-modal__avatar">?</div>
+            <div class="directory-detail-modal__profile-copy">
+              <h2>사용자 요약 조회 중</h2>
+            </div>
           </div>
           <button class="modal-close directory-detail-modal__close" type="button" @click="detailOpen = false">×</button>
         </header>
@@ -718,16 +796,90 @@ function formatActionError(error, fallbackMessage) {
         <div v-else-if="detailErrorMessage" class="error-box">{{ detailErrorMessage }}</div>
         <template v-else-if="selectedUser">
           <div class="detail-body directory-detail-modal__body">
-            <dl class="detail-list">
-              <div><dt>이름</dt><dd>{{ selectedUser.name }}</dd></div>
-              <div><dt>이메일</dt><dd>{{ selectedUser.email }}</dd></div>
-              <div><dt>계열사</dt><dd>{{ selectedUser.affiliate }}</dd></div>
-              <div><dt>부서</dt><dd>{{ selectedUser.department }}</dd></div>
-              <div><dt>팀</dt><dd>{{ selectedUser.team }}</dd></div>
-              <div><dt>직책</dt><dd>{{ selectedUser.position }}</dd></div>
-              <div><dt>권한</dt><dd>{{ roleLabel(selectedUser.role) }}</dd></div>
-              <div><dt>상태</dt><dd>{{ displayStatusLabel(selectedUser.status) }}</dd></div>
-            </dl>
+            <section class="directory-detail-modal__section">
+              <div class="directory-detail-modal__section-title">
+                <span class="directory-detail-modal__section-icon directory-detail-modal__section-icon--account" aria-hidden="true"></span>
+                <h3>계정 정보</h3>
+              </div>
+              <dl class="directory-detail-modal__info-card directory-detail-modal__info-card--two">
+                <div class="directory-detail-modal__cell">
+                  <dt>로그인 ID</dt>
+                  <dd>{{ selectedUser.loginId }}</dd>
+                </div>
+                <div class="directory-detail-modal__cell">
+                  <dt>이름</dt>
+                  <dd>{{ selectedUser.name }}</dd>
+                </div>
+                <div class="directory-detail-modal__cell">
+                  <dt>이메일</dt>
+                  <dd>{{ selectedUser.email }}</dd>
+                </div>
+                <div class="directory-detail-modal__cell">
+                  <dt>계열사</dt>
+                  <dd>{{ selectedUser.affiliate || '-' }}</dd>
+                </div>
+              </dl>
+            </section>
+
+            <section class="directory-detail-modal__section">
+              <div class="directory-detail-modal__section-title">
+                <span class="directory-detail-modal__section-icon directory-detail-modal__section-icon--organization" aria-hidden="true"></span>
+                <h3>조직 정보</h3>
+              </div>
+              <dl class="directory-detail-modal__info-card directory-detail-modal__info-card--two">
+                <div class="directory-detail-modal__cell">
+                  <dt>부서</dt>
+                  <dd>{{ selectedUser.department || '-' }}</dd>
+                </div>
+                <div class="directory-detail-modal__cell">
+                  <dt>팀</dt>
+                  <dd>{{ selectedUser.team || '-' }}</dd>
+                </div>
+                <div class="directory-detail-modal__cell">
+                  <dt>직책</dt>
+                  <dd>{{ selectedUser.position || '-' }}</dd>
+                </div>
+                <div class="directory-detail-modal__cell">
+                  <dt>권한</dt>
+                  <dd>
+                    <span class="directory-detail-modal__role-badge">{{ roleLabel(selectedUser.role) }}</span>
+                  </dd>
+                </div>
+                <div class="directory-detail-modal__cell directory-detail-modal__cell--span-2">
+                  <dt>상태</dt>
+                  <dd>
+                    <span :class="['badge', 'directory-status-badge', displayStatusTone(selectedUser.status)]">
+                      {{ displayStatusLabel(selectedUser.status) }}
+                    </span>
+                  </dd>
+                </div>
+              </dl>
+            </section>
+
+            <section class="directory-detail-modal__section">
+              <div class="directory-detail-modal__section-title">
+                <span class="directory-detail-modal__section-icon directory-detail-modal__section-icon--history" aria-hidden="true"></span>
+                <h3>계정 이력</h3>
+              </div>
+              <dl class="directory-detail-modal__info-card directory-detail-modal__info-card--two">
+                <div class="directory-detail-modal__cell">
+                  <dt>등록일</dt>
+                  <dd>{{ formatDisplayDate(selectedUser.activeFrom) }}</dd>
+                </div>
+                <div class="directory-detail-modal__cell">
+                  <dt>활성 시작일</dt>
+                  <dd>{{ formatDisplayDate(selectedUser.activeFrom) }}</dd>
+                </div>
+                <div class="directory-detail-modal__cell">
+                  <dt>비활성화일</dt>
+                  <dd>{{ formatDisplayDate(selectedUser.activeUntil || DEFAULT_ACTIVE_UNTIL) }}</dd>
+                </div>
+                <div class="directory-detail-modal__cell">
+                  <dt>최근 수정일</dt>
+                  <dd>{{ formatDisplayDate(selectedUser.updatedAt) }}</dd>
+                </div>
+              </dl>
+            </section>
           </div>
           <div class="modal-actions directory-detail-modal__actions">
             <button
@@ -783,24 +935,6 @@ function formatActionError(error, fallbackMessage) {
                 <option value="ADMIN">ADMIN</option>
               </AppSelect>
             </label>
-            <label v-if="!isEditMode">
-              상태
-              <AppSelect v-model="editForm.status">
-                <option value="ACTIVE">활성</option>
-                <option value="INACTIVE">비활성</option>
-              </AppSelect>
-            </label>
-          </div>
-          <div class="form-row two">
-            <label>
-              계열사
-              <AppSelect v-model="editForm.affiliateId" :disabled="organizationLoading || !isEditMode">
-                <option value="">선택 안 함</option>
-                <option v-for="affiliate in availableAffiliates" :key="affiliate.affiliateId" :value="affiliate.affiliateId">
-                  {{ affiliate.name }}
-                </option>
-              </AppSelect>
-            </label>
             <label>
               부서
               <AppSelect v-model="editForm.departmentId" :disabled="organizationLoading">
@@ -833,11 +967,11 @@ function formatActionError(error, fallbackMessage) {
           </div>
           <div class="form-row two">
             <label>
-              활성 시작일
+              등록일
               <input v-model="editForm.activeFrom" type="date" />
             </label>
             <label>
-              활성 종료일
+              비활성화일
               <input v-model="editForm.activeUntil" type="date" />
             </label>
           </div>
@@ -897,13 +1031,93 @@ function formatActionError(error, fallbackMessage) {
         </button>
       </div>
     </ModalShell>
-  </article>
+  </section>
 </template>
 
 <style scoped>
 .directory-panel {
   display: grid;
+  gap: 18px;
+}
+
+.directory-shell {
+  border: 1px solid rgba(226, 232, 240, 0.92);
+  border-radius: 28px;
+  background: linear-gradient(180deg, #ffffff 0%, #fffdfa 100%);
+  box-shadow: 0 18px 40px rgba(15, 23, 42, 0.05);
+  padding: 28px;
+}
+
+.directory-metric-grid {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 16px;
+  margin-bottom: 0;
+}
+
+.directory-metric-card {
+  min-height: 116px;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: 16px;
+  border: 1px solid rgba(226, 232, 240, 0.92);
+  border-radius: 24px;
+  background: linear-gradient(180deg, #ffffff 0%, #fffdfa 100%);
+  box-shadow: 0 18px 40px rgba(15, 23, 42, 0.05);
+  padding: 18px 20px;
+}
+
+.directory-metric-icon {
+  width: 54px;
+  height: 54px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 18px;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.55);
+}
+
+.directory-metric-icon.tone-orange {
+  background: linear-gradient(180deg, #fff2e8, #ffe3d0);
+  color: #f97316;
+}
+
+.directory-metric-icon.tone-green {
+  background: linear-gradient(180deg, #ecfdf5, #d1fae5);
+  color: #16a34a;
+}
+
+.directory-metric-icon.tone-slate {
+  background: linear-gradient(180deg, #f8fafc, #e2e8f0);
+  color: #64748b;
+}
+
+.directory-metric-icon.tone-blue {
+  background: linear-gradient(180deg, #eef4ff, #dbeafe);
+  color: #2563eb;
+}
+
+.directory-metric-copy {
+  min-width: 0;
+  display: grid;
+  gap: 4px;
+}
+
+.directory-metric-copy span {
+  color: #475467;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.directory-metric-copy strong {
+  font-size: 22px;
+  letter-spacing: -0.03em;
+}
+
+.directory-metric-copy em {
+  color: #667085;
+  font-size: 12px;
+  font-style: normal;
+  font-weight: 600;
 }
 
 .directory-head {
@@ -914,59 +1128,120 @@ function formatActionError(error, fallbackMessage) {
 }
 
 .directory-head h2 {
-  margin-bottom: 0;
+  margin: 0;
+  font-size: 18px;
+  letter-spacing: -0.02em;
 }
 
 .directory-head p {
   margin: 6px 0 0;
-  color: var(--muted-foreground);
+  color: #6b7280;
   font-size: 13px;
-}
-
-.directory-toolbar {
-  margin-bottom: 0;
-  gap: 10px;
-}
-
-.directory-search-field {
-  flex: 1 1 320px;
 }
 
 .directory-head > .badge {
-  min-height: 30px;
-  padding: 0 10px;
-  font-size: 12px;
-  font-weight: 700;
-}
-
-.directory-toolbar :deep(input) {
-  height: 34px;
+  min-height: 32px;
   padding: 0 12px;
   font-size: 13px;
+  font-weight: 800;
 }
 
-.directory-toolbar :deep(input::placeholder) {
-  color: var(--muted-foreground);
-  font-size: 13px;
+.directory-toolbar-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 18px;
 }
 
-.directory-toolbar .toolbar {
-  gap: 6px;
+.directory-search-field {
+  flex: 1 1 520px;
+  max-width: 760px;
 }
 
-.directory-toolbar .chip {
-  min-height: 34px;
-  padding: 0 11px;
-  font-size: 13px;
+.directory-search-icon {
+  position: absolute;
+  top: 50%;
+  left: 16px;
+  z-index: 1;
+  color: #98a2b3;
+  transform: translateY(-50%);
+}
+
+.directory-search-field :deep(input) {
+  height: 42px;
+  border-radius: 14px;
+  padding: 0 16px 0 46px;
+  font-size: 14px;
+  box-shadow: none;
+}
+
+.directory-search-field :deep(input::placeholder) {
+  color: #98a2b3;
+  font-size: 14px;
+}
+
+.directory-status-toolbar {
+  gap: 8px;
+  justify-content: flex-end;
+}
+
+.directory-status-toolbar .chip {
+  min-height: 40px;
+  border-radius: 14px;
+  padding: 0 18px;
+  font-size: 14px;
   font-weight: 700;
+}
+
+.directory-status-toolbar .chip.active {
+  border-color: rgba(249, 115, 22, 0.45);
+  background: #fff3ea;
+  color: var(--primary);
 }
 
 .directory-table {
   margin-top: 0;
+  border-color: #eef2f7;
+  border-radius: 22px;
+  box-shadow: none;
 }
 
 .action-feedback {
   white-space: pre-line;
+}
+
+.directory-feedback {
+  margin-bottom: 12px;
+}
+
+.directory-table :deep(table) {
+  min-width: 1120px;
+}
+
+.directory-table :deep(th) {
+  background: linear-gradient(180deg, #fbfcfe 0%, #f8fafc 100%);
+  color: #667085;
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.directory-table :deep(td) {
+  padding-top: 14px;
+  padding-bottom: 14px;
+  vertical-align: middle;
+}
+
+.directory-row:hover {
+  background: #fffaf5;
+}
+
+.directory-action-group {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: #d0d5dd;
+  white-space: nowrap;
 }
 
 .delete-confirm-modal {
@@ -1047,6 +1322,10 @@ function formatActionError(error, fallbackMessage) {
   transition: color 0.15s ease, text-decoration-color 0.15s ease;
 }
 
+.directory-action-link.muted {
+  color: #667085;
+}
+
 .directory-action-link:hover {
   color: var(--primary);
   text-decoration: underline;
@@ -1058,23 +1337,52 @@ function formatActionError(error, fallbackMessage) {
 }
 
 .directory-detail-modal {
-  width: min(600px, calc(100vw - 32px));
+  width: min(520px, calc(100vw - 24px));
   padding: 0;
   overflow: hidden;
+  border-radius: 24px;
+  box-shadow: 0 22px 56px rgba(15, 23, 42, 0.18);
 }
 
 .directory-detail-modal__header {
   display: flex;
   justify-content: space-between;
-  gap: 16px;
+  gap: 14px;
   align-items: flex-start;
   border-bottom: 1px solid var(--border);
   padding: 18px 20px;
 }
 
+.directory-detail-modal__profile {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+}
+
+.directory-detail-modal__avatar {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 72px;
+  height: 72px;
+  border-radius: 50%;
+  border: 1px solid rgba(243, 115, 33, 0.18);
+  background: linear-gradient(180deg, #fff7f2 0%, #fff1e8 100%);
+  color: var(--primary);
+  font-size: 28px;
+  font-weight: 800;
+  flex: 0 0 auto;
+}
+
+.directory-detail-modal__profile-copy {
+  min-width: 0;
+}
+
 .directory-detail-modal__header h2 {
   margin: 0;
   font-size: 22px;
+  line-height: 1.14;
   letter-spacing: 0;
 }
 
@@ -1082,51 +1390,267 @@ function formatActionError(error, fallbackMessage) {
   margin: 6px 0 0;
   color: var(--muted-foreground);
   font-size: 12px;
+  font-weight: 600;
 }
 
 .directory-detail-modal__close {
   flex: 0 0 auto;
+  width: 38px;
+  height: 38px;
+  border-radius: 50%;
+  background: #f8fafc;
+  font-size: 24px;
+  color: #667085;
 }
 
 .directory-detail-modal__body {
-  padding: 18px 20px 0;
+  padding: 16px 20px 0;
 }
 
-.directory-detail-modal :deep(.detail-list) {
-  gap: 12px;
+.directory-detail-modal__section + .directory-detail-modal__section {
+  margin-top: 14px;
 }
 
-.directory-detail-modal :deep(.detail-list dt) {
-  font-size: 10px;
+.directory-detail-modal__section-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
 }
 
-.directory-detail-modal :deep(.detail-list dd) {
-  margin-top: 3px;
+.directory-detail-modal__section-title h3 {
+  margin: 0;
+  font-size: 15px;
+  line-height: 1.3;
+}
+
+.directory-detail-modal__section-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  position: relative;
+}
+
+.directory-detail-modal__section-icon::before,
+.directory-detail-modal__section-icon::after {
+  content: '';
+  position: absolute;
+}
+
+.directory-detail-modal__section-icon--account::before {
+  top: 1px;
+  width: 8px;
+  height: 8px;
+  border: 2px solid var(--primary);
+  border-radius: 50%;
+}
+
+.directory-detail-modal__section-icon--account::after {
+  bottom: 1px;
+  width: 14px;
+  height: 9px;
+  border: 2px solid var(--primary);
+  border-top: none;
+  border-radius: 0 0 10px 10px;
+}
+
+.directory-detail-modal__section-icon--organization::before {
+  left: 3px;
+  bottom: 2px;
+  width: 16px;
+  height: 14px;
+  border: 2px solid var(--primary);
+  border-radius: 3px;
+}
+
+.directory-detail-modal__section-icon--organization::after {
+  top: 3px;
+  left: 7px;
+  width: 3px;
+  height: 11px;
+  background:
+    linear-gradient(var(--primary), var(--primary)) 0 0 / 3px 3px no-repeat,
+    linear-gradient(var(--primary), var(--primary)) 0 4px / 3px 3px no-repeat,
+    linear-gradient(var(--primary), var(--primary)) 0 8px / 3px 3px no-repeat;
+}
+
+.directory-detail-modal__section-icon--history::before {
+  inset: 2px;
+  border: 2px solid var(--primary);
+  border-radius: 6px;
+}
+
+.directory-detail-modal__section-icon--history::after {
+  top: 6px;
+  left: 10px;
+  width: 2px;
+  height: 7px;
+  background: var(--primary);
+  transform-origin: bottom center;
+  transform: rotate(45deg);
+}
+
+.directory-detail-modal__info-card {
+  display: grid;
+  overflow: hidden;
+  border: 1px solid #e7edf5;
+  border-radius: 18px;
+  background: #fff;
+  box-shadow: 0 8px 22px rgba(15, 23, 42, 0.045);
+}
+
+.directory-detail-modal__info-card--two {
+  grid-template-columns: 1fr;
+}
+
+.directory-detail-modal__cell {
+  padding: 13px 14px;
+  min-height: 0;
+  border-bottom: 1px solid #e7edf5;
+}
+
+.directory-detail-modal__cell--span-2 {
+  grid-column: auto;
+}
+
+.directory-detail-modal__cell dt {
+  margin: 0;
+  color: #98a2b3;
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1.3;
+}
+
+.directory-detail-modal__cell dd {
+  margin: 6px 0 0;
+  color: #101828;
   font-size: 13px;
-  line-height: 1.55;
+  font-weight: 700;
+  line-height: 1.4;
+  word-break: break-word;
+}
+
+.directory-detail-modal__role-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 56px;
+  min-height: 26px;
+  padding: 0 10px;
+  border-radius: 10px;
+  background: #fff1e8;
+  color: var(--primary);
+  font-size: 11px;
+  font-weight: 800;
 }
 
 .directory-detail-modal__actions {
-  padding: 16px 20px 20px;
+  padding: 14px 20px 18px;
+  margin-top: 14px;
+  border-top: 1px solid var(--border);
   justify-content: flex-end;
   gap: 8px;
 }
 
 @media (max-width: 959px) {
+  .directory-metric-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
   .directory-head {
     flex-direction: column;
   }
 
-  .directory-head-actions {
+  .directory-toolbar-row {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .directory-search-field {
     width: 100%;
-    justify-content: space-between;
   }
 
   .directory-detail-modal__header,
   .directory-detail-modal__body,
   .directory-detail-modal__actions {
-    padding-left: 16px;
-    padding-right: 16px;
+    padding-left: 14px;
+    padding-right: 14px;
+  }
+
+  .directory-detail-modal__header {
+    padding-top: 16px;
+    padding-bottom: 16px;
+  }
+
+  .directory-detail-modal__profile {
+    gap: 10px;
+  }
+
+  .directory-detail-modal__avatar {
+    width: 64px;
+    height: 64px;
+    font-size: 26px;
+  }
+
+  .directory-detail-modal__header h2 {
+    font-size: 20px;
+  }
+
+  .directory-detail-modal__header p {
+    font-size: 12px;
+  }
+}
+
+@media (max-width: 640px) {
+  .directory-shell {
+    padding: 20px;
+    border-radius: 22px;
+  }
+
+  .directory-metric-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .directory-metric-card {
+    grid-template-columns: 1fr;
+  }
+
+  .directory-detail-modal {
+    width: min(100vw - 16px, 100%);
+    border-radius: 22px;
+  }
+
+  .directory-detail-modal__header {
+    gap: 16px;
+    align-items: flex-start;
+  }
+
+  .directory-detail-modal__profile {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .directory-detail-modal__cell {
+    min-height: 0;
+    padding: 12px 12px 13px;
+  }
+
+  .directory-detail-modal__cell dt {
+    font-size: 12px;
+  }
+
+  .directory-detail-modal__cell dd {
+    font-size: 13px;
+  }
+
+  .directory-detail-modal__actions {
+    flex-direction: column-reverse;
+  }
+
+  .directory-detail-modal__actions > button {
+    width: 100%;
   }
 }
 </style>

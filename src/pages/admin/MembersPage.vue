@@ -12,7 +12,7 @@ const auth = useAuthStore()
 </script>
 
 <template>
-  <section class="page admin-page">
+  <section class="page admin-page admin-members-page">
     <header class="page-header rooms-header">
       <div>
         <h1>회원 관리</h1>
@@ -36,10 +36,35 @@ const auth = useAuthStore()
   gap: 16px;
 }
 
+.admin-members-page {
+  display: grid;
+  gap: 18px;
+}
+
+.admin-members-page .page-header {
+  margin-bottom: 0;
+}
+
+.admin-members-page .page-header h1 {
+  font-size: clamp(30px, 4vw, 38px);
+  letter-spacing: -0.03em;
+}
+
+.admin-members-page .page-header p {
+  font-size: 15px;
+}
+
 .header-actions {
   display: flex;
   align-items: center;
   justify-content: flex-end;
+}
+
+.header-actions :deep(.action-button) {
+  min-height: 44px;
+  border-radius: 14px;
+  padding: 0 22px;
+  box-shadow: 0 14px 28px rgba(243, 115, 33, 0.18);
 }
 
 @media (max-width: 959px) {
