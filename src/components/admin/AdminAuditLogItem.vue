@@ -10,7 +10,6 @@ const props = defineProps({
   log: { type: Object, required: true },
 })
 
-const actorName = computed(() => props.log.actorName || '-')
 const actionLabel = computed(() => formatActionTypeLabel(props.log.actionType))
 const targetLabel = computed(() => formatTargetTypeLabel(props.log.targetType))
 const targetName = computed(() => props.log.targetName || '-')
@@ -43,7 +42,6 @@ function formatCompactDateTime(value) {
 
 <template>
   <li class="admin-audit-log-item">
-    <strong class="admin-audit-log-actor">{{ actorName }}</strong>
     <div class="admin-audit-log-summary">
       <span class="admin-audit-log-action">{{ actionLabel }}</span>
       <span class="admin-audit-log-target">{{ targetLabel }}</span>

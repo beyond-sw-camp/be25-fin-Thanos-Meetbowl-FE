@@ -1,5 +1,6 @@
 <script setup>
 import { computed, onMounted, ref } from 'vue'
+import { CalendarCheck2, FileText, LockKeyhole, Sparkles, User } from '@lucide/vue'
 import AdminAuditLogItem from '../../components/admin/AdminAuditLogItem.vue'
 import AdminChartShell from '../../components/admin/AdminChartShell.vue'
 import AdminInsightCard from '../../components/admin/AdminInsightCard.vue'
@@ -401,21 +402,29 @@ const kpis = computed(() => {
       label: '오늘 예약 수',
       value: meetingRoomSummary.value.todayReservationCount,
       sub: `운영 시간 상세 점유 ${visibleOccupancyUsage.value.length}개 시간대`,
+      icon: CalendarCheck2,
+      tone: 'orange',
     },
     {
       label: '현재 사용 중 회의실 수',
       value: meetingRoomSummary.value.inUseMeetingRoomCount,
       sub: `현재 시간대 점유 기준 ${siteBuildingUsage.value.length}개 건물`,
+      icon: User,
+      tone: 'blue',
     },
     {
       label: '현재 사용 가능한 회의실 수',
       value: meetingRoomSummary.value.availableMeetingRoomCount,
       sub: `현재 사용 중인 회의실 기준`,
+      icon: Sparkles,
+      tone: 'green',
     },
     {
       label: '메일 보관 기간',
       value: `${mailRetentionPolicy.value.retentionDays}일`,
       sub: mailRetentionPolicy.value.autoDeleteEnabled ? '자동 삭제 사용' : '자동 삭제 미사용',
+      icon: LockKeyhole,
+      tone: 'violet',
     },
     {
       label: '최근 관리자 작업',
@@ -423,6 +432,8 @@ const kpis = computed(() => {
       sub: recentAuditLogs.value[0]
         ? `${recentAuditLogs.value[0].actorName} · ${formatActionTypeLabel(recentAuditLogs.value[0].actionType)}`
         : '최근 이력 없음',
+      icon: FileText,
+      tone: 'orange-soft',
     },
   ]
 })
@@ -526,7 +537,7 @@ function resultBadgeClass(result) {
 </script>
 
 <template>
-  <section class="page admin-page">
+  <section class="page admin-page admin-dashboard-page">
 <!--    <div class="admin-eyebrow"><span></span>Admin Console</div>-->
     <header class="page-header">
       <h1>관리자 대시보드</h1>
@@ -551,10 +562,15 @@ function resultBadgeClass(result) {
 
     <template v-else>
       <div class="metric-grid admin-metric-grid">
-        <article v-for="kpi in kpis" :key="kpi.label" class="metric-card admin-metric-card">
-          <span>{{ kpi.label }}</span>
-          <strong>{{ kpi.value }}</strong>
-          <em>{{ kpi.sub }}</em>
+        <article v-for="kpi in kpis" :key="kpi.label" class="metric-card admin-metric-card admin-dashboard-kpi">
+          <div :class="['admin-metric-icon', `tone-${kpi.tone}`]">
+            <component :is="kpi.icon" :size="22" />
+          </div>
+          <div class="admin-metric-body">
+            <span>{{ kpi.label }}</span>
+            <strong>{{ kpi.value }}</strong>
+            <em>{{ kpi.sub }}</em>
+          </div>
         </article>
       </div>
 
@@ -732,7 +748,7 @@ function resultBadgeClass(result) {
         </article>
       </div>
 
-      <article class="card">
+      <article class="card admin-retention-card">
         <div class="card-head">
           <div>
             <h2>보관 정책 요약</h2>
