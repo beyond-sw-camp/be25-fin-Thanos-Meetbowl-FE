@@ -5,7 +5,7 @@ import UserDirectoryPanel from '../../components/common/UserDirectoryPanel.vue'
 import { useAuthStore } from '../../stores/auth'
 
 const panelTitle = '사용자 검색'
-const panelDescription = '이름, 이메일, 로그인 ID로 사용자를 찾고 회원 요약 정보를 확인합니다.'
+const panelDescription = ''
 // 패널 인스턴스를 잡아두고, 상단 버튼에서 생성 모달을 직접 연다.
 const directoryPanel = ref(null)
 const auth = useAuthStore()

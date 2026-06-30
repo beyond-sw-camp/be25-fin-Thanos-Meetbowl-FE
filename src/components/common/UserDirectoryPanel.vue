@@ -5,6 +5,7 @@ import AppSelect from './AppSelect.vue'
 import {
   createAdminUser,
   deleteAdminUser,
+  getAllAdminUsers,
   getAdminUser,
   getAdminUsers,
   resetAdminUserPassword,
@@ -58,6 +59,10 @@ const pageNo = ref(1)
 const totalPages = ref(1)
 const totalElements = ref(0)
 const users = ref([])
+const summaryTotalMembers = ref(0)
+const summaryActiveMembers = ref(0)
+const summaryInactiveMembers = ref(0)
+const summaryDepartmentCount = ref(0)
 const detailOpen = ref(false)
 const editOpen = ref(false)
 const deleteConfirmOpen = ref(false)
@@ -107,38 +112,31 @@ const isEditingCurrentUser = computed(
   () => Boolean(editForm.value.userId) && editForm.value.userId === auth.user?.userId,
 )
 const currentAdminAffiliateId = computed(() => auth.user?.affiliateId || auth.user?.organizationId || '')
-const uniqueDepartmentCount = computed(() =>
-  new Set(
-    users.value
-      .map((user) => user.department)
-      .filter((department) => department && department !== '-'),
-  ).size,
-)
 const summaryCards = computed(() => [
   {
     label: '전체 회원 수',
-    value: `${totalElements.value}명`,
+    value: `${summaryTotalMembers.value}명`,
     description: '전체 등록된 회원 수',
     icon: CircleUserRound,
     tone: 'orange',
   },
   {
     label: '활성 회원',
-    value: `${users.value.filter((user) => user.status === 'ACTIVE').length}명`,
+    value: `${summaryActiveMembers.value}명`,
     description: '현재 활성 상태의 회원 수',
     icon: UserCheck,
     tone: 'green',
   },
   {
     label: '비활성 회원',
-    value: `${users.value.filter((user) => user.status === 'INACTIVE').length}명`,
+    value: `${summaryInactiveMembers.value}명`,
     description: '현재 비활성 상태의 회원 수',
     icon: UserX,
     tone: 'slate',
   },
   {
     label: '소속 부서 수',
-    value: `${uniqueDepartmentCount.value}개`,
+    value: `${summaryDepartmentCount.value}개`,
     description: '등록된 부서 기준',
     icon: Building2,
     tone: 'blue',
@@ -178,6 +176,7 @@ const availablePositions = computed(() =>
 
 onMounted(() => {
   loadUsers()
+  loadSummaryCards()
 })
 
 onBeforeUnmount(() => {
@@ -260,11 +259,7 @@ async function loadUsers() {
       return
     }
 
-    users.value = (data?.items || []).map(normalizeUserSummary)
-
-    const visibleUsers = (data?.items || [])
-      .map(normalizeUserSummary)
-      .filter((user) => user.role === 'USER' && user.loginId !== 'admin')
+    const visibleUsers = toVisibleUsers(data?.items || [])
     users.value = visibleUsers
   } catch (error) {
     if (error?.status === 403) {
@@ -277,6 +272,29 @@ async function loadUsers() {
     loading.value = false
     hasLoadedUsers.value = true
   }
+}
+
+async function loadSummaryCards() {
+  try {
+    const data = await getAllAdminUsers({ size: 100 })
+    const visibleUsers = toVisibleUsers(data?.items || [])
+    summaryTotalMembers.value = visibleUsers.length
+    summaryActiveMembers.value = visibleUsers.filter((user) => user.status === 'ACTIVE').length
+    summaryInactiveMembers.value = visibleUsers.filter((user) => user.status === 'INACTIVE').length
+    summaryDepartmentCount.value = new Set(
+      visibleUsers
+        .map((user) => user.department)
+        .filter((department) => department && department !== '-'),
+    ).size
+  } catch (error) {
+    if (error?.status === 403) return
+  }
+}
+
+function toVisibleUsers(items) {
+  return items
+    .map(normalizeUserSummary)
+    .filter((user) => user.role === 'USER' && user.loginId !== 'admin')
 }
 
 function applySuggestion(user) {
@@ -378,6 +396,7 @@ async function saveMember() {
       await updateAdminUser(editForm.value.userId, buildUserUpdatePayload(editForm.value))
       // 수정 저장 후에는 현재 검색어/필터/페이지 기준으로 목록을 다시 받아 badge 상태를 BE 응답과 맞춘다.
       await loadUsers()
+      await loadSummaryCards()
 
       if (selectedUser.value?.userId === editForm.value.userId) {
         selectedUser.value = normalizeUserSummary(await getAdminUser(editForm.value.userId))
@@ -395,6 +414,7 @@ async function saveMember() {
         totalElements.value += 1
         totalPages.value = Math.max(1, Math.ceil(totalElements.value / props.pageSize))
       }
+      await loadSummaryCards()
 
       // BE가 내려준 temporaryPassword를 그대로 안내하되, 없더라도 초기 비밀번호 정책값 1234를 보여준다.
       successMessage.value = `계정이 생성되었습니다. 초기 비밀번호는 ${created?.temporaryPassword || '1234'}입니다.`
@@ -442,6 +462,7 @@ async function handleDeleteMember() {
     // 삭제 성공 후에는 현재 필터/페이지 기준으로 목록을 다시 받아 비활성화 상태와 총 개수를 함께 동기화한다.
     // 삭제 후에도 현재 검색어/필터/페이지 조건은 유지한 채 목록만 최신화한다.
     await loadUsers()
+    await loadSummaryCards()
   } catch (error) {
     if (error?.status === 403) {
       forbidden.value = true
