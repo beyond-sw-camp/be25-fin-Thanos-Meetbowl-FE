@@ -27,7 +27,7 @@ const props = defineProps({
   title: { type: String, default: '사용자 검색' },
   description: {
     type: String,
-    default: '이름, 이메일, 로그인 ID로 사용자를 찾고 조직 요약 정보를 확인합니다.',
+    default: '',
   },
   pageSize: { type: Number, default: 20 },
   editable: { type: Boolean, default: false },
@@ -40,6 +40,7 @@ defineExpose({
 })
 
 const loading = ref(true)
+const hasLoadedUsers = ref(false)
 const detailLoading = ref(false)
 const editLoading = ref(false)
 const saving = ref(false)
@@ -235,7 +236,8 @@ watch(
 )
 
 async function loadUsers() {
-  loading.value = true
+  const showLoading = !hasLoadedUsers.value
+  loading.value = showLoading
   forbidden.value = false
   errorMessage.value = ''
   actionError.value = ''
@@ -273,6 +275,7 @@ async function loadUsers() {
     errorMessage.value = error?.message || '사용자 검색 결과를 불러오지 못했습니다.'
   } finally {
     loading.value = false
+    hasLoadedUsers.value = true
   }
 }
 
@@ -656,7 +659,7 @@ function formatActionError(error, fallbackMessage) {
       <div class="directory-head">
         <div>
           <h2>{{ title }}</h2>
-          <p>{{ description }}</p>
+          <p v-if="description">{{ description }}</p>
         </div>
         <span class="badge navy">총 {{ totalElements }}명</span>
       </div>
