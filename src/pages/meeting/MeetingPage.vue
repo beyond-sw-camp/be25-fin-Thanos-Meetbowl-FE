@@ -1474,9 +1474,7 @@ const sttEmptyStateMessage = computed(() => {
 const currentCaptionEmptyStateMessage = computed(() => sttEmptyStateMessage.value)
 const sttStatusHint = computed(() => {
   if (!meetingRoom.value) return ''
-  if (finalizedCaptions.value.length > 0 || streamingCaptionPreview.value) {
-    return lastCaptionText.value ? `마지막 수신 문장: ${lastCaptionText.value}` : ''
-  }
+  if (finalizedCaptions.value.length > 0 || streamingCaptionPreview.value) return ''
   if (!mic.value) return '마이크가 꺼져 있으면 STT가 문장을 만들 수 없습니다.'
   if (sttRuntimeStatus.value) return `STT 상태: ${sttRuntimeStatus.value}`
   if (lastCaptionReceivedAt.value) return '자막은 수신됐지만 아직 화면에 고정된 문장이 없습니다.'
