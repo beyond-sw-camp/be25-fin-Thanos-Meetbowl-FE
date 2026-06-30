@@ -314,15 +314,15 @@ const siteUsageInsightItems = computed(() => [
     secondaryValue: `${visibleSiteBuildingUsage.value.length}개`,
   },
   {
-    label: '사용률이 집계된 건물',
+    label: '현재 시간대 점유 회의실',
     value: `${visibleSiteBuildingUsage.value.length}개`,
-    secondaryLabel: '현재 사용 중 회의실',
+    secondaryLabel: '현재 시간대 점유 회의실',
     secondaryValue: `${meetingRoomSummary.value?.inUseMeetingRoomCount ?? 0}개`,
   },
   {
-    label: '현재 사용 중 회의실',
+    label: '현재 시간대 점유 회의실',
     value: `${meetingRoomSummary.value?.inUseMeetingRoomCount ?? 0}개`,
-    secondaryLabel: '가장 많은 사용 중 회의실',
+    secondaryLabel: '가장 많이 점유된 건물',
     secondaryValue: peakSiteUsage.value
       ? `${peakSiteUsage.value.siteName} · ${peakSiteUsage.value.buildingName} · ${peakSiteUsage.value.usedRooms}개`
       : '-',
@@ -405,7 +405,7 @@ const kpis = computed(() => {
     {
       label: '현재 사용 중 회의실 수',
       value: meetingRoomSummary.value.inUseMeetingRoomCount,
-      sub: `실시간 점유 기준 ${siteBuildingUsage.value.length}개 건물`,
+      sub: `현재 시간대 점유 기준 ${siteBuildingUsage.value.length}개 건물`,
     },
     {
       label: '현재 사용 가능한 회의실 수',
@@ -688,13 +688,13 @@ function resultBadgeClass(result) {
           <div class="card-head">
             <div>
               <h2>현재 사용 중 회의실 분포</h2>
-              <p>사이트와 건물별로 현재 사용 중인 회의실 수를 기준으로 분포를 보여줍니다.</p>
+              <p>사이트와 건물별로 현재 시간대에 점유 중인 회의실 수를 기준으로 분포를 보여줍니다.</p>
             </div>
             <span class="badge">{{ visibleSiteBuildingUsage.length }}개 건물</span>
           </div>
-          <p v-if="!visibleSiteBuildingUsage.length" class="empty-text">집계된 현재 사용 중 회의실 분포가 없습니다.</p>
+          <p v-if="!visibleSiteBuildingUsage.length" class="empty-text">집계된 현재 시간대 점유 회의실 분포가 없습니다.</p>
           <div v-else class="admin-usage-detail-card">
-            <div class="admin-usage-bar-chart" role="img" aria-label="현재 사용 중 회의실 분포 그래프">
+            <div class="admin-usage-bar-chart" role="img" aria-label="현재 시간대 점유 회의실 분포 그래프">
               <div v-for="site in siteUsageChartRows" :key="`${site.siteId}-${site.buildingId}`" class="admin-usage-bar-row">
                 <div class="admin-usage-bar-meta">
                   <strong>{{ site.siteName }}</strong>
