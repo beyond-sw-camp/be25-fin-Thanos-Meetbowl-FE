@@ -327,10 +327,10 @@ watch(
   position: absolute;
   top: 0;
   left: 50%;
-  width: 1px;
+  width: 2px;
   height: 14px;
   background: var(--org-line-color);
-  transform: translateX(-0.5px);
+  transform: translateX(-50%);
 }
 
 .organization-chart-canvas__root-connector-rail {
@@ -338,7 +338,7 @@ watch(
   top: 14px;
   left: 137px;
   right: 137px;
-  height: 1px;
+  height: 2px;
   background: var(--org-line-color);
 }
 
@@ -364,10 +364,10 @@ watch(
   position: absolute;
   top: 0;
   left: 50%;
-  width: 1px;
+  width: 2px;
   height: 14px;
   background: var(--org-line-color);
-  transform: translateX(-0.5px);
+  transform: translateX(-50%);
 }
 
 .organization-chart-canvas__department-branch {
@@ -386,10 +386,10 @@ watch(
   position: absolute;
   top: 0;
   left: 50%;
-  width: 1px;
+  width: 2px;
   height: 12px;
   background: var(--org-line-color);
-  transform: translateX(-0.5px);
+  transform: translateX(-50%);
 }
 
 .organization-chart-canvas__department-connector-rail {
@@ -397,7 +397,7 @@ watch(
   top: 12px;
   left: 66px;
   right: 66px;
-  height: 1px;
+  height: 2px;
   background: var(--org-line-color);
 }
 
@@ -426,10 +426,10 @@ watch(
   position: absolute;
   top: -12px;
   left: 50%;
-  width: 1px;
+  width: 2px;
   height: 12px;
   background: var(--org-line-color);
-  transform: translateX(-0.5px);
+  transform: translateX(-50%);
 }
 
 .organization-chart-canvas__node {
@@ -563,10 +563,10 @@ watch(
   position: absolute;
   top: 0;
   left: 50%;
-  width: 1px;
+  width: 2px;
   height: 8px;
   background: var(--org-line-color);
-  transform: translateX(-0.5px);
+  transform: translateX(-50%);
 }
 
 .organization-chart-canvas__member-list {
