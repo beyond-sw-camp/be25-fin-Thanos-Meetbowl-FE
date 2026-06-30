@@ -80,7 +80,7 @@
           <span>제목</span>
           <button type="button" class="mail-time-sort" @click="toggleSortDirection">
             받은 시간
-            <ArrowDown :size="15" />
+            <ArrowDown :size="15" :class="{ asc: sort === 'oldest' }" />
           </button>
         </div>
 
@@ -89,7 +89,7 @@
           :key="mail.mailId"
           type="button"
           class="mail-list-row"
-          :class="{ unread: !mail.read }"
+          :class="{ unread: !mail.read && tab === 'inbox' }"
           @click="openMail(mail)"
         >
           <span class="mail-list-cell mail-check-cell" @click.stop>
@@ -116,7 +116,7 @@
 
           <span class="mail-list-cell mail-time-cell">
             <time>{{ mail.displayDateShort }}</time>
-            <i class="mail-read-dot" :class="{ unread: !mail.read }"></i>
+            <i class="mail-read-dot" :class="{ unread: !mail.read && tab === 'inbox' }"></i>
           </span>
         </button>
 
@@ -964,6 +964,10 @@ function dismissToast(id) {
   background: transparent;
   color: inherit;
   font: inherit;
+}
+
+.mail-time-sort :deep(svg.asc) {
+  transform: rotate(180deg);
 }
 
 .mail-empty-state {

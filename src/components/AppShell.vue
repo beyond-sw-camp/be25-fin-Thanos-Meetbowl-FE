@@ -203,6 +203,7 @@
       <RouterView :key="`${route.path}::${navResetKey}`" />
     </main>
 
+    <AppToastStack :items="toasts" @dismiss="dismissToast" />
     <FloatingChatbot v-if="showFloatingChatbot" />
     <OnboardingTour v-if="tutorialOpen" @finish="closeTutorial" />
   </div>
@@ -228,6 +229,7 @@ import {
   ChevronDown,
 } from '@lucide/vue'
 import FloatingChatbot from './FloatingChatbot.vue'
+import AppToastStack from './common/AppToastStack.vue'
 import OnboardingTour from './tutorial/OnboardingTour.vue'
 import { isTutorialCompleted, markTutorialCompleted } from '../lib/tutorial'
 import {
@@ -275,6 +277,7 @@ const NOTIFICATION_PAGE_SIZE = 10
 const notificationPage = ref(1)
 const notificationsHasMore = ref(false)
 const notificationsLoadingMore = ref(false)
+const toasts = ref([])
 
 const adminPasswordResetRequests = ref([])
 const adminNotificationCount = ref(0)
@@ -386,6 +389,30 @@ function notificationVisual(notification) {
   }
 
   return { icon: Bell, toneClass: 'is-general', label: '일반 알림' }
+}
+
+function shouldToastNotification(notification) {
+  if (notification?.read) return false
+  const type = String(notification?.type || '').toUpperCase()
+  const resourceType = String(notification?.resourceType || '').toUpperCase()
+  return type.includes('MAIL') || type.includes('MEETING') || resourceType === 'MAIL' || resourceType === 'MEETING'
+}
+
+function showNotificationToast(notification) {
+  const toastId = `notification-${notification.id}`
+  if (toasts.value.some((toast) => toast.id === toastId)) return
+  const visual = notificationVisual(notification)
+  const toast = {
+    id: toastId,
+    title: notification?.title || visual.label,
+    message: notification?.content || visual.label,
+  }
+  toasts.value = [toast, ...toasts.value].slice(0, 3)
+  window.setTimeout(() => dismissToast(toastId), 3200)
+}
+
+function dismissToast(id) {
+  toasts.value = toasts.value.filter((toast) => toast.id !== id)
 }
 
 async function refreshAdminNotificationCount() {
@@ -553,12 +580,15 @@ onMounted(() => {
   notificationSource = subscribeNotifications({
     onNotification: (notification) => {
       const index = notifications.value.findIndex((item) => item.id === notification.id)
-      if (index >= 0) {
+      if (notification.read) {
+        if (index >= 0) notifications.value.splice(index, 1)
+      } else if (index >= 0) {
         notifications.value.splice(index, 1, notification)
       } else {
         notifications.value.unshift(notification)
-        if (!notification.read) unreadCount.value += 1
+        unreadCount.value += 1
       }
+      if (shouldToastNotification(notification)) showNotificationToast(notification)
     },
   })
 })

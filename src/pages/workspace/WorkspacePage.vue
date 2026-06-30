@@ -91,13 +91,17 @@
           <Search :size="14" />
           <input v-model="memoKeyword" placeholder="개인 메모 검색">
         </label>
-        <button v-for="memo in pagedMemos" :key="memo.memoId" type="button" class="workspace-memo-item" :class="{ active: activeMemoId === memo.memoId }" @click="selectMemo(memo.memoId)">
-          <strong>{{ memo.title }}</strong>
-          <span>{{ summarizeRichText(memo.content) }}</span>
-          <small>{{ displayDate(memo.updatedAt || memo.createdAt) }}</small>
-        </button>
-        <div v-if="filteredMemos.length === 0" class="empty-state workspace-compact-empty">검색된 메모가 없습니다.</div>
-        <Pagination v-model="memoPage" :total-pages="memoTotalPages" />
+        <div class="workspace-memo-items">
+          <button v-for="memo in pagedMemos" :key="memo.memoId" type="button" class="workspace-memo-item" :class="{ active: activeMemoId === memo.memoId }" @click="selectMemo(memo.memoId)">
+            <strong>{{ memo.title }}</strong>
+            <span>{{ summarizeRichText(memo.content) }}</span>
+            <small>{{ displayDate(memo.updatedAt || memo.createdAt) }}</small>
+          </button>
+          <div v-if="filteredMemos.length === 0" class="empty-state workspace-compact-empty">검색된 메모가 없습니다.</div>
+        </div>
+        <div class="workspace-memo-pagination">
+          <Pagination v-model="memoPage" :total-pages="memoTotalPages" />
+        </div>
       </aside>
       <article class="card workspace-memo-editor">
         <template v-if="memoDraft.memoId">
@@ -362,7 +366,7 @@ import {
 import { previewKind, resolveBlobFileName, saveBlob } from '../../lib/file-actions'
 import { getUserSummary, searchUsers } from '../../lib/users'
 import { emptyTiptapDocument, extractTiptapText, stringifyTiptapDocument } from '../../lib/minutes-content.js'
-import { formatKstDateTime, formatKstTime } from '../../utils/dateTime'
+import { addMinutes, formatKstDateTime, formatKstTime } from '../../utils/dateTime'
 import { workspaceDateKey, workspaceMonthCells, workspaceNow } from '../../data/workspaceData'
 import {
   addMinutesFavorite,
@@ -682,6 +686,8 @@ function selectCalendarDate(cell) {
 
 function openEventForm(event = null) {
   editingEventId.value = event?.eventId || ''
+  const defaultDate = selected.value || todayKey
+  const defaultStart = currentKstTime()
   eventDraft.value = event
     ? {
         title: event.title || '',
@@ -690,8 +696,23 @@ function openEventForm(event = null) {
         end: toTimeInput(event.endedAt),
         description: event.description || '',
       }
-    : { title: '', date: selected.value, start: '09:00', end: '10:00', description: '' }
+    : {
+        title: '',
+        date: defaultDate,
+        start: defaultStart,
+        end: addMinutes(defaultStart, 60),
+        description: '',
+      }
   eventOpen.value = true
+}
+
+function currentKstTime() {
+  return new Intl.DateTimeFormat('en-GB', {
+    timeZone: 'Asia/Seoul',
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false,
+  }).format(new Date())
 }
 
 async function saveEvent() {
@@ -723,41 +744,6 @@ function openSelectedEvent(event) {
     return
   }
   openEventForm(event)
-}
-
-function upsertLocalEvent(payload) {
-  const nextEvent = normalizeEvent({
-    eventId: editingEventId.value || `local-event-${Date.now()}`,
-    source: 'PERSONAL',
-    ...payload,
-  })
-  const localExists = localEvents.value.some((event) => event.eventId === editingEventId.value)
-  localEvents.value = editingEventId.value && localExists
-    ? localEvents.value.map((event) => event.eventId === editingEventId.value ? nextEvent : event)
-    : [...localEvents.value, nextEvent]
-  events.value = editingEventId.value
-    ? events.value.map((event) => event.eventId === editingEventId.value ? nextEvent : event)
-    : [...events.value, nextEvent]
-}
-
-function mergeLocalEvents(baseEvents) {
-  const byId = new Map(baseEvents.map((event) => [eventKey(event), event]))
-  localEvents.value.forEach((event) => byId.set(eventKey(event), event))
-  return [...byId.values()]
-}
-
-function eventKey(event) {
-  return [
-    event.eventId || '',
-    event.source || '',
-    event.meetingId || '',
-    event.relatedMeetingId || '',
-    event.ownerUserId || '',
-    event.title || '',
-    event.startedAt || '',
-    event.endedAt || '',
-    event.description || '',
-  ].join(':')
 }
 
 async function selectMemo(memoId) {

@@ -23,10 +23,6 @@
         @enable-room-usage="enableRoomUsage"
         @disable-room-usage="disableRoomUsage"
         @attendee-reject="onAttendeeReject"
-        @add-external-invitee="addExternalInvitee"
-        @remove-external-invitee="removeExternalInvitee"
-        @update:external-invitee-name="form.externalInviteeName = $event"
-        @update:external-invitee-email="form.externalInviteeEmail = $event"
         @schedule-field-edited="handleScheduleFieldEdited"
       >
         <template #actions>
@@ -147,9 +143,6 @@ const form = ref({
   start: initialSchedule.start,
   end: initialSchedule.end,
   attendees: hostAttendee.value ? [hostAttendee.value] : [],
-  externalInvitees: [],
-  externalInviteeName: '',
-  externalInviteeEmail: '',
   reviewerUserId: '',
   content: '',
 })
@@ -201,12 +194,9 @@ async function prefillFromMeeting() {
           email:
             attendee.userId === myUserId.value
               ? auth.user?.email || ''
-              : summaries.get(attendee.userId)?.email || '',
+          : summaries.get(attendee.userId)?.email || '',
         })),
       ),
-      externalInvitees: normalizeExternalInvitees(full.externalInvitees || []),
-      externalInviteeName: '',
-      externalInviteeEmail: '',
       reviewerUserId: full.attendees?.find((attendee) => attendee.reviewer)?.userId || '',
       content: full.description || '',
     }
@@ -414,45 +404,6 @@ function syncEditSchedule(field) {
   }
 }
 
-function normalizeExternalInvitees(invitees = []) {
-  const normalized = []
-  const seen = new Set()
-  for (const invitee of invitees) {
-    const email = String(invitee?.email || '').trim().toLowerCase()
-    const name = String(invitee?.name || '').trim()
-    if (!email || !name || seen.has(email)) continue
-    normalized.push({ name, email })
-    seen.add(email)
-  }
-  return normalized
-}
-
-function addExternalInvitee() {
-  const name = form.value.externalInviteeName.trim()
-  const email = form.value.externalInviteeEmail.trim().toLowerCase()
-  if (!name || !email) {
-    actionError.value = '외부 참석자 이름과 이메일을 모두 입력해 주세요.'
-    return
-  }
-  const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
-  if (!emailPattern.test(email)) {
-    actionError.value = '외부 참석자 이메일 형식이 올바르지 않습니다.'
-    return
-  }
-  const exists = form.value.externalInvitees.some((invitee) => invitee.email === email)
-  if (exists) {
-    actionError.value = '이미 추가된 외부 참석자입니다.'
-    return
-  }
-  form.value.externalInvitees = [...form.value.externalInvitees, { name, email }]
-  form.value.externalInviteeName = ''
-  form.value.externalInviteeEmail = ''
-}
-
-function removeExternalInvitee(email) {
-  form.value.externalInvitees = form.value.externalInvitees.filter((invitee) => invitee.email !== email)
-}
-
 function shiftScheduleByMinutes(date, time, deltaMinutes) {
   const base = new Date(kstToUtcIso(date, time))
   const shifted = new Date(base.getTime() + (deltaMinutes * 60 * 1000))
@@ -502,9 +453,10 @@ function describeConflicts(conflicts) {
         form.value.attendees.find((a) => a.userId === conflict.userId)?.name ||
         nameMap[conflict.userId] ||
         '참석자'
+      const period = formatConflictPeriod(conflict)
       return conflict.meetingTitle
-        ? `${name}님은 '${conflict.meetingTitle}' 회의에 참석 중입니다`
-        : `${name}님은 이미 회의 참석 중입니다`
+        ? `${name}님은 '${conflict.meetingTitle}' 회의에 참석 중입니다${period}`
+        : `${name}님은 이미 회의 참석 중입니다${period}`
     })
     .join(' / ')
 }
@@ -514,9 +466,10 @@ async function validateAttendeeAdd(user) {
   const conflicts = await fetchConflicts([user.userId])
   if (!conflicts.length) return null
   const conflict = conflicts[0]
+  const period = formatConflictPeriod(conflict)
   return conflict.meetingTitle
-    ? `${user.name}님은 '${conflict.meetingTitle}' 회의에 참석 중입니다.`
-    : `${user.name}님은 이미 회의 참석 중입니다.`
+    ? `${user.name}님은 '${conflict.meetingTitle}' 회의에 참석 중입니다${period}.`
+    : `${user.name}님은 이미 회의 참석 중입니다${period}.`
 }
 
 // 추가가 차단되면(겹침) '참석자 검색' 라벨 위 경고로 알린다.
@@ -547,7 +500,7 @@ async function recheckAttendeesForTime() {
     const name = current.find((a) => a.userId === userId)?.name || nameMap[userId] || '참석자'
     const isHost = userId === myUserId.value
     const where = conflict.meetingTitle ? `'${conflict.meetingTitle}' 회의에` : '이미'
-    phrases.push(`${name}님은 ${where} 참석 중입니다${isHost ? '' : ' (제외됨)'}`)
+    phrases.push(`${name}님은 ${where} 참석 중입니다${formatConflictPeriod(conflict)}${isHost ? '' : ' (제외됨)'}`)
     if (!isHost) removableIds.add(userId)
   }
 
@@ -555,6 +508,17 @@ async function recheckAttendeesForTime() {
     form.value.attendees = current.filter((attendee) => !removableIds.has(attendee.userId))
   }
   attendeeWarning.value = phrases.join(' / ')
+}
+
+function formatConflictPeriod(conflict) {
+  if (!conflict?.scheduledAt || !conflict?.scheduledEndAt) return ''
+  const startDate = utcToKstDate(conflict.scheduledAt)
+  const endDate = utcToKstDate(conflict.scheduledEndAt)
+  const start = utcToKstClock(conflict.scheduledAt)
+  const end = utcToKstClock(conflict.scheduledEndAt)
+  return startDate === endDate
+    ? ` (${startDate} ${start} - ${end})`
+    : ` (${startDate} ${start} - ${endDate} ${end})`
 }
 
 async function save() {
@@ -600,10 +564,6 @@ async function save() {
     scheduledEndAt,
     meetingRoomId: form.value.roomId || null,
     attendeeUserIds: form.value.attendees.map((attendee) => attendee.userId),
-    externalInvitees: form.value.externalInvitees.map((invitee) => ({
-      name: invitee.name,
-      email: invitee.email,
-    })),
     reviewerUserId: form.value.reviewerUserId,
     description: form.value.content.trim() || null,
   }
