@@ -541,6 +541,11 @@ function createEmptyForm() {
 }
 
 function createFormFromUser(user) {
+  const resolvedAffiliateId = resolveAffiliateId(user)
+  const resolvedDepartmentId = resolveDepartmentId(user, resolvedAffiliateId)
+  const resolvedTeamId = resolveTeamId(user, resolvedDepartmentId)
+  const resolvedPositionId = resolvePositionId(user, resolvedAffiliateId)
+
   return {
     userId: user?.userId || '',
     loginId: user?.loginId || '',
@@ -548,14 +553,49 @@ function createFormFromUser(user) {
     email: user?.email || '',
     role: user?.role || 'USER',
     status: user?.status || 'ACTIVE',
-    affiliateId: user?.affiliateId || '',
-    departmentId: user?.departmentId || '',
-    teamId: user?.teamId || '',
-    positionId: user?.positionId || '',
+    affiliateId: resolvedAffiliateId,
+    departmentId: resolvedDepartmentId,
+    teamId: resolvedTeamId,
+    positionId: resolvedPositionId,
     activeFrom: toDateInputValue(user?.activeFrom || user?.activeStartDate),
     activeUntil: toDateInputValue(user?.activeUntil || user?.activeEndDate),
     createdAt: toDateInputValue(user?.createdAt),
   }
+}
+
+function resolveAffiliateId(user) {
+  if (user?.affiliateId) return user.affiliateId
+  return findOrganizationIdByName(availableAffiliates.value, user?.affiliate)
+}
+
+function resolveDepartmentId(user, affiliateId) {
+  if (user?.departmentId) return user.departmentId
+  const department = availableDepartments.value.find(
+    (item) => item.name === user?.department && (!affiliateId || item.affiliateId === affiliateId),
+  )
+  return department?.departmentId || ''
+}
+
+function resolveTeamId(user, departmentId) {
+  if (user?.teamId) return user.teamId
+  const team = availableTeams.value.find(
+    (item) => item.name === user?.team && (!departmentId || item.departmentId === departmentId),
+  )
+  return team?.teamId || ''
+}
+
+function resolvePositionId(user, affiliateId) {
+  if (user?.positionId) return user.positionId
+  const position = availablePositions.value.find(
+    (item) => item.name === user?.position && (!affiliateId || item.affiliateId === affiliateId),
+  )
+  return position?.positionId || ''
+}
+
+function findOrganizationIdByName(items, targetName) {
+  if (!targetName) return ''
+  const matched = items.find((item) => item.name === targetName)
+  return matched?.affiliateId || matched?.departmentId || matched?.teamId || matched?.positionId || ''
 }
 
 function buildUserCreatePayload(targetForm) {
