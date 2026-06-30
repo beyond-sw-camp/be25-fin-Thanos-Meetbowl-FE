@@ -689,7 +689,7 @@ function formatActionError(error, fallbackMessage) {
               <td>{{ user.position }}</td>
               <td>{{ roleLabel(user.role) }}</td>
               <td>
-                <span :class="['badge', displayStatusTone(user.status)]">
+                <span :class="['badge', 'directory-status-badge', displayStatusTone(user.status)]">
                   {{ displayStatusLabel(user.status) }}
                 </span>
               </td>
@@ -1025,14 +1025,36 @@ function formatActionError(error, fallbackMessage) {
   cursor: pointer;
 }
 
+.directory-status-badge,
 .directory-action-link {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 32px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 800;
+  line-height: 1;
+}
+
+.directory-status-badge {
+  min-width: 74px;
+  padding: 0 12px;
+}
+
+.directory-action-link {
+  border: 1px solid rgba(241, 101, 33, 0.16);
+  background: rgba(255, 237, 213, 0.82);
   color: var(--primary-dark);
-  font-weight: 700;
+  transition: background-color 0.15s ease, border-color 0.15s ease, color 0.15s ease, box-shadow 0.15s ease;
 }
 
 .directory-action-link:hover {
+  background: rgba(255, 237, 213, 1);
+  border-color: rgba(241, 101, 33, 0.28);
   color: var(--primary);
-  text-decoration: underline;
+  text-decoration: none;
+  box-shadow: 0 6px 16px rgba(241, 101, 33, 0.12);
 }
 
 .directory-action-link:focus-visible {
