@@ -2,6 +2,12 @@
   <section class="page my-reservations-page">
     <header class="page-header"><h1>{{ headerTitle }}</h1><p>{{ headerDescription }}</p></header>
 
+    <nav class="page-route-tabs reservation-route-tabs">
+      <RouterLink to="/app/rooms" class="page-route-tab" active-class="active">전체 예약 현황</RouterLink>
+      <RouterLink to="/app/my-reservations" class="page-route-tab" active-class="active">내 예약</RouterLink>
+      <RouterLink to="/app/my-attending" class="page-route-tab" active-class="active">참석 회의</RouterLink>
+    </nav>
+
     <article v-if="loading" class="card empty-state">예약 현황을 불러오는 중입니다.</article>
 
     <article v-else-if="errorMessage" class="card">
@@ -88,7 +94,7 @@ import { compareByDistanceTo, shiftDateKst, todayKst, utcToKstClock, utcToKstDat
 import { useConfirmDialog } from '../../composables/useConfirmDialog'
 
 const props = defineProps({
-  // 데이터 기준: 'host'(내가 주최/예약) | 'invited'(내가 참석자로 지정)
+  // 데이터 기준: 'host'(내가 주최/예약) | 'invited'(내가 참석자로 지정) | 'all'(주최+참석 합집합)
   role: { type: String, default: 'host' },
   headerTitle: { type: String, required: true },
   headerDescription: { type: String, default: '' },
@@ -96,6 +102,8 @@ const props = defineProps({
   countLabel: { type: String, required: true },
   // 수정·취소 컬럼/버튼 노출 여부. 취소는 host만 가능하므로 invited 페이지는 false.
   allowCancel: { type: Boolean, default: false },
+  // true면 회의실(meetingRoomId)이 있는 회의만 노출하고 원격 회의는 제외한다.
+  roomOnly: { type: Boolean, default: false },
 })
 
 const auth = useAuthStore()
@@ -126,8 +134,6 @@ const STATUS = {
   ENDED: { label: '종료', tone: '' },
   CANCELLED: { label: '취소됨', tone: 'danger' },
 }
-
-const roomOnlyRole = computed(() => props.role === 'host')
 
 const upcomingMeetings = computed(() => {
   return meetings.value
@@ -166,7 +172,7 @@ async function load() {
     ])
     rooms.value = roomData?.items || []
     meetings.value = (meetingData || [])
-      .filter((item) => !roomOnlyRole.value || item.meetingRoomId)
+      .filter((item) => !props.roomOnly || item.meetingRoomId)
       .map((item) => normalizeMeeting(item))
   } catch (error) {
     errorMessage.value = error?.message || '예약 현황을 불러오지 못했습니다. 잠시 후 다시 시도해 주세요.'
@@ -277,6 +283,10 @@ function inPeriod(meeting, period) {
 </script>
 
 <style scoped>
+.reservation-route-tabs {
+  margin-bottom: 28px;
+}
+
 .count-grid {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));

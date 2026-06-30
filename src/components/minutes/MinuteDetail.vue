@@ -4,7 +4,7 @@
       <div class="minute-heading">
         <div class="minute-title-row">
           <h2>{{ minute.title }}</h2>
-          <button class="minute-favorite-button" aria-label="즐겨찾기 전환" @click="$emit('toggle-favorite', minute.id)">
+          <button v-if="!readonlyMode" class="minute-favorite-button" aria-label="즐겨찾기 전환" @click="$emit('toggle-favorite', minute.id)">
             {{ favorites[minute.id] ? '★' : '☆' }}
           </button>
         </div>
@@ -12,11 +12,11 @@
           <span class="minute-meta-item">{{ minute.date }}</span>
           <span class="minute-meta-item">{{ minute.duration }}</span>
           <button type="button" class="minute-meta-chip minute-meta-participants" @click="openParticipants">
-            <small>참여자</small>
+            <span class="minute-meta-chip-label">참여자</span>
             <strong>{{ minute.attendees }}명</strong>
           </button>
           <span class="minute-meta-chip">
-            <small>검토자</small>
+            <span class="minute-meta-chip-label">검토자</span>
             <strong>{{ minute.reviewer }}</strong>
           </span>
           <span class="minute-status">{{ minute.statusLabel }}</span>
@@ -26,9 +26,9 @@
         <button class="secondary-button minute-action-button" :disabled="pdfPending || editing" @click="downloadPdf">
           {{ pdfPending ? 'PDF 생성 중...' : 'PDF 다운로드' }}
         </button>
-        <button v-if="!editing" class="secondary-button minute-action-button" :disabled="!canEdit || actionPending" @click="$emit('start-edit')">수정</button>
-        <button class="primary-button minute-action-button" :disabled="!canApprove || actionPending" @click="$emit('approve')">승인</button>
-        <button class="primary-button minute-action-button" :disabled="!canShare || actionPending" @click="$emit('share')">내부 메일 공유</button>
+        <button v-if="!readonlyMode && !editing" class="secondary-button minute-action-button" :disabled="!canEdit || actionPending" @click="$emit('start-edit')">수정</button>
+        <button v-if="!readonlyMode" class="primary-button minute-action-button" :disabled="!canApprove || actionPending" @click="$emit('approve')">승인</button>
+        <button v-if="!readonlyMode" class="primary-button minute-action-button" :disabled="!canShare || actionPending" @click="$emit('share')">내부 메일 공유</button>
       </div>
     </header>
     <section class="ai-minutes-box">
@@ -47,6 +47,10 @@
         </div>
       </template>
       <template v-else>
+        <div class="minutes-section-heading minutes-section-heading-static">
+          <span>AI 요약 회의록</span>
+          <small>{{ minute.statusLabel }}</small>
+        </div>
         <section class="minutes-document-section">
           <h3>회의 요약</h3>
           <p class="minutes-summary-text">{{ minute.summary || '요약이 없습니다.' }}</p>
@@ -100,6 +104,7 @@ const props = defineProps({
   canApprove: { type: Boolean, default: false },
   canShare: { type: Boolean, default: false },
   actionPending: { type: Boolean, default: false },
+  readonlyMode: { type: Boolean, default: false },
 })
 
 defineEmits(['toggle-favorite', 'start-edit', 'cancel-edit', 'save-edit', 'approve', 'toggle-transcript', 'share'])

@@ -30,10 +30,12 @@
         <span>Meetbowl</span>
       </RouterLink>
       <div class="meeting-lobby-actions">
-        <button class="secondary-button small" type="button" @click="openGuestLinkDialog">
+        <button class="meeting-lobby-top-action" type="button" @click="openGuestLinkDialog">
+          <MessageSquareShare :size="16" />
           공유
         </button>
-        <button class="meeting-lobby-close" type="button" @click="closeMeetingPage">
+        <button class="meeting-lobby-top-action" type="button" @click="closeMeetingPage">
+          <LogOut :size="16" />
           대기실 나가기
         </button>
       </div>
@@ -48,6 +50,9 @@
 
       <div class="meeting-lobby-grid">
         <section class="meeting-preview-panel">
+          <header class="meeting-panel-header">
+            <h2><Video :size="18" /> 카메라 미리보기</h2>
+          </header>
           <div class="camera-preview meeting-camera-preview">
             <video
               v-show="cam && hasVideoTrack"
@@ -61,6 +66,9 @@
               <p>{{ cameraPlaceholder }}</p>
             </div>
 
+            <button type="button" class="preview-capture-button" aria-label="카메라 미리보기">
+              <Camera :size="18" />
+            </button>
             <span class="preview-participant-name">{{ currentParticipantName }}</span>
 
             <div class="preview-controls">
@@ -71,6 +79,7 @@
                 :aria-pressed="mic"
                 @click="toggleMicrophone"
               >
+                <component :is="mic ? Mic : MicOff" :size="16" />
                 {{ mic ? '마이크 켜짐' : '마이크 꺼짐' }}
               </button>
               <button
@@ -80,6 +89,7 @@
                 :aria-pressed="cam"
                 @click="toggleCamera"
               >
+                <component :is="cam ? Video : VideoOff" :size="16" />
                 {{ cam ? '카메라 켜짐' : '카메라 꺼짐' }}
               </button>
             </div>
@@ -95,20 +105,22 @@
 
           <div class="device-panel-heading">
             <div>
-              <h2>입장 설정</h2>
+              <h2><Settings2 :size="18" /> 입장 설정</h2>
               <p>현재 기기에 연결된 장치를 선택하세요.</p>
             </div>
             <button
               type="button"
-              class="secondary-button small"
+              class="secondary-button small meeting-device-refresh"
               :disabled="loadingDevices"
               @click="initializeDevices"
             >
+              <RefreshCw :size="15" />
               {{ loadingDevices ? '검색 중' : '새로고침' }}
             </button>
           </div>
 
-          <div class="device-fields">
+          <div class="device-fields meeting-device-fields">
+            <div class="meeting-device-two-column">
             <label>
               표시 이름
               <input
@@ -132,6 +144,7 @@
                 </option>
               </AppSelect>
             </label>
+            </div>
 
             <div class="microphone-test">
               <div class="microphone-test-heading">
@@ -161,41 +174,38 @@
               <p class="audio-test-tip">스피커 확인은 이어폰을 연결한 상태에서 테스트하는 편이 안정적입니다.</p>
             </div>
 
-            <label>
-              스피커
-              <AppSelect
-                v-model="selectedAudioOutput"
-                :disabled="!audioOutputs.length || !supportsSpeakerSelection"
-                @change="applySpeaker"
-              >
-                <option v-if="!audioOutputs.length" value="">기본 스피커</option>
-                <option v-for="device in audioOutputs" :key="device.deviceId" :value="device.deviceId">
-                  {{ device.label }}
-                </option>
-              </AppSelect>
-              <small v-if="!supportsSpeakerSelection">
-                이 브라우저에서는 스피커 선택을 지원하지 않습니다.
-              </small>
-            </label>
+            <div class="meeting-device-two-column">
+              <label>
+                스피커
+                <AppSelect
+                  v-model="selectedAudioOutput"
+                  :disabled="!audioOutputs.length || !supportsSpeakerSelection"
+                  @change="applySpeaker"
+                >
+                  <option v-if="!audioOutputs.length" value="">기본 스피커</option>
+                  <option v-for="device in audioOutputs" :key="device.deviceId" :value="device.deviceId">
+                    {{ device.label }}
+                  </option>
+                </AppSelect>
+                <small v-if="!supportsSpeakerSelection">
+                  이 브라우저에서는 스피커 선택을 지원하지 않습니다.
+                </small>
+              </label>
 
-            <label>
-              카메라
-              <AppSelect
-                v-model="selectedVideoInput"
-                :disabled="!videoInputs.length || loadingDevices"
-                @change="restartPreview"
-              >
-                <option v-if="!videoInputs.length" value="">카메라를 찾을 수 없음</option>
-                <option v-for="device in videoInputs" :key="device.deviceId" :value="device.deviceId">
-                  {{ device.label }}
-                </option>
-              </AppSelect>
-            </label>
-          </div>
-
-          <div class="selected-device-summary">
-            <span>마이크 {{ mic ? '사용' : '음소거' }}</span>
-            <span>카메라 {{ cam ? '사용' : '끔' }}</span>
+              <label>
+                카메라
+                <AppSelect
+                  v-model="selectedVideoInput"
+                  :disabled="!videoInputs.length || loadingDevices"
+                  @change="restartPreview"
+                >
+                  <option v-if="!videoInputs.length" value="">카메라를 찾을 수 없음</option>
+                  <option v-for="device in videoInputs" :key="device.deviceId" :value="device.deviceId">
+                    {{ device.label }}
+                  </option>
+                </AppSelect>
+              </label>
+            </div>
           </div>
 
           <button
@@ -1002,6 +1012,7 @@
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import AppSelect from '../../components/common/AppSelect.vue'
 import {
+  Camera,
   Captions,
   ChevronDown,
   ChevronLeft,
@@ -1009,6 +1020,7 @@ import {
   ChevronUp,
   Ellipsis,
   Fullscreen,
+  LogOut,
   MessageSquare,
   MessageSquareShare,
   Mic,
@@ -1016,6 +1028,7 @@ import {
   PanelRightClose,
   PanelRightOpen,
   PhoneOff,
+  RefreshCw,
   ScreenShare,
   ScreenShareOff,
   Settings2,

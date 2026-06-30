@@ -1,8 +1,11 @@
 <template>
   <aside class="reservation-timeline">
     <header class="reservation-timeline-head">
-      <h3>회의실 예약 현황</h3>
-      <p>{{ range.start }}~{{ range.end }} 선택 기준</p>
+      <div class="reservation-timeline-copy">
+        <h3>회의실 예약 현황</h3>
+        <p>선택한 시간대의 회의실 이용 가능 여부를 확인하세요.</p>
+      </div>
+      <span class="reservation-timeline-range">{{ range.start }} ~ {{ range.end }} 선택 기준</span>
     </header>
 
     <div class="toolbar">
@@ -24,7 +27,7 @@
         <div class="room-hours"><span v-for="hour in timelineHours" :key="hour">{{ String(hour).padStart(2, '0') }}:00</span></div>
       </div>
       <RoomTimelineRow
-        v-for="room in filteredRooms"
+        v-for="(room, index) in filteredRooms"
         :key="room.roomId"
         :room="room"
         :blocks="blocksByRoom[room.roomId] || []"
@@ -35,6 +38,8 @@
         :selected-range="range"
         :preview-block="room.roomId === selectedRoomId ? previewBlock : null"
         :show-empty-label="false"
+        :show-now-label="index === 0"
+        show-now-time
         :selected="room.roomId === selectedRoomId"
         @select="$emit('select-room', $event)"
         @select-range="forwardSelectRange"
@@ -76,21 +81,109 @@ function forwardSelectRange(roomId, start, end) {
 .reservation-timeline {
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 0;
   min-width: 0;
   border: 1px solid var(--border);
-  border-radius: 12px;
-  background: var(--muted);
-  padding: 16px;
+  border-radius: 20px;
+  background: #fff;
+  overflow: hidden;
+}
+.reservation-timeline-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 22px 22px 14px;
+}
+.reservation-timeline-copy {
+  display: grid;
+  gap: 6px;
 }
 .reservation-timeline-head h3 {
   margin: 0;
-  font-size: 15px;
+  font-size: 18px;
 }
 .reservation-timeline-head p {
-  margin: 4px 0 0;
+  margin: 0;
   color: var(--muted-foreground);
   font-size: 13px;
+}
+.reservation-timeline-range {
+  color: #64748b;
+  font-size: 13px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+.toolbar {
+  display: flex;
+  gap: 10px;
+  padding: 0 22px 14px;
+}
+.chip {
+  min-height: 34px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: #fff;
+  padding: 0 14px;
+  color: #64748b;
+  font-size: 13px;
+  font-weight: 700;
+}
+.chip.active {
+  border-color: rgba(243, 115, 33, 0.5);
+  background: #fff7ed;
+  color: var(--primary);
+}
+.reservation-timeline :deep(.room-timeline-scroll) {
+  border-top: 1px solid var(--border);
+  background: #fff;
+}
+.reservation-timeline :deep(.room-hours span) {
+  place-items: center;
+  padding-left: 0;
+  text-align: center;
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  min-height: 48px;
+}
+.reservation-timeline :deep(.room-row-meta) {
+  min-height: 152px;
+  gap: 8px;
+  padding: 18px 18px 16px;
+}
+.reservation-timeline :deep(.room-row-meta strong) {
+  font-size: 15px;
+  line-height: 1.3;
+}
+.reservation-timeline :deep(.room-row-meta small),
+.reservation-timeline :deep(.room-row-meta em) {
+  font-size: 12px;
+  gap: 6px;
+}
+.reservation-timeline :deep(.room-track) {
+  min-height: 152px;
+}
+.reservation-timeline :deep(.reservation-block) {
+  top: 50%;
+  transform: translateY(-50%);
+  min-height: 60px;
+  padding: 8px 10px;
+  border-radius: 10px;
+}
+.reservation-timeline :deep(.drag-selection) {
+  top: calc(50% - 30px);
+  bottom: auto;
+  height: 60px;
+  transform: none;
+}
+.reservation-timeline :deep(.reservation-block strong) {
+  font-size: 12px;
+}
+.reservation-timeline :deep(.reservation-block span) {
+  font-size: 11px;
+}
+.reservation-timeline :deep(.now-marker em) {
+  top: 8px;
 }
 .room-name-spacer {
   display: flex;
@@ -99,5 +192,15 @@ function forwardSelectRange(roomId, start, end) {
   font-size: 12px;
   font-weight: 700;
   color: var(--muted-foreground);
+}
+
+@media (max-width: 900px) {
+  .reservation-timeline-head {
+    flex-direction: column;
+  }
+
+  .reservation-timeline-range {
+    white-space: normal;
+  }
 }
 </style>

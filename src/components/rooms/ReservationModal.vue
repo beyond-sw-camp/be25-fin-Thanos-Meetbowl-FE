@@ -1,10 +1,10 @@
 <template>
   <ModalShell :modal-class="['room-modal', { 'has-timeline': roomTimelineVisible, compact: !roomTimelineVisible }]" @close="$emit('close')">
-    <template #overlay>
-      <div v-if="actionError" class="reservation-warning-overlay">{{ actionError }}</div>
-    </template>
-    <header>
-      <div><h2>{{ isEdit ? '회의 수정' : '새 회의 예약' }}</h2></div>
+    <header class="reservation-modal-header">
+      <div class="reservation-modal-title">
+        <h2>{{ isEdit ? '회의 수정' : '새 회의 예약' }}</h2>
+        <p>회의 정보를 입력하고 적합한 회의실을 확인하세요.</p>
+      </div>
       <button class="modal-close" type="button" aria-label="닫기" @click="$emit('close')">×</button>
     </header>
     <div class="room-modal-grid">
@@ -17,10 +17,17 @@
         :allow-remote="allowRemote"
         :attendee-validate="validateAttendeeAdd"
         :attendee-warning="attendeeWarning"
+        :general-warning="generalWarningMessage"
+        :reviewer-warning="reviewerWarningMessage"
         @submit="save"
         @enable-room-usage="enableRoomUsage"
         @disable-room-usage="disableRoomUsage"
         @attendee-reject="onAttendeeReject"
+        @add-external-invitee="addExternalInvitee"
+        @remove-external-invitee="removeExternalInvitee"
+        @update:external-invitee-name="form.externalInviteeName = $event"
+        @update:external-invitee-email="form.externalInviteeEmail = $event"
+        @schedule-field-edited="handleScheduleFieldEdited"
       >
         <template #actions>
           <div class="modal-actions">
@@ -53,6 +60,7 @@ import ReservationForm from './ReservationForm.vue'
 import ReservationTimeline from './ReservationTimeline.vue'
 import { useAuthStore } from '../../stores/auth'
 import { checkAttendeeAvailability, createMeeting, getMeeting, getRoomReservations, updateMeeting } from '../../lib/reservations'
+import { getUserSummary } from '../../lib/users'
 import { useUserNames } from '../../composables/useUserNames'
 import { addMinutes, kstDayRangeUtc, kstToUtcIso, shiftDateKst, todayKst, utcToKstClock, utcToKstDate } from '../../utils/dateTime'
 
@@ -60,7 +68,7 @@ const props = defineProps({
   rooms: { type: Array, default: () => [] },
   initialRoomId: { type: String, default: '' },
   initialDate: { type: String, default: '' },
-  initialStart: { type: String, default: '09:00' },
+  initialStart: { type: String, default: '' },
   // 드래그로 종료시간까지 prefill할 때 사용(없으면 시작+60분).
   initialEnd: { type: String, default: '' },
   // 'create'(신규 예약) | 'edit'(기존 회의 수정)
@@ -81,6 +89,9 @@ const hostAttendee = computed(() => {
   return {
     userId: auth.user.userId,
     name: auth.user.name || '나',
+    department: auth.user.department || '',
+    position: auth.user.position || '',
+    email: auth.user.email || '',
   }
 })
 const { nameMap, resolveNames } = useUserNames()
@@ -90,19 +101,24 @@ const roomUsageEnabled = ref(!props.allowRemote || Boolean(props.initialRoomId) 
 const saving = ref(false)
 const loading = ref(false)
 const actionError = ref('')
-// 참석자 겹침 경고는 모달 오버레이 대신 '참석자 검색' 라벨 위 오버레이(폼 너비)에 따로 띄운다.
 const attendeeWarning = ref('')
 const blocksByRoom = ref({})
-let errorOverlayTimerId = null
-let attendeeWarningTimerId = null
 // 초기 prefill/마운트가 끝나기 전에는 참석자 시간 재검사를 돌리지 않는다(열자마자 기존 참석자가 빠지는 것 방지).
 const ready = ref(false)
 let attendeeRecheckTimer = null
+const endAutoManaged = ref(false)
+const editDurationMinutes = ref(60)
 
 const submitLabel = computed(() => {
   if (saving.value) return isEdit.value ? '수정 중...' : '예약 중...'
   return isEdit.value ? '회의 수정하기' : '회의 예약하기'
 })
+const reviewerWarningMessage = computed(() =>
+  actionError.value === '회의록 검토자를 선택해 주세요.' ? actionError.value : '',
+)
+const generalWarningMessage = computed(() =>
+  actionError.value && actionError.value !== reviewerWarningMessage.value ? actionError.value : '',
+)
 const timelineRange = computed(() => ({
   start: form.value.start,
   end:
@@ -120,26 +136,27 @@ const timelinePreviewBlock = computed(() => {
 })
 const roomTimelineVisible = computed(() => !props.allowRemote || roomUsageEnabled.value)
 
-const initialDate = props.initialDate || todayKst()
-const normalizedInitialEnd = props.initialEnd === '24:00' ? '00:00' : props.initialEnd
-const normalizedInitialEndDate =
-  props.initialEnd === '24:00' ? shiftDateKst(initialDate, 1) : initialDate
+const initialSchedule = buildInitialSchedule()
 const form = ref({
   title: '',
   // 회의실 선택값이 곧 meetingRoomId(미선택 ''=원격). 원격 토글은 roomId로부터 파생된다(별도 상태 없음).
   // initialRemote면 기본 미선택('')으로 시작(회의 모달). 회의실 예약은 첫 회의실을 기본 선택.
   roomId: props.initialRoomId || (props.initialRemote ? '' : props.rooms[0]?.roomId || ''),
-  date: initialDate,
-  endDate: normalizedInitialEndDate,
-  start: props.initialStart,
-  end: normalizedInitialEnd || addMinutes(props.initialStart, 60),
+  date: initialSchedule.date,
+  endDate: initialSchedule.endDate,
+  start: initialSchedule.start,
+  end: initialSchedule.end,
   attendees: hostAttendee.value ? [hostAttendee.value] : [],
+  externalInvitees: [],
+  externalInviteeName: '',
+  externalInviteeEmail: '',
   reviewerUserId: '',
   content: '',
 })
 
 onMounted(async () => {
   if (isEdit.value && props.meeting) await prefillFromMeeting()
+  if (!isEdit.value) endAutoManaged.value = !props.initialEnd
   if (!props.allowRemote) roomUsageEnabled.value = true
   if (props.allowRemote && props.initialRemote) roomUsageEnabled.value = false
   await loadDay()
@@ -157,6 +174,7 @@ async function prefillFromMeeting() {
       (attendee) => attendee.role !== 'HOST' || attendee.userId === myUserId.value,
     )
     await resolveNames(participants.map((attendee) => attendee.userId))
+    const summaries = await loadAttendeeSummaries(participants.map((attendee) => attendee.userId))
     form.value = {
       title: full.title || '',
       // 회의실 선택값으로 복원(없으면 ''=원격). 토글은 roomId에서 파생되므로 별도 복원 불필요.
@@ -172,11 +190,31 @@ async function prefillFromMeeting() {
             attendee.userId === myUserId.value
               ? auth.user?.name || '나'
               : nameMap[attendee.userId] || '이름 미확인',
+          department:
+            attendee.userId === myUserId.value
+              ? auth.user?.department || ''
+              : summaries.get(attendee.userId)?.department || '',
+          position:
+            attendee.userId === myUserId.value
+              ? auth.user?.position || ''
+              : summaries.get(attendee.userId)?.position || '',
+          email:
+            attendee.userId === myUserId.value
+              ? auth.user?.email || ''
+              : summaries.get(attendee.userId)?.email || '',
         })),
       ),
+      externalInvitees: normalizeExternalInvitees(full.externalInvitees || []),
+      externalInviteeName: '',
+      externalInviteeEmail: '',
       reviewerUserId: full.attendees?.find((attendee) => attendee.reviewer)?.userId || '',
       content: full.description || '',
     }
+    editDurationMinutes.value = Math.max(
+      1,
+      differenceMinutes(full.scheduledAt, full.scheduledEndAt),
+    )
+    endAutoManaged.value = false
   } catch (error) {
     actionError.value = error?.message || '회의 정보를 불러오지 못했습니다.'
   } finally {
@@ -201,31 +239,6 @@ watch(
   },
   { immediate: true },
 )
-
-watch(actionError, (message) => {
-  if (errorOverlayTimerId) {
-    window.clearTimeout(errorOverlayTimerId)
-    errorOverlayTimerId = null
-  }
-  if (!message) return
-  errorOverlayTimerId = window.setTimeout(() => {
-    actionError.value = ''
-    errorOverlayTimerId = null
-  }, 3000)
-})
-
-// 참석자 경고도 동일하게 일정 시간 뒤 자동으로 사라진다(제외 안내를 읽을 수 있게 조금 더 길게).
-watch(attendeeWarning, (message) => {
-  if (attendeeWarningTimerId) {
-    window.clearTimeout(attendeeWarningTimerId)
-    attendeeWarningTimerId = null
-  }
-  if (!message) return
-  attendeeWarningTimerId = window.setTimeout(() => {
-    attendeeWarning.value = ''
-    attendeeWarningTimerId = null
-  }, 4000)
-})
 
 // 참석자에서 빠진 사용자가 검토자였다면 검토자 선택을 비운다.
 watch(
@@ -280,6 +293,7 @@ function selectRoom(roomId) {
 function applyTimelineRange(roomId, start, end) {
   form.value.roomId = roomId
   if (roomId) roomUsageEnabled.value = true
+  endAutoManaged.value = false
   form.value.start = start
   if (end === '24:00') {
     form.value.endDate = shiftDateKst(form.value.date, 1)
@@ -311,10 +325,148 @@ function normalizeAttendees(attendees = []) {
     normalized.push({
       userId: attendee.userId,
       name: attendee.name || nameMap[attendee.userId] || '이름 미확인',
+      department: attendee.department || '',
+      position: attendee.position || '',
+      email: attendee.email || '',
     })
     seen.add(attendee.userId)
   }
   return normalized
+}
+
+async function loadAttendeeSummaries(userIds = []) {
+  const summaries = await Promise.all(
+    [...new Set(userIds)]
+      .filter((userId) => userId && userId !== myUserId.value)
+      .map(async (userId) => [userId, await getUserSummary(userId).catch(() => null)]),
+  )
+  return new Map(summaries)
+}
+
+function buildInitialSchedule() {
+  const defaultStart = props.initialStart || currentKstTime()
+  const date = props.initialDate || todayKst()
+  const end = props.initialEnd === '24:00' ? '00:00' : props.initialEnd || addMinutes(defaultStart, 60)
+  const endDate = props.initialEnd === '24:00'
+    ? shiftDateKst(date, 1)
+    : props.initialEnd
+      ? date
+      : resolveEndDate(date, defaultStart, end)
+  return {
+    date,
+    endDate,
+    start: defaultStart,
+    end,
+  }
+}
+
+function currentKstTime() {
+  return new Intl.DateTimeFormat('en-GB', {
+    timeZone: 'Asia/Seoul',
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false,
+  }).format(new Date())
+}
+
+function resolveEndDate(date, start, end) {
+  return timeToComparableMinutes(end) <= timeToComparableMinutes(start)
+    ? shiftDateKst(date, 1)
+    : date
+}
+
+function timeToComparableMinutes(time) {
+  const [hour, minute] = String(time || '00:00').split(':').map(Number)
+  return (hour * 60) + minute
+}
+
+function handleScheduleFieldEdited(field) {
+  if (isEdit.value) {
+    syncEditSchedule(field)
+    return
+  }
+  if (field === 'end' || field === 'endDate') {
+    endAutoManaged.value = false
+    return
+  }
+  if (!endAutoManaged.value) return
+  syncEndWithStart()
+}
+
+function syncEndWithStart() {
+  const nextEnd = addMinutes(form.value.start, 60)
+  form.value.end = nextEnd
+  form.value.endDate = resolveEndDate(form.value.date, form.value.start, nextEnd)
+}
+
+function syncEditSchedule(field) {
+  const durationMinutes = Math.max(1, editDurationMinutes.value || 60)
+  if (field === 'start' || field === 'date') {
+    const shiftedEnd = shiftScheduleByMinutes(form.value.date, form.value.start, durationMinutes)
+    form.value.endDate = shiftedEnd.date
+    form.value.end = shiftedEnd.time
+    return
+  }
+  if (field === 'end' || field === 'endDate') {
+    const shiftedStart = shiftScheduleByMinutes(form.value.endDate, form.value.end, -durationMinutes)
+    form.value.date = shiftedStart.date
+    form.value.start = shiftedStart.time
+  }
+}
+
+function normalizeExternalInvitees(invitees = []) {
+  const normalized = []
+  const seen = new Set()
+  for (const invitee of invitees) {
+    const email = String(invitee?.email || '').trim().toLowerCase()
+    const name = String(invitee?.name || '').trim()
+    if (!email || !name || seen.has(email)) continue
+    normalized.push({ name, email })
+    seen.add(email)
+  }
+  return normalized
+}
+
+function addExternalInvitee() {
+  const name = form.value.externalInviteeName.trim()
+  const email = form.value.externalInviteeEmail.trim().toLowerCase()
+  if (!name || !email) {
+    actionError.value = '외부 참석자 이름과 이메일을 모두 입력해 주세요.'
+    return
+  }
+  const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+  if (!emailPattern.test(email)) {
+    actionError.value = '외부 참석자 이메일 형식이 올바르지 않습니다.'
+    return
+  }
+  const exists = form.value.externalInvitees.some((invitee) => invitee.email === email)
+  if (exists) {
+    actionError.value = '이미 추가된 외부 참석자입니다.'
+    return
+  }
+  form.value.externalInvitees = [...form.value.externalInvitees, { name, email }]
+  form.value.externalInviteeName = ''
+  form.value.externalInviteeEmail = ''
+}
+
+function removeExternalInvitee(email) {
+  form.value.externalInvitees = form.value.externalInvitees.filter((invitee) => invitee.email !== email)
+}
+
+function shiftScheduleByMinutes(date, time, deltaMinutes) {
+  const base = new Date(kstToUtcIso(date, time))
+  const shifted = new Date(base.getTime() + (deltaMinutes * 60 * 1000))
+  return {
+    date: utcToKstDate(shifted.toISOString()),
+    time: utcToKstClock(shifted.toISOString()),
+  }
+}
+
+function differenceMinutes(startIso, endIso) {
+  const startMs = new Date(startIso).getTime()
+  const endMs = new Date(endIso).getTime()
+  if (Number.isNaN(startMs) || Number.isNaN(endMs)) return 60
+  return Math.round((endMs - startMs) / (60 * 1000))
 }
 
 // 현재 폼 시간대 기준으로 userIds의 회의 겹침을 조회한다. 시간이 비었거나 종료<=시작이면 검사하지 않는다(빈 배열).
@@ -431,8 +583,14 @@ async function save() {
 
   const scheduledAt = kstToUtcIso(form.value.date, form.value.start)
   const scheduledEndAt = kstToUtcIso(form.value.endDate, form.value.end)
+  const now = new Date()
+  now.setSeconds(0, 0)
   if (new Date(scheduledEndAt) <= new Date(scheduledAt)) {
     actionError.value = '종료 시각은 시작 시각보다 뒤여야 합니다.'
+    return
+  }
+  if (!isEdit.value && new Date(scheduledAt) < now) {
+    actionError.value = '현재 시간 이전의 회의는 생성할 수 없습니다.'
     return
   }
 
@@ -442,6 +600,10 @@ async function save() {
     scheduledEndAt,
     meetingRoomId: form.value.roomId || null,
     attendeeUserIds: form.value.attendees.map((attendee) => attendee.userId),
+    externalInvitees: form.value.externalInvitees.map((invitee) => ({
+      name: invitee.name,
+      email: invitee.email,
+    })),
     reviewerUserId: form.value.reviewerUserId,
     description: form.value.content.trim() || null,
   }
@@ -470,19 +632,33 @@ async function save() {
 }
 
 onBeforeUnmount(() => {
-  if (errorOverlayTimerId) {
-    window.clearTimeout(errorOverlayTimerId)
-    errorOverlayTimerId = null
-  }
-  if (attendeeWarningTimerId) {
-    window.clearTimeout(attendeeWarningTimerId)
-    attendeeWarningTimerId = null
-  }
   window.clearTimeout(attendeeRecheckTimer)
 })
 </script>
 
 <style scoped>
+.reservation-modal-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.reservation-modal-title {
+  display: grid;
+  gap: 6px;
+}
+
+.reservation-modal-title h2 {
+  margin: 0;
+}
+
+.reservation-modal-title p {
+  margin: 0;
+  color: var(--muted-foreground);
+  font-size: 14px;
+}
+
 .modal-close {
   width: 32px;
   height: 32px;
@@ -497,22 +673,5 @@ onBeforeUnmount(() => {
 .modal-close:hover {
   background: var(--muted);
   color: var(--foreground);
-}
-.reservation-warning-overlay {
-  position: absolute;
-  left: 50%;
-  top: calc(50% - 360px);
-  z-index: 2;
-  width: min(860px, calc(100vw - 64px));
-  transform: translateX(-50%);
-  border: 1px solid #fdba74;
-  border-radius: 10px;
-  background: #fff7ed;
-  color: #c2410c;
-  padding: 12px 14px;
-  font-size: 13px;
-  font-weight: 700;
-  box-shadow: 0 12px 28px rgba(194, 65, 12, 0.16);
-  pointer-events: none;
 }
 </style>

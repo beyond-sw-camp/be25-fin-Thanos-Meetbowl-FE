@@ -111,8 +111,8 @@ function feedbackTypeLabel(type) {
 .realtime-feedback-panel {
   height: 100%;
   min-height: 0;
-  display: grid;
-  grid-template-rows: auto minmax(0, 1fr);
+  display: flex;
+  flex-direction: column;
   overflow: hidden;
   border: 1px solid rgba(243, 115, 33, .34);
   border-radius: 12px;
@@ -203,6 +203,7 @@ function feedbackTypeLabel(type) {
 }
 
 .realtime-feedback-list {
+  flex: 1 1 auto;
   min-height: 0;
   display: grid;
   align-content: start;
@@ -210,6 +211,7 @@ function feedbackTypeLabel(type) {
   overflow-y: auto;
   padding: 10px;
   scrollbar-gutter: stable;
+  overscroll-behavior: contain;
 }
 
 .realtime-feedback-card {

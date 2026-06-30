@@ -1,5 +1,6 @@
 <script setup>
 import { computed, useAttrs } from 'vue'
+import { ChevronDown } from '@lucide/vue'
 
 defineOptions({ inheritAttrs: false })
 
@@ -52,7 +53,7 @@ function handleChange(event) {
     >
       <slot />
     </select>
-    <span class="app-select-arrow" aria-hidden="true">▼</span>
+    <span class="app-select-arrow" aria-hidden="true"><ChevronDown :size="16" :stroke-width="2.5" /></span>
   </span>
 </template>
 
@@ -104,7 +105,9 @@ function handleChange(event) {
   top: 50%;
   transform: translateY(-50%);
   color: var(--muted-foreground);
-  font-size: 10px;
   line-height: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
 }
 </style>

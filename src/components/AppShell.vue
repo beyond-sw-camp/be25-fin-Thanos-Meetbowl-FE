@@ -1,14 +1,14 @@
 <template>
   <div class="shell">
-    <aside class="sidebar" :class="{ open: mobileOpen }">
+    <aside class="sidebar" :class="{ open: mobileOpen, collapsed: sidebarCollapsed }">
       <RouterLink :to="homePath" class="brand" @click="mobileOpen = false">
         <span class="brand-mark">M</span>
-        <span>Meetbowl</span>
+        <span v-if="!sidebarCollapsed" class="brand-text">Meetbowl</span>
       </RouterLink>
 
       <nav class="nav">
         <section v-for="section in visibleSections" :key="section.title" class="nav-section">
-          <p class="nav-title">{{ section.title }}</p>
+          <p v-if="section.title && !sidebarCollapsed" class="nav-title">{{ section.title }}</p>
           <template v-for="item in section.items" :key="item.to">
             <RouterLink
               :to="item.to"
@@ -17,8 +17,10 @@
               :data-tour="item.tourId"
               @click="handleNavClick(item.to)"
             >
-              <span class="nav-icon">{{ item.icon }}</span>
-              <span>{{ item.label }}</span>
+              <span class="nav-icon">
+                <component :is="item.icon" :size="18" stroke-width="2.1" />
+              </span>
+              <span v-if="!sidebarCollapsed">{{ item.label }}</span>
             </RouterLink>
             <RouterLink
               v-for="child in (isExpanded(item) ? item.children : [])"
@@ -28,12 +30,22 @@
               :class="{ active: isActive(child.to) }"
               @click="handleNavClick(child.to)"
             >
-              <span class="nav-icon">{{ child.icon }}</span>
-              <span>{{ child.label }}</span>
+              <span class="nav-icon">
+                <component :is="child.icon" :size="15" stroke-width="2.1" />
+              </span>
+              <span v-if="!sidebarCollapsed">{{ child.label }}</span>
             </RouterLink>
           </template>
         </section>
       </nav>
+
+      <div class="sidebar-footer">
+        <button type="button" class="sidebar-collapse-button" @click="toggleSidebar">
+          <PanelLeftClose v-if="!sidebarCollapsed" :size="18" />
+          <PanelLeftOpen v-else :size="18" />
+          <span v-if="!sidebarCollapsed">사이드바 접기</span>
+        </button>
+      </div>
     </aside>
 
     <div v-if="mobileOpen" class="scrim" @click="mobileOpen = false" />
@@ -68,58 +80,75 @@
               </div>
 
               <template v-if="isAdmin">
-                <p v-if="adminNotificationsLoading" class="notification-empty">불러오는 중…</p>
-                <p v-else-if="adminPasswordResetRequests.length === 0" class="notification-empty">
-                  새로운 알림이 없습니다.
-                </p>
-                <div
-                  v-for="request in adminPasswordResetRequests"
-                  :key="request.requestId"
-                  class="notification password-reset-notification"
-                >
-                  <div class="password-reset-notification__head">
-                    <strong>{{ request.requesterName || request.name || request.userName || request.displayName || '-' }}</strong>
-                    <span class="badge danger">PENDING</span>
-                  </div>
-                  <span>로그인 ID: {{ request.loginId || '-' }}</span>
-                  <span>이메일: {{ request.email || '-' }}</span>
-                  <small>요청 일시: {{ formatPasswordResetRequestedAt(request.requestedAt) }}</small>
-                  <div class="password-reset-notification__actions">
-                    <button
-                      type="button"
-                      class="primary-button small"
-                      :disabled="isAdminRequestActionPending(request.requestId)"
-                      @click="handlePasswordResetDecision(request.requestId, 'approve')"
-                    >
-                      승인
-                    </button>
-                    <button
-                      type="button"
-                      class="secondary-button small password-reset-notification__reject"
-                      :disabled="isAdminRequestActionPending(request.requestId)"
-                      @click="handlePasswordResetDecision(request.requestId, 'reject')"
-                    >
-                      거절
-                    </button>
+                <div class="notification-list">
+                  <p v-if="adminNotificationsLoading" class="notification-empty">불러오는 중…</p>
+                  <p v-else-if="adminPasswordResetRequests.length === 0" class="notification-empty">
+                    새로운 알림이 없습니다.
+                  </p>
+                  <div
+                    v-for="request in adminPasswordResetRequests"
+                    :key="request.requestId"
+                    class="notification password-reset-notification"
+                  >
+                    <span class="notification-icon is-admin">
+                      <UserRound :size="18" stroke-width="2.1" />
+                    </span>
+                    <div class="notification-copy">
+                      <div class="password-reset-notification__head">
+                        <strong>{{ request.requesterName || request.name || request.userName || request.displayName || '-' }}</strong>
+                        <span class="badge danger">PENDING</span>
+                      </div>
+                      <span>로그인 ID: {{ request.loginId || '-' }}</span>
+                      <span>이메일: {{ request.email || '-' }}</span>
+                      <small>요청 일시: {{ formatPasswordResetRequestedAt(request.requestedAt) }}</small>
+                      <div class="password-reset-notification__actions">
+                        <button
+                          type="button"
+                          class="primary-button small"
+                          :disabled="isAdminRequestActionPending(request.requestId)"
+                          @click="handlePasswordResetDecision(request.requestId, 'approve')"
+                        >
+                          승인
+                        </button>
+                        <button
+                          type="button"
+                          class="secondary-button small password-reset-notification__reject"
+                          :disabled="isAdminRequestActionPending(request.requestId)"
+                          @click="handlePasswordResetDecision(request.requestId, 'reject')"
+                        >
+                          거절
+                        </button>
+                      </div>
+                    </div>
                   </div>
                 </div>
               </template>
 
               <template v-else>
-                <p v-if="notificationsLoading" class="notification-empty">불러오는 중…</p>
-                <p v-else-if="notifications.length === 0" class="notification-empty">새로운 알림이 없습니다.</p>
-                <RouterLink
-                  v-for="item in notifications"
-                  :key="item.id"
-                  :to="notificationRoute(item)"
-                  class="notification"
-                  :class="{ unread: !item.read }"
-                  @click="handleNotificationClick(item)"
-                >
-                  <strong>{{ item.title }}</strong>
-                  <span>{{ item.content }}</span>
-                  <small>{{ formatNotificationTime(item.createdAt) }}</small>
-                </RouterLink>
+                <div class="notification-list">
+                  <p v-if="notificationsLoading" class="notification-empty">불러오는 중…</p>
+                  <p v-else-if="notifications.length === 0" class="notification-empty">새로운 알림이 없습니다.</p>
+                  <RouterLink
+                    v-for="item in notifications"
+                    :key="item.id"
+                    :to="notificationRoute(item)"
+                    class="notification"
+                    :class="{ unread: !item.read }"
+                    @click="handleNotificationClick(item)"
+                  >
+                    <span class="notification-icon" :class="notificationVisual(item).toneClass">
+                      <component :is="notificationVisual(item).icon" :size="18" stroke-width="2.1" />
+                    </span>
+                    <span class="notification-copy">
+                      <span class="notification-topline">
+                        <strong>{{ item.title }}</strong>
+                        <small>{{ formatNotificationTime(item.createdAt) }}</small>
+                      </span>
+                      <span>{{ item.content }}</span>
+                      <em>{{ notificationVisual(item).label }}</em>
+                    </span>
+                  </RouterLink>
+                </div>
                 <button
                   v-if="notificationsHasMore && !notificationsLoading && notifications.length > 0"
                   type="button"
@@ -127,16 +156,24 @@
                   :disabled="notificationsLoadingMore"
                   @click="loadMoreNotifications"
                 >
-                  {{ notificationsLoadingMore ? '불러오는 중…' : '더보기' }}
+                  {{ notificationsLoadingMore ? '불러오는 중…' : '전체 알림 보기' }}
                 </button>
               </template>
             </div>
           </div>
 
+          <button type="button" class="icon-button topbar-help-button" @click="startTutorial">
+            <CircleHelp :size="20" />
+          </button>
+
           <div ref="profileDropdownRef" class="dropdown-wrap">
             <button class="profile-button" type="button" @click="toggleProfile">
-              <span class="avatar">{{ user?.avatar }}</span>
-              <span class="profile-name">{{ user?.name }}</span>
+              <span class="avatar">{{ userInitial }}</span>
+              <span class="profile-copy">
+                <strong class="profile-name">{{ user?.name }}</strong>
+                <small class="profile-subtitle">{{ profileSubtitle }}</small>
+              </span>
+              <ChevronDown :size="18" class="profile-chevron" />
             </button>
             <div v-if="profileOpen" class="dropdown profile-panel">
               <strong>{{ user?.name }}</strong>
@@ -174,7 +211,22 @@
 <script setup>
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { Bell } from '@lucide/vue'
+import {
+  Bell,
+  CalendarDays,
+  CircleHelp,
+  Files,
+  FolderOpen,
+  LayoutDashboard,
+  Mail,
+  MessageCircleMore,
+  PanelLeftClose,
+  PanelLeftOpen,
+  SquarePen,
+  Users,
+  UserRound,
+  ChevronDown,
+} from '@lucide/vue'
 import FloatingChatbot from './FloatingChatbot.vue'
 import OnboardingTour from './tutorial/OnboardingTour.vue'
 import { isTutorialCompleted, markTutorialCompleted } from '../lib/tutorial'
@@ -198,6 +250,7 @@ const route = useRoute()
 const router = useRouter()
 const auth = useAuthStore()
 const mobileOpen = ref(false)
+const sidebarCollapsed = ref(false)
 // 같은 메뉴를 다시 눌렀을 때 그 기능의 초기 화면으로 되돌리기 위해, RouterView를 강제 remount한다.
 const navResetKey = ref(0)
 const notificationsOpen = ref(false)
@@ -210,7 +263,11 @@ const user = computed(() => auth.user)
 const homePath = computed(() => auth.homePath)
 const isAdmin = computed(() => user.value?.role === 'ADMIN')
 const showFloatingChatbot = computed(() => !route.path.startsWith('/admin'))
-
+const userInitial = computed(() => String(user.value?.name || user.value?.loginId || 'M').trim().slice(0, 1))
+const profileSubtitle = computed(() => {
+  if (user.value?.role === 'ADMIN') return 'Meetbowl 팀'
+  return user.value?.organizationName || user.value?.team || '로컬 워크스페이스'
+})
 const notifications = ref([])
 const unreadCount = ref(0)
 const notificationsLoading = ref(false)
@@ -247,38 +304,40 @@ const affiliationText = computed(() => {
 
 const navSections = [
   {
-    title: '개인 워크스페이스',
+    title: '',
     roles: ['USER'],
     items: [
-      { to: '/app/dashboard', label: '대시보드', icon: 'D', tourId: 'dashboard' },
+      { to: '/app/dashboard', label: '대시보드', icon: LayoutDashboard, tourId: 'dashboard' },
       {
         to: '/app/rooms',
         label: '회의실 예약',
-        icon: 'R',
+        icon: CalendarDays,
         tourId: 'rooms',
-        children: [
-          { to: '/app/my-reservations', label: '내 예약', icon: 'M' },
-          { to: '/app/my-attending', label: '참석 회의', icon: 'A' },
-        ],
       },
-      { to: '/app/meetings', label: '회의', icon: 'M', tourId: 'meetings' },
-      { to: '/app/minutes', label: '내 회의록', icon: 'N', tourId: 'minutes' },
-      { to: '/app/mail', label: '메일', icon: 'L' },
-      { to: '/app/workspace', label: '개인 워크스페이스', icon: 'W' },
-      { to: '/app/shared-docs', label: '공유 워크스페이스', icon: 'S' },
-      { to: '/app/community', label: '커뮤니티', icon: 'C' },
+      { to: '/app/meetings', label: '회의', icon: Users, tourId: 'meetings' },
+      { to: '/app/minutes', label: '내 회의록', icon: SquarePen, tourId: 'minutes' },
+      { to: '/app/mail', label: '메일', icon: Mail },
+    ],
+  },
+  {
+    title: '',
+    roles: ['USER'],
+    items: [
+      { to: '/app/workspace', label: '개인 워크스페이스', icon: UserRound },
+      { to: '/app/shared-docs', label: '공유 워크스페이스', icon: Files },
+      { to: '/app/community', label: '도파민', icon: MessageCircleMore },
     ],
   },
   {
     title: '관리자',
     roles: ['ADMIN'],
     items: [
-      { to: '/admin/dashboard', label: '관리자 대시보드', icon: 'D' },
-      { to: '/admin/members', label: '회원 관리', icon: 'U' },
-      { to: '/admin/organization', label: '조직/직급 관리', icon: 'O' },
-      { to: '/admin/rooms', label: '회의실 관리', icon: 'R' },
-      { to: '/admin/minutes-policy', label: '보관 정책 관리', icon: 'P' },
-      { to: '/admin/logs', label: '관리자 작업 로그', icon: 'L' },
+      { to: '/admin/dashboard', label: '관리자 대시보드', icon: LayoutDashboard },
+      { to: '/admin/members', label: '회원 관리', icon: UserRound },
+      { to: '/admin/organization', label: '조직/직급 관리', icon: Users },
+      { to: '/admin/rooms', label: '회의실 관리', icon: CalendarDays },
+      { to: '/admin/minutes-policy', label: '보관 정책 관리', icon: FolderOpen },
+      { to: '/admin/logs', label: '관리자 작업 로그', icon: Files },
     ],
   },
 ]
@@ -308,6 +367,25 @@ function formatPasswordResetRequestedAt(requestedAt) {
     minute: '2-digit',
     hour12: false,
   }).format(date)
+}
+
+function notificationVisual(notification) {
+  const type = String(notification?.type || '').toUpperCase()
+  const resourceType = String(notification?.resourceType || '').toUpperCase()
+
+  if (type.includes('MINUTES') || resourceType === 'MEETING_MINUTES') {
+    return { icon: SquarePen, toneClass: 'is-minutes', label: '회의록 알림' }
+  }
+
+  if (type.includes('MEETING') || resourceType === 'MEETING') {
+    return { icon: CalendarDays, toneClass: 'is-meeting', label: '회의 알림' }
+  }
+
+  if (type.includes('MAIL') || resourceType === 'MAIL') {
+    return { icon: Mail, toneClass: 'is-mail', label: '메일 알림' }
+  }
+
+  return { icon: Bell, toneClass: 'is-general', label: '일반 알림' }
 }
 
 async function refreshAdminNotificationCount() {
@@ -507,6 +585,10 @@ function handleNavClick(to) {
   }
 }
 
+function toggleSidebar() {
+  sidebarCollapsed.value = !sidebarCollapsed.value
+}
+
 function isExpanded(item) {
   if (!item.children) return false
   return isActive(item.to) || item.children.some((child) => isActive(child.to))
@@ -543,7 +625,13 @@ async function handleLogout() {
 }
 
 .notification-panel {
-  width: 310px;
+  width: 420px;
+  overflow: hidden;
+  border: 1px solid rgba(226, 232, 240, 0.9);
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.98);
+  box-shadow: 0 24px 60px rgba(15, 23, 42, 0.14);
+  backdrop-filter: blur(18px);
 }
 
 .profile-panel {
@@ -575,58 +663,143 @@ async function handleLogout() {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  border-bottom: 1px solid var(--border);
+  padding: 14px 18px;
+  border-bottom: 1px solid #e7edf5;
 }
 
 .notification-header .panel-title {
+  margin: 0;
   border-bottom: none;
+  font-size: 16px;
+  font-weight: 800;
 }
 
 .notification-mark-all {
-  margin-right: 12px;
+  margin-right: 0;
   border: none;
   background: none;
-  color: var(--primary-dark, #2563eb);
-  font-size: 12px;
-  font-weight: 600;
+  color: #6b7280;
+  font-size: 14px;
+  font-weight: 700;
   cursor: pointer;
 }
 
 .notification-empty {
   margin: 0;
-  padding: 18px 14px;
+  padding: 20px 18px;
   font-size: 13px;
   color: var(--muted-foreground);
   text-align: center;
 }
 
+.notification-list {
+  max-height: min(420px, calc(100vh - 220px));
+  overflow-y: auto;
+}
+
+.notification {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 12px;
+  align-items: start;
+  padding: 14px 18px;
+  border-bottom: 1px solid #edf2f7;
+  text-decoration: none;
+  color: inherit;
+  background: white;
+  transition: background-color 0.16s ease, transform 0.16s ease;
+}
+
+.notification:hover {
+  background: #fffaf5;
+}
+
 .notification.unread {
-  background: var(--muted, #f8fafc);
+  background: linear-gradient(180deg, rgba(255, 247, 237, 0.5), rgba(255, 255, 255, 0.98));
 }
 
-.notification.unread strong::before {
-  content: '';
-  display: inline-block;
-  width: 6px;
-  height: 6px;
-  margin-right: 6px;
-  border-radius: 999px;
-  background: var(--primary-dark, #2563eb);
-  vertical-align: middle;
+.notification-icon {
+  width: 34px;
+  height: 34px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 10px;
+  background: #f8fafc;
+  color: #64748b;
+  flex-shrink: 0;
 }
 
-.notification.unread strong,
-.notification.unread span {
+.notification-icon.is-mail {
+  background: #fff4ed;
+  color: #f97316;
+}
+
+.notification-icon.is-meeting {
+  background: #f4f6fb;
+  color: #475569;
+}
+
+.notification-icon.is-minutes {
+  background: #eefcf6;
+  color: #10b981;
+}
+
+.notification-icon.is-general,
+.notification-icon.is-admin {
+  background: #f8fafc;
+  color: #475569;
+}
+
+.notification-copy {
+  min-width: 0;
+  display: grid;
+  gap: 4px;
+}
+
+.notification-topline {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.notification-copy strong {
+  color: #111827;
+  font-size: 14px;
+  font-weight: 800;
+  line-height: 1.35;
+}
+
+.notification-copy > span,
+.notification-copy small {
+  color: #6b7280;
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.notification-copy > span {
+  word-break: keep-all;
+}
+
+.notification-copy em {
+  color: #94a3b8;
+  font-size: 11px;
+  font-style: normal;
   font-weight: 700;
 }
 
+.notification.unread .notification-copy strong {
+  color: #0f172a;
+}
+
 .password-reset-notification {
-  gap: 6px;
+  gap: 12px;
   cursor: default;
 }
 
 .password-reset-notification:hover {
-  background: white;
+  background: #fffaf5;
 }
 
 .password-reset-notification__head {
@@ -640,7 +813,7 @@ async function handleLogout() {
   display: flex;
   justify-content: flex-end;
   gap: 8px;
-  margin-top: 4px;
+  margin-top: 6px;
 }
 
 .password-reset-notification__reject {
@@ -650,22 +823,36 @@ async function handleLogout() {
 
 .notification-more {
   width: 100%;
-  padding: 10px 14px;
+  padding: 13px 18px;
   border: none;
-  border-top: 1px solid var(--border, #e5e7eb);
-  background: transparent;
-  color: var(--primary-dark, #2563eb);
-  font-size: 13px;
-  font-weight: 600;
+  border-top: 1px solid #edf2f7;
+  background: white;
+  color: #f97316;
+  font-size: 14px;
+  font-weight: 800;
   cursor: pointer;
 }
 
 .notification-more:hover {
-  background: var(--muted, #f8fafc);
+  background: #fffaf5;
 }
 
 .notification-more:disabled {
   color: var(--muted-foreground);
   cursor: default;
+}
+
+@media (max-width: 760px) {
+  .notification-panel {
+    width: min(92vw, 420px);
+  }
+
+  .notification {
+    padding: 13px 16px;
+  }
+
+  .notification-header {
+    padding: 13px 16px;
+  }
 }
 </style>

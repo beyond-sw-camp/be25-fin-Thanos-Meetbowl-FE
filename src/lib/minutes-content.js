@@ -1,3 +1,13 @@
+const DEFAULT_DOC = Object.freeze({
+  type: 'doc',
+  content: [
+    {
+      type: 'paragraph',
+      content: [],
+    },
+  ],
+})
+
 export function extractTiptapText(content) {
   const document = parseContent(content)
   if (!document) return ''
@@ -14,7 +24,11 @@ export function isValidTiptapDocument(content) {
 
 export function parseTiptapDocument(content) {
   const document = parseContent(content)
-  return isValidTiptapDocument(document) ? document : emptyTiptapDocument()
+  if (isValidTiptapDocument(document)) return document
+  if (typeof content === 'string' && shouldCreateTextDocument(content)) {
+    return textTiptapDocument(content.trim())
+  }
+  return emptyTiptapDocument()
 }
 
 export function stringifyTiptapDocument(document) {
@@ -22,12 +36,21 @@ export function stringifyTiptapDocument(document) {
 }
 
 export function emptyTiptapDocument() {
+  return cloneDefaultDoc()
+}
+
+function textTiptapDocument(text) {
   return {
     type: 'doc',
     content: [
       {
         type: 'paragraph',
-        content: [],
+        content: [
+          {
+            type: 'text',
+            text,
+          },
+        ],
       },
     ],
   }
@@ -41,6 +64,19 @@ function parseContent(content) {
   } catch {
     return null
   }
+}
+
+function shouldCreateTextDocument(content) {
+  const text = content.trim()
+  if (!text) return false
+
+  if (/^[\[{]/.test(text)) return false
+  return true
+}
+
+function cloneDefaultDoc() {
+  if (typeof structuredClone === 'function') return structuredClone(DEFAULT_DOC)
+  return JSON.parse(JSON.stringify(DEFAULT_DOC))
 }
 
 function collectText(node, lines) {

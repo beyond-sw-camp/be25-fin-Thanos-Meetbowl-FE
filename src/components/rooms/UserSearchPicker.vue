@@ -1,22 +1,27 @@
 <template>
   <div class="member-picker">
-    <div v-if="warning" class="member-picker-warning">{{ warning }}</div>
-    <label>참석자 검색<input v-model="query" placeholder="이름, 부서, 이메일"></label>
+    <div v-if="warning" class="member-picker-warning" role="alert">
+      <span class="member-picker-warning__icon">!</span>
+      <span>{{ warning }}</span>
+    </div>
+    <label>참석자 검색<input v-model="query" placeholder="이름, 부서, 이메일로 검색하세요"></label>
     <div v-if="results.length" class="member-picker-results">
       <button
         v-for="user in results"
         :key="user.userId"
         type="button"
         :disabled="checking"
+        class="member-picker-result-button"
         @click="add(user)"
       >
         <strong>{{ user.name }}</strong>
-        <span>{{ user.department }} · {{ user.email }}</span>
+        <span>{{ formatUserMeta(user) }}</span>
       </button>
     </div>
     <div class="participant-chips">
-      <span v-for="attendee in modelValue" :key="attendee.userId">
-        {{ attendee.name }}
+      <span v-for="attendee in modelValue" :key="attendee.userId" class="participant-chip">
+        <strong>{{ attendee.name }}</strong>
+        <small>{{ formatUserMeta(attendee) }}</small>
         <button
           v-if="!fixedUserIdSet.has(attendee.userId)"
           type="button"
@@ -66,6 +71,7 @@ async function runSearch(keyword) {
         userId: user.userId,
         name: user.name || '-',
         department: user.department || '',
+        position: user.position || '',
         email: user.email || '',
       }))
   } catch {
@@ -103,7 +109,13 @@ async function add(user) {
       checking.value = false
     }
   }
-  emit('update:modelValue', [...props.modelValue, { userId: user.userId, name: user.name }])
+  emit('update:modelValue', [...props.modelValue, {
+    userId: user.userId,
+    name: user.name,
+    department: user.department || '',
+    position: user.position || '',
+    email: user.email || '',
+  }])
   query.value = ''
   results.value = []
 }
@@ -112,30 +124,106 @@ function remove(userId) {
   if (fixedUserIdSet.value.has(userId)) return
   emit('update:modelValue', props.modelValue.filter((attendee) => attendee.userId !== userId))
 }
+
+function formatUserMeta(user) {
+  return [user?.department, user?.position].filter(Boolean).join(' · ') || '-'
+}
 </script>
 
 <style scoped>
-/* '참석자 검색' 라벨 바로 위에 폼(참석자 영역) 너비로 뜨는 중앙 오버레이. 레이아웃을 밀지 않도록 absolute로 띄운다. */
 .member-picker {
-  position: relative;
+  display: grid;
+  gap: 10px;
+}
+.member-picker label {
+  display: grid;
+  gap: 8px;
+  color: var(--foreground);
+  font-size: 14px;
+  font-weight: 700;
+}
+.member-picker label input {
+  width: 100%;
+  min-height: 46px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: #fff;
+  padding: 12px 14px;
+  color: var(--foreground);
+  font: inherit;
 }
 .member-picker-warning {
-  position: absolute;
-  left: 50%;
-  bottom: calc(100% + 8px);
-  transform: translateX(-50%);
-  z-index: 2;
-  width: 100%;
-  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  gap: 10px;
   border: 1px solid #fdba74;
-  border-radius: 10px;
+  border-radius: 12px;
   background: #fff7ed;
   color: #c2410c;
-  padding: 10px 12px;
+  padding: 11px 13px;
   font-size: 13px;
   font-weight: 700;
-  text-align: center;
-  box-shadow: 0 12px 28px rgba(194, 65, 12, 0.16);
-  pointer-events: none;
+  line-height: 1.45;
+}
+.member-picker-warning__icon {
+  width: 22px;
+  height: 22px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  background: rgba(249, 115, 22, 0.12);
+  color: #ea580c;
+  font-size: 12px;
+  font-weight: 900;
+  flex-shrink: 0;
+}
+.member-picker-results {
+  display: grid;
+  gap: 8px;
+}
+.member-picker-result-button {
+  display: grid;
+  gap: 4px;
+  width: 100%;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: #fff;
+  padding: 12px 14px;
+  text-align: left;
+}
+.member-picker-result-button span {
+  color: var(--muted-foreground);
+  font-size: 13px;
+}
+.participant-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.participant-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex: 0 0 auto;
+  border-radius: 999px;
+  background: #f3f4f6;
+  color: var(--foreground);
+  padding: 8px 12px;
+  font-size: 13px;
+  white-space: nowrap;
+}
+.participant-chip small {
+  color: var(--muted-foreground);
+  font-size: 13px;
+}
+.participant-chip button {
+  border: 0;
+  background: transparent;
+  color: var(--muted-foreground);
+  cursor: pointer;
+  font-size: 16px;
+  line-height: 1;
+  padding: 0;
 }
 </style>

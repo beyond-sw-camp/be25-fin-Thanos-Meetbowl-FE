@@ -21,8 +21,7 @@
       <div class="mail-selected-recipients" :class="{ empty: !recipients.length }">
         <small v-if="!recipients.length">선택된 수신자가 없습니다.</small>
         <span v-for="member in recipients" :key="userKey(member)">
-          {{ member.name }}
-          <small>{{ member.department || member.team || member.email }}</small>
+          <span class="member-chip-label">{{ formatUserChipLabel(member) }}</span>
           <button type="button" :aria-label="`${member.name} 수신자 제거`" @click="removeRecipient(userKey(member))">×</button>
         </span>
       </div>
@@ -31,21 +30,21 @@
           <Search :size="15" />
           <input v-model="recipientQuery" placeholder="수신자 추가: 이름, 부서/팀, 이메일 검색">
         </label>
-        <div v-if="pickerOpen && (recipientQuery || recipientMatches.length || recipientLoading)" class="recipient-results">
-          <small v-if="recipientLoading">수신자를 검색하는 중입니다.</small>
-          <button v-for="member in recipientMatches" :key="userKey(member)" type="button" @click="addRecipient(member)">
-            <strong>{{ member.name }}</strong>
-            <small>{{ member.affiliate || '-' }} · {{ member.department || member.team || '-' }} · {{ member.email }}</small>
-          </button>
-          <small v-if="recipientQuery && !recipientLoading && !recipientMatches.length">검색 결과가 없습니다.</small>
-        </div>
+      <div v-if="pickerOpen && (recipientQuery || recipientMatches.length || recipientLoading)" class="recipient-results">
+        <small v-if="recipientLoading">수신자를 검색하는 중입니다.</small>
+        <button v-for="member in recipientMatches" :key="userKey(member)" type="button" @click="addRecipient(member)">
+          <strong>{{ member.name }}</strong>
+          <small>{{ member.affiliate || '-' }} · {{ member.department || member.team || '-' }} · {{ member.email }}</small>
+        </button>
+        <small v-if="recipientQuery && !recipientLoading && !recipientMatches.length">검색 결과가 없습니다.</small>
       </div>
-      <input v-model="draft.subject" placeholder="제목">
-      <textarea v-model="draft.body" rows="10" placeholder="내용을 입력하세요..."></textarea>
-      <label
-        class="upload-zone-small mail-upload-zone"
-        @dragover.prevent
-        @drop.prevent="addFiles($event.dataTransfer.files)"
+    </div>
+    <input v-model="draft.subject" placeholder="제목">
+    <MinutesEditor v-model="draft.body" />
+    <label
+      class="upload-zone-small mail-upload-zone"
+      @dragover.prevent
+      @drop.prevent="addFiles($event.dataTransfer.files)"
       >
         <Upload :size="24" />
         <strong>파일을 끌어다 놓거나 클릭해 첨부</strong>
@@ -75,6 +74,8 @@
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { ChevronDown, FileType2, Paperclip, Search, Upload, X } from '@lucide/vue'
 import ModalShell from '../common/ModalShell.vue'
+import MinutesEditor from '../minutes/MinutesEditor.vue'
+import { formatUserChipLabel } from '../../utils/userLabel'
 
 const props = defineProps({
   initialDraft: { type: Object, default: () => ({}) },

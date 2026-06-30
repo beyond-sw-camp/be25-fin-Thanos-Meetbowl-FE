@@ -1,6 +1,6 @@
 <template>
-  <form class="form-grid" @submit.prevent="$emit('submit')">
-    <label>회의 제목<input v-model="form.title" required placeholder="회의 제목"></label>
+  <form class="form-grid reservation-form-grid" @submit.prevent="$emit('submit')">
+    <label>회의 제목<input v-model="form.title" required placeholder="회의 제목을 입력하세요"></label>
     <div v-if="allowRemote && !roomUsageEnabled" class="room-usage-cta">
       <p>원격 회의로 진행 중입니다.</p>
       <button type="button" class="secondary-button" @click="$emit('enable-room-usage')">
@@ -25,12 +25,24 @@
       </label>
     </template>
     <div class="form-row two">
-      <label>시작 날짜<input type="date" v-model="form.date"></label>
-      <label>종료 날짜<input type="date" v-model="form.endDate"></label>
+      <label>
+        시작 날짜
+        <input type="date" v-model="form.date" @input="$emit('schedule-field-edited', 'date')">
+      </label>
+      <label>
+        종료 날짜
+        <input type="date" v-model="form.endDate" @input="$emit('schedule-field-edited', 'endDate')">
+      </label>
     </div>
     <div class="form-row two">
-      <label>시작 시간<input type="time" v-model="form.start"></label>
-      <label>종료 시간<input type="time" v-model="form.end"></label>
+      <label>
+        시작 시간
+        <input type="time" v-model="form.start" @input="$emit('schedule-field-edited', 'start')">
+      </label>
+      <label>
+        종료 시간
+        <input type="time" v-model="form.end" @input="$emit('schedule-field-edited', 'end')">
+      </label>
     </div>
 
     <UserSearchPicker
@@ -42,6 +54,10 @@
     />
 
     <label>
+      <span v-if="reviewerWarning" class="reservation-inline-warning" role="alert">
+        <span class="reservation-inline-warning__icon">!</span>
+        <span>{{ reviewerWarning }}</span>
+      </span>
       회의록 검토자
       <AppSelect v-model="form.reviewerUserId">
         <option value="">검토자 미지정</option>
@@ -56,8 +72,58 @@
       <small>참석자 중 회의록을 검토할 1명을 지정합니다.</small>
     </label>
 
-    <label>회의 내용<textarea v-model="form.content" rows="4" placeholder="회의 목적과 안건"></textarea></label>
-    <slot name="actions" />
+    <div class="external-invitee-section">
+      <div class="external-invitee-header">
+        <strong>외부 초대 <span>(선택)</span></strong>
+      </div>
+      <div class="external-invitee-inputs">
+        <label>
+          이름
+          <input
+            :value="form.externalInviteeName"
+            type="text"
+            placeholder="외부 참석자 이름"
+            @input="$emit('update:external-invitee-name', $event.target.value)"
+            @keydown.enter.prevent="$emit('add-external-invitee')"
+          >
+        </label>
+        <label>
+          이메일
+          <input
+            :value="form.externalInviteeEmail"
+            type="email"
+            placeholder="guest@example.com"
+            @input="$emit('update:external-invitee-email', $event.target.value)"
+            @keydown.enter.prevent="$emit('add-external-invitee')"
+          >
+        </label>
+        <button type="button" class="secondary-button" @click="$emit('add-external-invitee')">
+          추가
+        </button>
+      </div>
+      <div v-if="form.externalInvitees?.length" class="external-invitee-chips">
+        <span
+          v-for="invitee in form.externalInvitees"
+          :key="`${invitee.email}-${invitee.name}`"
+          class="external-invitee-chip"
+        >
+          {{ invitee.name }}
+          <small>&lt;{{ invitee.email }}&gt;</small>
+          <button type="button" aria-label="외부 참석자 제거" @click="$emit('remove-external-invitee', invitee.email)">
+            ×
+          </button>
+        </span>
+      </div>
+    </div>
+
+    <label>회의 내용 <span class="field-optional">(선택)</span><textarea v-model="form.content" rows="4" placeholder="회의의 목적, 주요 의제, 참고 사항을 입력하세요"></textarea></label>
+    <div class="reservation-form-footer">
+      <div v-if="generalWarning" class="reservation-inline-warning reservation-inline-warning--footer" role="alert">
+        <span class="reservation-inline-warning__icon">!</span>
+        <span>{{ generalWarning }}</span>
+      </div>
+      <slot name="actions" />
+    </div>
   </form>
 </template>
 
@@ -78,12 +144,137 @@ const props = defineProps({
   attendeeValidate: { type: Function, default: null },
   // 참석자 겹침 경고 문구. '참석자 검색' 라벨 위 오버레이로 표시한다.
   attendeeWarning: { type: String, default: '' },
+  generalWarning: { type: String, default: '' },
+  reviewerWarning: { type: String, default: '' },
 })
-defineEmits(['submit', 'enable-room-usage', 'disable-room-usage', 'attendee-reject'])
+defineEmits([
+  'submit',
+  'enable-room-usage',
+  'disable-room-usage',
+  'attendee-reject',
+  'add-external-invitee',
+  'remove-external-invitee',
+  'update:external-invitee-name',
+  'update:external-invitee-email',
+  'schedule-field-edited',
+])
 const reviewerOptions = computed(() => props.form.attendees.filter((attendee) => attendee.userId))
 </script>
 
 <style scoped>
+.reservation-form-grid {
+  gap: 16px;
+}
+
+.reservation-inline-warning {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  border: 1px solid #fdba74;
+  border-radius: 12px;
+  background: #fff7ed;
+  color: #c2410c;
+  padding: 11px 13px;
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1.45;
+}
+
+.reservation-inline-warning__icon {
+  width: 22px;
+  height: 22px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  background: rgba(249, 115, 22, 0.12);
+  color: #ea580c;
+  font-size: 12px;
+  font-weight: 900;
+  flex-shrink: 0;
+}
+
+.reservation-inline-warning--footer {
+  max-width: min(520px, 100%);
+}
+
+.reservation-form-grid > label,
+.reservation-form-grid :deep(.member-picker) {
+  display: grid;
+  gap: 8px;
+}
+
+.reservation-form-grid > label {
+  color: var(--foreground);
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.reservation-form-grid > label .field-optional {
+  color: var(--muted-foreground);
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.reservation-form-grid > label input,
+.reservation-form-grid > label textarea {
+  width: 100%;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: #fff;
+  padding: 12px 14px;
+  color: var(--foreground);
+  font: inherit;
+}
+
+.reservation-form-grid > label input {
+  min-height: 46px;
+}
+
+.reservation-form-grid > label textarea {
+  min-height: 116px;
+  resize: vertical;
+}
+
+.reservation-form-grid > label :deep(.app-select-wrap) {
+  width: 100%;
+}
+
+.reservation-form-grid > label :deep(.app-select) {
+  min-height: 46px;
+  border-radius: 12px;
+}
+
+.reservation-form-grid > label small {
+  color: var(--muted-foreground);
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.reservation-form-grid .form-row.two {
+  gap: 14px;
+}
+
+.reservation-form-grid .modal-actions {
+  padding-top: 8px;
+  margin-left: auto;
+}
+
+.reservation-form-grid .modal-actions .secondary-button,
+.reservation-form-grid .modal-actions .primary-button {
+  min-width: 132px;
+  min-height: 46px;
+  border-radius: 12px;
+}
+
+.reservation-form-footer {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  padding-top: 8px;
+}
+
 .room-usage-cta {
   display: grid;
   gap: 10px;
@@ -112,5 +303,80 @@ const reviewerOptions = computed(() => props.form.attendees.filter((attendee) =>
 }
 .room-usage-bar span {
   min-width: 0;
+}
+.external-invitee-section {
+  display: grid;
+  gap: 10px;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: var(--surface, #fff);
+  padding: 14px;
+}
+.external-invitee-header {
+  display: grid;
+  gap: 4px;
+}
+.external-invitee-header strong {
+  font-size: 14px;
+}
+.external-invitee-header strong span {
+  color: var(--muted-foreground);
+  font-size: 13px;
+  font-weight: 500;
+}
+.external-invitee-header small {
+  color: var(--muted-foreground);
+}
+.external-invitee-inputs {
+  display: grid;
+  gap: 10px;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto;
+  align-items: end;
+}
+.external-invitee-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.external-invitee-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border-radius: 999px;
+  background: #f3f4f6;
+  color: var(--foreground);
+  padding: 8px 12px;
+  font-size: 13px;
+  white-space: nowrap;
+}
+.external-invitee-chip small {
+  color: var(--muted-foreground);
+}
+.external-invitee-chip button {
+  border: 0;
+  background: transparent;
+  color: var(--muted-foreground);
+  cursor: pointer;
+  font-size: 16px;
+  line-height: 1;
+  padding: 0;
+}
+@media (max-width: 720px) {
+  .reservation-form-footer {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .reservation-inline-warning--footer {
+    max-width: none;
+  }
+
+  .reservation-form-grid .modal-actions {
+    margin-left: 0;
+  }
+
+  .external-invitee-inputs {
+    grid-template-columns: 1fr;
+  }
 }
 </style>
