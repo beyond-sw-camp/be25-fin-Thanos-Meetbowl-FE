@@ -562,13 +562,18 @@ function normalizeBuilding(item) {
       <article class="card admin-site-filter">
         <strong>사이트 / 건물</strong>
         <div class="toolbar">
-          <button class="chip" :class="{ active: buildingFilter === 'all' }" type="button" @click="buildingFilter = 'all'">
+          <button
+            class="chip admin-room-filter-chip"
+            :class="{ active: buildingFilter === 'all' }"
+            type="button"
+            @click="buildingFilter = 'all'"
+          >
             전체 ({{ rooms.length }}실)
           </button>
           <button
             v-for="building in siteBuildingList"
             :key="building.buildingId"
-            class="chip"
+            class="chip admin-room-filter-chip"
             :class="{ active: buildingFilter === building.buildingId }"
             type="button"
             @click="buildingFilter = buildingFilter === building.buildingId ? 'all' : building.buildingId"
@@ -599,13 +604,13 @@ function normalizeBuilding(item) {
               <td>{{ room.floor === null ? '-' : `${room.floor}F` }}</td>
               <td>{{ room.capacity }}명</td>
               <td>
-                <span :class="['badge', room.isAvailable ? 'success' : 'warning']">
+                <span :class="['badge', 'admin-room-status-badge', room.isAvailable ? 'success' : 'warning']">
                   {{ room.isAvailable ? '운영 중' : '사용 제한' }}
                 </span>
               </td>
-              <td>
-                <button class="icon-text" type="button" @click="openEditRoom(room)">수정</button>
-                <button class="icon-text danger" type="button" @click="removeRoom(room)">삭제</button>
+              <td class="admin-room-action-cell">
+                <button class="icon-text admin-room-action-button" type="button" @click="openEditRoom(room)">수정</button>
+                <button class="icon-text danger admin-room-action-button admin-room-action-button--danger" type="button" @click="removeRoom(room)">삭제</button>
               </td>
             </tr>
             <tr v-if="!filteredRooms.length">
@@ -781,6 +786,71 @@ function normalizeBuilding(item) {
 .admin-data-table th:nth-child(5), .admin-data-table td:nth-child(5) { width: 8%; }  /* 정원 */
 .admin-data-table th:nth-child(6), .admin-data-table td:nth-child(6) { width: 14%; } /* 상태 */
 .admin-data-table th:nth-child(7), .admin-data-table td:nth-child(7) { width: 16%; } /* 액션 */
+
+.admin-room-filter-chip,
+.admin-room-status-badge,
+.admin-room-action-button {
+  min-height: 32px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 800;
+  line-height: 1;
+}
+
+.admin-room-filter-chip {
+  padding: 0 12px;
+}
+
+.admin-room-filter-chip.active {
+  box-shadow: 0 6px 16px rgba(241, 101, 33, 0.12);
+}
+
+.admin-room-status-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 74px;
+  padding: 0 12px;
+}
+
+.admin-room-action-cell {
+  white-space: nowrap;
+}
+
+.admin-room-action-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 12px;
+  border: 1px solid rgba(241, 101, 33, 0.16);
+  background: rgba(255, 237, 213, 0.82);
+  color: var(--primary-dark);
+  transition: background-color 0.15s ease, border-color 0.15s ease, color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.admin-room-action-button:hover {
+  background: rgba(255, 237, 213, 1);
+  border-color: rgba(241, 101, 33, 0.28);
+  color: var(--primary);
+  box-shadow: 0 6px 16px rgba(241, 101, 33, 0.12);
+}
+
+.admin-room-action-button + .admin-room-action-button {
+  margin-left: 8px;
+}
+
+.admin-room-action-button--danger {
+  border-color: rgba(220, 38, 38, 0.14);
+  background: rgba(254, 226, 226, 0.9);
+  color: var(--danger);
+}
+
+.admin-room-action-button--danger:hover {
+  background: #fee2e2;
+  border-color: rgba(220, 38, 38, 0.24);
+  color: #b91c1c;
+  box-shadow: 0 6px 16px rgba(220, 38, 38, 0.1);
+}
 
 /* 운영 중 토글: 본문 라벨은 기본 grid(세로)라, 라벨+체크박스를 한 줄로 정렬하도록 덮어씀 */
 .admin-modal-body > label.admin-toggle-row {

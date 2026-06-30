@@ -1907,22 +1907,21 @@ input:focus { border-color: var(--primary); box-shadow: 0 0 0 3px rgba(243,115,3
   display: grid;
   grid-template-columns: minmax(120px, 160px) minmax(0, 1fr);
   align-items: start;
-  gap: 6px;
-  padding: 0;
+  gap: 10px;
+  padding: 6px 0;
   min-height: 0;
   border-bottom: 1px solid var(--border);
 }
-.admin-audit-log-actor { color: var(--foreground); font-size: 12px; font-weight: 800; line-height: 1; padding-top: 0; }
+.admin-audit-log-actor { color: var(--foreground); font-size: 13px; font-weight: 800; line-height: 1.35; padding-top: 1px; }
 .admin-audit-log-summary {
   display: flex;
-  flex-wrap: nowrap;
+  flex-wrap: wrap;
   align-items: start;
-  gap: 2px;
+  gap: 6px;
   min-width: 0;
   color: var(--muted-foreground);
-  font-size: 10px;
-  line-height: 1;
-  overflow: hidden;
+  font-size: 12px;
+  line-height: 1.35;
 }
 .admin-audit-log-summary > * { min-width: 0; white-space: nowrap; flex: 0 0 auto; }
 .admin-audit-log-action { color: var(--foreground); font-weight: 700; }
@@ -1942,12 +1941,12 @@ input:focus { border-color: var(--primary); box-shadow: 0 0 0 3px rgba(243,115,3
 .admin-audit-log-field { color: var(--muted-foreground); }
 .admin-audit-log-time { font-variant-numeric: tabular-nums; }
 .admin-audit-log-summary .badge {
-  min-height: 12px;
-  padding: 0 4px;
-  font-size: 9px;
-  line-height: 1;
+  min-height: 18px;
+  padding: 0 7px;
+  font-size: 10px;
+  line-height: 1.1;
 }
-.admin-audit-log-link { color: var(--primary-dark); font-weight: 800; }
+.admin-audit-log-link { color: var(--primary-dark); font-weight: 800; font-size: 11px; }
 .admin-dashboard-grid > .admin-chart-card:last-of-type,
 .admin-dashboard-grid > .admin-table-card {
   display: flex;

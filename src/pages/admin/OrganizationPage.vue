@@ -2247,13 +2247,26 @@ function getDepartmentTreeData(departmentId) {
 }
 
 .organization-action-link {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 32px;
+  padding: 0 12px;
+  border: 1px solid rgba(241, 101, 33, 0.16);
+  border-radius: 999px;
+  background: rgba(255, 237, 213, 0.82);
   color: var(--primary-dark);
   font-weight: 700;
+  line-height: 1;
+  transition: background-color 0.15s ease, border-color 0.15s ease, color 0.15s ease, box-shadow 0.15s ease;
 }
 
 .organization-action-link:hover {
+  background: rgba(255, 237, 213, 1);
+  border-color: rgba(241, 101, 33, 0.28);
   color: var(--primary);
-  text-decoration: underline;
+  text-decoration: none;
+  box-shadow: 0 6px 16px rgba(241, 101, 33, 0.12);
 }
 
 .organization-action-link:focus-visible {
@@ -2261,12 +2274,21 @@ function getDepartmentTreeData(departmentId) {
   outline-offset: 2px;
 }
 
+.organization-action-link + .organization-action-link {
+  margin-left: 8px;
+}
+
 .organization-action-link--danger {
+  border-color: rgba(220, 38, 38, 0.14);
+  background: rgba(254, 226, 226, 0.9);
   color: var(--danger);
 }
 
 .organization-action-link--danger:hover {
+  background: #fee2e2;
+  border-color: rgba(220, 38, 38, 0.24);
   color: #b91c1c;
+  box-shadow: 0 6px 16px rgba(220, 38, 38, 0.1);
 }
 
 /* 조직도 트리 구조 스타일 */

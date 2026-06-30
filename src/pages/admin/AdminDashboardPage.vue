@@ -4,6 +4,7 @@ import AdminAuditLogItem from '../../components/admin/AdminAuditLogItem.vue'
 import AdminChartShell from '../../components/admin/AdminChartShell.vue'
 import AdminInsightCard from '../../components/admin/AdminInsightCard.vue'
 import { getAdminDashboardSummary } from '../../lib/admin-dashboard'
+import { formatActionTypeLabel } from '../../lib/admin-audit-log-utils'
 import { useAuthStore } from '../../stores/auth'
 
 const auth = useAuthStore()
@@ -419,7 +420,7 @@ const kpis = computed(() => {
       label: '최근 관리자 작업',
       value: recentAuditLogs.value.length,
       sub: recentAuditLogs.value[0]
-        ? `${recentAuditLogs.value[0].actorName} · ${recentAuditLogs.value[0].actionType}`
+        ? `${recentAuditLogs.value[0].actorName} · ${formatActionTypeLabel(recentAuditLogs.value[0].actionType)}`
         : '최근 이력 없음',
     },
   ]
