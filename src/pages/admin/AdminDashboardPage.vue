@@ -400,35 +400,35 @@ const kpis = computed(() => {
   return [
     {
       label: '오늘 예약 수',
-      value: meetingRoomSummary.value.todayReservationCount,
-      sub: `운영 시간 상세 점유 ${visibleOccupancyUsage.value.length}개 시간대`,
+      value: `${meetingRoomSummary.value.todayReservationCount} 건`,
+      sub: `운영 점유 ${visibleOccupancyUsage.value.length}개`,
       icon: CalendarCheck2,
       tone: 'orange',
     },
     {
-      label: '현재 사용 중 회의실 수',
-      value: meetingRoomSummary.value.inUseMeetingRoomCount,
-      sub: `현재 시간대 점유 기준 ${siteBuildingUsage.value.length}개 건물`,
+      label: '사용 중 회의실 수',
+      value: `${meetingRoomSummary.value.inUseMeetingRoomCount} 개`,
+      sub: `현재 기준 ${siteBuildingUsage.value.length}개 건물`,
       icon: User,
       tone: 'blue',
     },
     {
-      label: '현재 사용 가능한 회의실 수',
-      value: meetingRoomSummary.value.availableMeetingRoomCount,
-      sub: `현재 사용 중인 회의실 기준`,
+      label: '사용 가능한 회의실 수',
+      value: `${meetingRoomSummary.value.availableMeetingRoomCount} 개`,
+      sub: '사용 중 회의실 제외',
       icon: Sparkles,
       tone: 'green',
     },
     {
       label: '메일 보관 기간',
-      value: `${mailRetentionPolicy.value.retentionDays}일`,
+      value: `${mailRetentionPolicy.value.retentionDays} 일`,
       sub: mailRetentionPolicy.value.autoDeleteEnabled ? '자동 삭제 사용' : '자동 삭제 미사용',
       icon: LockKeyhole,
       tone: 'violet',
     },
     {
       label: '최근 관리자 작업',
-      value: recentAuditLogs.value.length,
+      value: `${recentAuditLogs.value.length} 건`,
       sub: recentAuditLogs.value[0]
         ? `${recentAuditLogs.value[0].actorName} · ${formatActionTypeLabel(recentAuditLogs.value[0].actionType)}`
         : '최근 이력 없음',

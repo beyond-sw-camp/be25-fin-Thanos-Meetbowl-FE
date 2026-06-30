@@ -1914,17 +1914,20 @@ input:focus { border-color: var(--primary); box-shadow: 0 0 0 3px rgba(243,115,3
 }
 .admin-dashboard-page .admin-metric-card span {
   color: #475467;
-  font-size: 13px;
+  font-size: 12px;
   font-weight: 700;
+  white-space: nowrap;
 }
 .admin-dashboard-page .admin-metric-card strong {
   font-size: clamp(28px, 2vw, 38px);
   letter-spacing: -0.04em;
+  white-space: nowrap;
 }
 .admin-dashboard-page .admin-metric-card em {
   color: #667085;
-  font-size: 12px;
+  font-size: 11px;
   font-weight: 600;
+  white-space: nowrap;
 }
 .admin-dashboard-grid { display: grid; gap: 16px; margin-bottom: 16px; align-items: stretch; }
 .admin-chart-card, .admin-site-card, .admin-table-card { min-width: 0; align-self: stretch; height: 100%; }
@@ -2095,7 +2098,7 @@ input:focus { border-color: var(--primary); box-shadow: 0 0 0 3px rgba(243,115,3
   gap: 0;
 }
 .admin-retention-card .detail-list > div {
-  padding: 18px 4px;
+  padding: 14px 4px;
   border-top: 1px solid #edf1f6;
 }
 .admin-retention-card .detail-list > div:nth-child(-n + 2) {
@@ -2108,16 +2111,16 @@ input:focus { border-color: var(--primary); box-shadow: 0 0 0 3px rgba(243,115,3
   text-transform: none;
 }
 .admin-retention-card .detail-list dd {
-  margin-top: 8px;
+  margin-top: 6px;
   color: #111827;
-  font-size: 22px;
+  font-size: 20px;
   font-weight: 800;
   letter-spacing: -0.03em;
-  line-height: 1.2;
+  line-height: 1.15;
 }
 .admin-retention-card .detail-list > div:nth-child(3) dd,
 .admin-retention-card .detail-list > div:nth-child(4) dd {
-  font-size: 14px;
+  font-size: 13px;
   font-weight: 600;
   letter-spacing: 0;
 }
