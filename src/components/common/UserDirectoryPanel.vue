@@ -1031,7 +1031,7 @@ function formatActionError(error, fallbackMessage) {
   align-items: center;
   justify-content: center;
   min-height: 32px;
-  border-radius: 999px;
+  border-radius: 10px;
   font-size: 12px;
   font-weight: 800;
   line-height: 1;
@@ -1043,18 +1043,13 @@ function formatActionError(error, fallbackMessage) {
 }
 
 .directory-action-link {
-  border: 1px solid rgba(241, 101, 33, 0.16);
-  background: rgba(255, 237, 213, 0.82);
   color: var(--primary-dark);
-  transition: background-color 0.15s ease, border-color 0.15s ease, color 0.15s ease, box-shadow 0.15s ease;
+  transition: color 0.15s ease, text-decoration-color 0.15s ease;
 }
 
 .directory-action-link:hover {
-  background: rgba(255, 237, 213, 1);
-  border-color: rgba(241, 101, 33, 0.28);
   color: var(--primary);
-  text-decoration: none;
-  box-shadow: 0 6px 16px rgba(241, 101, 33, 0.12);
+  text-decoration: underline;
 }
 
 .directory-action-link:focus-visible {
