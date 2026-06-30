@@ -103,9 +103,10 @@
 
 
 ## 7. 데이터베이스 설계 (ERD)
-[ERD](https://www.erdcloud.com/d/yXrcCrnYFdM2P8q6b)
+[ERD]([https://www.erdcloud.com/d/yXrcCrnYFdM2P8q6b])
 
-<img width="1930" height="1330" alt="meetbowl" src="https://github.com/user-attachments/assets/66637be3-f064-4db5-a451-05c959c69a12" />
+<img width="6000" height="3832" alt="meetbowl final" src="https://github.com/user-attachments/assets/4ae83333-e434-423f-b4ac-1e8e7c2ed2c2" />
+
 
 <br>
 
