@@ -791,7 +791,7 @@ function normalizeBuilding(item) {
 .admin-room-status-badge,
 .admin-room-action-button {
   min-height: 32px;
-  border-radius: 999px;
+  border-radius: 10px;
   font-size: 12px;
   font-weight: 800;
   line-height: 1;
@@ -822,17 +822,14 @@ function normalizeBuilding(item) {
   align-items: center;
   justify-content: center;
   padding: 0 12px;
-  border: 1px solid rgba(241, 101, 33, 0.16);
-  background: rgba(255, 237, 213, 0.82);
+  background: transparent;
   color: var(--primary-dark);
-  transition: background-color 0.15s ease, border-color 0.15s ease, color 0.15s ease, box-shadow 0.15s ease;
+  transition: color 0.15s ease, text-decoration-color 0.15s ease;
 }
 
 .admin-room-action-button:hover {
-  background: rgba(255, 237, 213, 1);
-  border-color: rgba(241, 101, 33, 0.28);
   color: var(--primary);
-  box-shadow: 0 6px 16px rgba(241, 101, 33, 0.12);
+  text-decoration: underline;
 }
 
 .admin-room-action-button + .admin-room-action-button {
@@ -840,16 +837,11 @@ function normalizeBuilding(item) {
 }
 
 .admin-room-action-button--danger {
-  border-color: rgba(220, 38, 38, 0.14);
-  background: rgba(254, 226, 226, 0.9);
   color: var(--danger);
 }
 
 .admin-room-action-button--danger:hover {
-  background: #fee2e2;
-  border-color: rgba(220, 38, 38, 0.24);
   color: #b91c1c;
-  box-shadow: 0 6px 16px rgba(220, 38, 38, 0.1);
 }
 
 /* 운영 중 토글: 본문 라벨은 기본 grid(세로)라, 라벨+체크박스를 한 줄로 정렬하도록 덮어씀 */
