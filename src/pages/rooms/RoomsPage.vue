@@ -29,7 +29,7 @@
     <template v-else>
       <div class="card rooms-toolbar rooms-toolbar-card reservation-toolbar-card">
         <div class="reservation-toolbar-main">
-          <div class="room-date-control">
+          <div class="room-date-control reservation-toolbar-date-row">
             <button class="room-nav-button" type="button" aria-label="이전 날짜" @click="shiftDay(-1)">
               <ChevronLeft :size="18" />
             </button>
@@ -43,24 +43,26 @@
             <button class="room-today-button" type="button" @click="date = todayKst()">오늘</button>
           </div>
 
-          <div class="reservation-filter-select reservation-filter-select-building with-leading-icon">
-            <Building2 :size="16" class="reservation-filter-icon" />
-            <AppSelect class="room-board-select room-building-select" v-model="buildingFilter">
-              <option v-for="option in buildingOptions" :key="option.value" :value="option.value">{{ option.label }}</option>
-            </AppSelect>
-          </div>
+          <div class="reservation-toolbar-filters">
+            <div class="reservation-filter-select reservation-filter-select-building with-leading-icon">
+              <Building2 :size="16" class="reservation-filter-icon" />
+              <AppSelect class="room-board-select room-building-select" v-model="buildingFilter">
+                <option v-for="option in buildingOptions" :key="option.value" :value="option.value">{{ option.label }}</option>
+              </AppSelect>
+            </div>
 
-          <div class="reservation-filter-select reservation-filter-select-capacity with-leading-icon">
-            <Users :size="16" class="reservation-filter-icon" />
-            <AppSelect class="room-board-select room-capacity-select" v-model="capacityFilter">
-              <option v-for="option in capacityOptions" :key="option.value" :value="option.value">{{ option.label }}</option>
-            </AppSelect>
-          </div>
+            <div class="reservation-filter-select reservation-filter-select-capacity with-leading-icon">
+              <Users :size="16" class="reservation-filter-icon" />
+              <AppSelect class="room-board-select room-capacity-select" v-model="capacityFilter">
+                <option v-for="option in capacityOptions" :key="option.value" :value="option.value">{{ option.label }}</option>
+              </AppSelect>
+            </div>
 
-          <label class="reservation-search-field">
-            <Search :size="18" />
-            <input v-model="globalSearch" type="search" placeholder="회의실 검색" />
-          </label>
+            <label class="reservation-search-field">
+              <Search :size="18" />
+              <input v-model="globalSearch" type="search" placeholder="회의실 검색" />
+            </label>
+          </div>
         </div>
       </div>
 
@@ -154,7 +156,7 @@
               </div>
 
               <RoomTimelineRow
-                v-for="(room, index) in boardRooms"
+                v-for="(room, index) in pagedBoardRooms"
                 :key="room.roomId"
                 :room="room"
                 :blocks="filteredBlocksByRoom[room.roomId] || []"
@@ -168,13 +170,36 @@
                 @track-drag="openCreateRange"
               />
 
-              <div v-if="boardRooms.length && !timelineHasReservations" class="reservation-timeline-empty">
-                <Calendar :size="42" />
-                <strong>예약 없음</strong>
-                <p>선택한 날짜에 예약된 회의가 없습니다.</p>
-              </div>
-
               <div v-if="!boardRooms.length" class="empty-state-inline board-empty-state">표시할 회의실이 없습니다.</div>
+            </div>
+
+            <div v-if="boardRooms.length" class="reservation-timeline-footer">
+              <span>총 {{ boardRooms.length }}개 회의실</span>
+              <div class="reservation-list-pagination">
+                <button
+                  type="button"
+                  :disabled="timelineCurrentPage <= 1"
+                  @click="timelineCurrentPage = Math.max(1, timelineCurrentPage - 1)"
+                >
+                  <ChevronLeft :size="16" />
+                </button>
+                <button
+                  v-for="page in timelineVisiblePageNumbers"
+                  :key="page"
+                  type="button"
+                  :class="{ active: page === timelineCurrentPage }"
+                  @click="timelineCurrentPage = page"
+                >
+                  {{ page }}
+                </button>
+                <button
+                  type="button"
+                  :disabled="timelinePageCount <= timelineCurrentPage"
+                  @click="timelineCurrentPage = Math.min(timelinePageCount, timelineCurrentPage + 1)"
+                >
+                  <ChevronRight :size="16" />
+                </button>
+              </div>
             </div>
           </div>
 
@@ -214,34 +239,32 @@
 
             <div class="reservation-list-footer">
               <span>총 {{ filteredListItems.length }}건</span>
-              <div class="reservation-list-footer-controls">
-                <div class="reservation-list-pagination">
-                  <button type="button" :disabled="currentPage <= 1" @click="currentPage = Math.max(1, currentPage - 1)">
-                    <ChevronLeft :size="16" />
-                  </button>
-                  <button
-                    v-for="page in visiblePageNumbers"
-                    :key="page"
-                    type="button"
-                    :class="{ active: page === currentPage }"
-                    @click="currentPage = page"
-                  >
-                    {{ page }}
-                  </button>
-                  <button
-                    type="button"
-                    :disabled="currentPage >= pageCount"
-                    @click="currentPage = Math.min(pageCount, currentPage + 1)"
-                  >
-                    <ChevronRight :size="16" />
-                  </button>
-                </div>
-
-                <AppSelect v-model.number="pageSize" size="sm" class="reservation-page-size-select">
-                  <option :value="20">20개씩 보기</option>
-                  <option :value="50">50개씩 보기</option>
-                </AppSelect>
+              <div class="reservation-list-pagination">
+                <button type="button" :disabled="currentPage <= 1" @click="currentPage = Math.max(1, currentPage - 1)">
+                  <ChevronLeft :size="16" />
+                </button>
+                <button
+                  v-for="page in visiblePageNumbers"
+                  :key="page"
+                  type="button"
+                  :class="{ active: page === currentPage }"
+                  @click="currentPage = page"
+                >
+                  {{ page }}
+                </button>
+                <button
+                  type="button"
+                  :disabled="currentPage >= pageCount"
+                  @click="currentPage = Math.min(pageCount, currentPage + 1)"
+                >
+                  <ChevronRight :size="16" />
+                </button>
               </div>
+
+              <AppSelect v-model.number="pageSize" size="sm" class="reservation-page-size-select">
+                <option :value="20">20개씩 보기</option>
+                <option :value="50">50개씩 보기</option>
+              </AppSelect>
             </div>
           </div>
         </section>
@@ -348,6 +371,8 @@ const roomListSearch = ref('')
 const selectedRoomId = ref('')
 const currentPage = ref(1)
 const pageSize = ref(20)
+const timelineCurrentPage = ref(1)
+const timelinePageSize = 5
 
 const modal = ref(false)
 const detail = ref(null)
@@ -413,6 +438,18 @@ const boardRooms = computed(() => {
     return (blocksByRoom.value[room.roomId] || []).some((block) => blockMatchesKeyword(block, keyword))
   })
 })
+const timelinePageCount = computed(() => Math.max(1, Math.ceil(boardRooms.value.length / timelinePageSize)))
+const pagedBoardRooms = computed(() => {
+  const start = (timelineCurrentPage.value - 1) * timelinePageSize
+  return boardRooms.value.slice(start, start + timelinePageSize)
+})
+const timelineVisiblePageNumbers = computed(() => {
+  const total = timelinePageCount.value
+  const start = Math.max(1, Math.min(timelineCurrentPage.value - 2, total - 4))
+  const safeStart = Math.max(1, start)
+  const end = Math.min(total, safeStart + 4)
+  return Array.from({ length: end - safeStart + 1 }, (_, index) => safeStart + index)
+})
 
 const filteredBlocksByRoom = computed(() => {
   const keyword = normalizeKeyword(globalSearch.value)
@@ -425,10 +462,6 @@ const filteredBlocksByRoom = computed(() => {
   }
   return next
 })
-
-const timelineHasReservations = computed(() =>
-  boardRooms.value.some((room) => (filteredBlocksByRoom.value[room.roomId] || []).length > 0),
-)
 
 const listItems = computed(() =>
   meetings.value
@@ -528,6 +561,13 @@ watch(sidebarRooms, (nextRooms) => {
 }, { immediate: true })
 watch([globalSearch, buildingFilter, capacityFilter, pageSize], () => {
   currentPage.value = 1
+  timelineCurrentPage.value = 1
+})
+watch(boardRooms, (nextRooms) => {
+  const nextPageCount = Math.max(1, Math.ceil(nextRooms.length / timelinePageSize))
+  if (timelineCurrentPage.value > nextPageCount) {
+    timelineCurrentPage.value = nextPageCount
+  }
 })
 
 async function loadAll() {
@@ -760,32 +800,34 @@ async function cancelReservation(meetingId) {
 
 .reservation-toolbar-main {
   display: grid;
-  grid-template-columns:
-    52px
-    minmax(180px, 1.12fr)
-    52px
-    84px
-    minmax(170px, 0.82fr)
-    minmax(150px, 0.72fr)
-    minmax(220px, 1fr)
-    auto;
+  grid-template-columns: max-content minmax(0, 1fr);
   align-items: center;
   gap: 12px;
   width: 100%;
 }
 
-.reservation-toolbar-main .room-date-control {
-  display: contents;
-}
-
-.reservation-toolbar-main .room-date-control .room-date-pill {
+.reservation-toolbar-date-row {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 10px;
   min-width: 0;
+  flex-wrap: nowrap;
 }
 
-.reservation-toolbar-main .room-date-control .room-nav-button,
-.reservation-toolbar-main .room-date-control .room-today-button,
-.reservation-toolbar-main .room-date-control .room-date-pill {
-  width: 100%;
+.reservation-toolbar-date-row .room-date-pill {
+  min-width: 0;
+  width: 248px;
+  padding-left: 16px;
+  padding-right: 16px;
+  justify-content: center;
+}
+
+.reservation-toolbar-filters {
+  display: grid;
+  grid-template-columns: minmax(160px, 0.78fr) minmax(146px, 0.68fr) minmax(220px, 1fr);
+  align-items: center;
+  gap: 12px;
 }
 
 .reservation-filter-select {
@@ -1105,7 +1147,7 @@ async function cancelReservation(meetingId) {
 
 .reservation-timeline-scroll {
   position: relative;
-  min-height: 560px;
+  min-height: 0;
 }
 
 .reservation-time-header {
@@ -1132,6 +1174,22 @@ async function cancelReservation(meetingId) {
 
 .board-empty-state {
   padding: 48px 16px;
+}
+
+.reservation-timeline-footer {
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  align-items: center;
+  gap: 12px;
+  border-top: 1px solid var(--border);
+  padding: 14px 18px;
+}
+
+.reservation-timeline-footer span {
+  justify-self: start;
+  color: var(--muted-foreground);
+  font-size: 13px;
+  font-weight: 700;
 }
 
 .reservation-timeline-empty {
@@ -1229,29 +1287,25 @@ async function cancelReservation(meetingId) {
 }
 
 .reservation-list-footer {
-  display: flex;
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
   align-items: center;
-  justify-content: space-between;
   gap: 12px;
   padding: 14px 18px;
 }
 
 .reservation-list-footer span {
+  justify-self: start;
   color: var(--muted-foreground);
   font-size: 13px;
   font-weight: 700;
-}
-
-.reservation-list-footer-controls {
-  display: flex;
-  align-items: center;
-  gap: 10px;
 }
 
 .reservation-list-pagination {
   display: inline-flex;
   align-items: center;
   gap: 8px;
+  justify-self: center;
 }
 
 .reservation-list-pagination button {
@@ -1280,6 +1334,7 @@ async function cancelReservation(meetingId) {
 
 .reservation-page-size-select {
   min-width: 126px;
+  justify-self: end;
 }
 
 .empty-state-inline {
@@ -1298,15 +1353,11 @@ async function cancelReservation(meetingId) {
 
 @media (max-width: 1200px) {
   .reservation-toolbar-main {
-    grid-template-columns:
-      48px
-      minmax(160px, 1fr)
-      48px
-      76px
-      minmax(150px, 0.82fr)
-      minmax(136px, 0.72fr)
-      minmax(170px, 1fr)
-      auto;
+    grid-template-columns: 1fr;
+  }
+
+  .reservation-toolbar-filters {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
   }
 
   .reservation-board-grid.view-list {
@@ -1319,6 +1370,15 @@ async function cancelReservation(meetingId) {
 }
 
 @media (max-width: 900px) {
+  .reservation-toolbar-date-row {
+    flex-wrap: wrap;
+    justify-content: center;
+  }
+
+  .reservation-toolbar-filters {
+    grid-template-columns: 1fr;
+  }
+
   .reservation-board-head {
     flex-direction: column;
     align-items: flex-start;
@@ -1333,12 +1393,20 @@ async function cancelReservation(meetingId) {
   }
 
   .reservation-list-footer {
-    flex-direction: column;
-    align-items: stretch;
+    grid-template-columns: 1fr;
+    justify-items: center;
   }
 
-  .reservation-list-footer-controls {
-    justify-content: space-between;
+  .reservation-list-footer span,
+  .reservation-page-size-select,
+  .reservation-list-pagination,
+  .reservation-timeline-footer span {
+    justify-self: center;
+  }
+
+  .reservation-timeline-footer {
+    grid-template-columns: 1fr;
+    justify-items: center;
   }
 }
 </style>

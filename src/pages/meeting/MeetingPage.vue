@@ -1,7 +1,7 @@
 <template>
   <section v-if="shouldShowMeetingEndedScreen" class="meeting-ended-page">
     <div class="meeting-ended-card">
-      <span class="badge muted">회의 종료</span>
+      <span class="badge muted meeting-ended-badge">회의 종료</span>
       <h1>{{ meetingTitle }}</h1>
       <p>{{ meetingEndedScreenMessage }}</p>
       <div class="guest-link-actions">
@@ -3487,6 +3487,7 @@ watch([meetingId, popupSessionId], () => {
   // 같은 meeting popup 창을 재사용할 때는 이전 room 상태가 남을 수 있으므로
   // pop-up 진입 토큰이 바뀌면 로비 상태로 다시 정리한다.
   if (meetingRoom.value) return
+  if (meetingEndHandled.value || meetingEndedScreenVisible.value) return
   meetingEndedScreenVisible.value = false
   meetingConnectionStatus.value = '연결 대기'
   meetingConnectionError.value = ''

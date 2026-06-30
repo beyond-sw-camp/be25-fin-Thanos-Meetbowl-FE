@@ -141,7 +141,7 @@
 
 <script setup>
 
-import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import ActionButton from '../../components/common/ActionButton.vue'
 import AppSelect from '../../components/common/AppSelect.vue'
 import { useRoute, useRouter } from 'vue-router'
@@ -399,9 +399,12 @@ function closeMeetingDetail() {
   cancelling.value = false
 }
 
-function editFromDetail() {
+async function editFromDetail() {
   if (!detailMeeting.value) return
-  openEdit(detailMeeting.value)
+  const meeting = detailMeeting.value
+  closeMeetingDetail()
+  await nextTick()
+  openEdit(meeting)
 }
 
 function enterFromDetail() {

@@ -3,7 +3,7 @@
     <div class="room-row-meta">
       <strong>{{ room.name }}</strong>
       <small><Users :size="14" /> 1~{{ room.capacity }}명</small>
-      <small v-if="!compactMeta"><MapPin :size="14" /> {{ room.siteName }} {{ room.buildingName }}{{ room.floor === null ? '' : ' ' + room.floor + '층' }}</small>
+      <small><MapPin :size="14" /> {{ locationLabel }}</small>
       <em v-if="!room.isAvailable" class="badge warning">사용 제한</em>
       <em v-else-if="showAvailability" class="badge" :class="available ? 'success' : 'danger'">{{ available ? '가능' : '불가' }}</em>
     </div>
@@ -75,7 +75,7 @@ const props = defineProps({
   showAvailability: { type: Boolean, default: false },
   selectedRange: { type: Object, default: null },
   previewBlock: { type: Object, default: null },
-  showEmptyLabel: { type: Boolean, default: true },
+  showEmptyLabel: { type: Boolean, default: false },
   showNowLabel: { type: Boolean, default: true },
   showNowTime: { type: Boolean, default: false },
   selected: { type: Boolean, default: false },
@@ -85,6 +85,13 @@ const props = defineProps({
   date: { type: String, default: '' },
 })
 const emit = defineEmits(['block-click', 'track-click', 'track-drag', 'select', 'select-range'])
+const locationLabel = computed(() => {
+  const segments = [props.room.siteName, props.room.buildingName].filter(Boolean)
+  if (props.room.floor !== null && props.room.floor !== undefined && props.room.floor !== '') {
+    segments.push(`${props.room.floor}층`)
+  }
+  return segments.join(' ')
+})
 
 // '현재' 세로 마커는 보고 있는 날짜가 오늘(KST)일 때만. 다른 날짜를 봐도 현재 시각 위치에 뜨던 버그 방지.
 // date 미지정 시(타임라인이 날짜 개념 없이 쓰이는 경우)는 기존처럼 표시한다.
@@ -305,19 +312,21 @@ onBeforeUnmount(() => {
   border-bottom: 1px solid var(--border);
 }
 .room-row.compact .room-row-meta {
-  min-height: 56px;
-  gap: 4px;
-  padding: 12px 12px 10px;
+  min-height: 84px;
+  align-content: center;
+  gap: 8px;
+  padding: 16px 18px;
 }
 .room-row.compact .room-row-meta strong {
-  font-size: 18px;
-  line-height: 1.25;
+  font-size: 17px;
+  line-height: 1.2;
 }
 .room-row.compact .room-row-meta small {
-  font-size: 13px;
+  font-size: 12.5px;
+  line-height: 1.35;
 }
 .room-row.compact .room-track {
-  min-height: 56px;
+  min-height: 84px;
 }
 .room-row.compact .now-marker em {
   display: none;

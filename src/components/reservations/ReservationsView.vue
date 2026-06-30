@@ -18,10 +18,14 @@
     </article>
 
     <template v-else>
-      <div class="count-grid">
-        <article class="card count-card"><span>{{ countLabel }}</span><strong>{{ countAll }}</strong></article>
-        <article class="card count-card"><span>이번 주</span><strong>{{ countWeek }}</strong></article>
-        <article class="card count-card"><span>이번 달</span><strong>{{ countMonth }}</strong></article>
+      <div class="count-grid reservation-summary-grid">
+        <article v-for="card in countCards" :key="card.label" class="card count-card reservation-summary-card">
+          <span :class="['reservation-summary-icon', card.tone]"><component :is="card.icon" :size="22" /></span>
+          <div class="reservation-summary-copy">
+            <span>{{ card.label }}</span>
+            <strong>{{ card.value }}</strong>
+          </div>
+        </article>
       </div>
 
       <div v-if="actionError" class="card feedback-card"><div class="error-box">{{ actionError }}</div></div>
@@ -86,6 +90,7 @@
 
 <script setup>
 import { computed, onMounted, ref } from 'vue'
+import { CalendarCheck2, CalendarDays, CalendarRange } from '@lucide/vue'
 import { useAuthStore } from '../../stores/auth'
 import ReservationModal from '../rooms/ReservationModal.vue'
 import ConfirmDialog from '../common/ConfirmDialog.vue'
@@ -158,6 +163,11 @@ const displayedMeetings = computed(() => {
 const countAll = computed(() => activeUpcomingMeetings.value.length)
 const countWeek = computed(() => activeUpcomingMeetings.value.filter((meeting) => inPeriod(meeting, 'week')).length)
 const countMonth = computed(() => activeUpcomingMeetings.value.filter((meeting) => inPeriod(meeting, 'month')).length)
+const countCards = computed(() => [
+  { label: props.countLabel, value: countAll.value, icon: CalendarCheck2, tone: 'orange' },
+  { label: '이번 주', value: countWeek.value, icon: CalendarRange, tone: 'blue' },
+  { label: '이번 달', value: countMonth.value, icon: CalendarDays, tone: 'green' },
+])
 
 onMounted(load)
 
@@ -295,16 +305,44 @@ function inPeriod(meeting, period) {
 }
 .count-card {
   display: flex;
-  flex-direction: column;
-  gap: 6px;
+  align-items: center;
+  gap: 18px;
+  min-height: 132px;
+  padding: 26px 28px;
 }
-.count-card span {
+.reservation-summary-icon {
+  width: 64px;
+  height: 64px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  flex: 0 0 auto;
+}
+.reservation-summary-icon.orange {
+  background: #fff3ea;
+  color: var(--primary);
+}
+.reservation-summary-icon.blue {
+  background: #eff6ff;
+  color: #3b82f6;
+}
+.reservation-summary-icon.green {
+  background: #ecfdf5;
+  color: #22c55e;
+}
+.reservation-summary-copy {
+  display: grid;
+  gap: 8px;
+}
+.reservation-summary-copy span {
   color: var(--muted-foreground);
   font-size: 13px;
-  font-weight: 600;
+  font-weight: 700;
 }
-.count-card strong {
-  font-size: 26px;
+.reservation-summary-copy strong {
+  font-size: 34px;
+  line-height: 1;
 }
 .my-res-toolbar {
   margin-bottom: 16px;
@@ -329,6 +367,11 @@ function inPeriod(meeting, period) {
 @media (max-width: 640px) {
   .count-grid {
     grid-template-columns: 1fr;
+  }
+
+  .count-card {
+    min-height: 108px;
+    padding: 20px 22px;
   }
 }
 </style>

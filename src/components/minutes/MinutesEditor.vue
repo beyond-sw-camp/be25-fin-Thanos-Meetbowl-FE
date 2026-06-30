@@ -1,6 +1,6 @@
 <template>
-  <div class="minutes-editor" :class="{ 'minutes-editor-readonly': readonly }">
-    <div v-if="!readonly" class="minutes-editor-toolbar">
+  <div class="minutes-editor" :class="editorClasses">
+    <div v-if="!readonly" :class="toolbarClasses">
       <div class="minutes-toolbar-group">
         <button type="button" aria-label="실행 취소" title="실행 취소" :disabled="!editor?.can().chain().focus().undo().run()" @click="editor?.chain().focus().undo().run()">
           <Undo2 :size="15" />
@@ -50,13 +50,22 @@
         <button type="button" aria-label="번호 목록" title="번호 목록" :class="{ active: editor?.isActive('orderedList') }" @click="editor?.chain().focus().toggleOrderedList().run()"><ListOrdered :size="15" /></button>
       </div>
 
-      <div class="minutes-toolbar-group">
-        <button type="button" aria-label="더보기" title="더보기" class="minutes-toolbar-more-button" :class="{ active: moreMenuOpen }" @click="toggleMoreMenu">
-          <MoreHorizontal :size="15" />
-        </button>
+      <div class="minutes-toolbar-group minutes-toolbar-more-group">
+        <div ref="moreButtonWrapRef" class="minutes-toolbar-more-wrap">
+          <button type="button" aria-label="더보기" title="더보기" class="minutes-toolbar-more-button" :class="{ active: moreMenuOpen }" @click="toggleMoreMenu">
+            <MoreHorizontal :size="15" />
+          </button>
+        </div>
       </div>
-
-      <div v-if="moreMenuOpen" ref="moreMenuRef" class="minutes-more-menu">
+    </div>
+    <Teleport to="body">
+      <div
+        v-if="moreMenuOpen"
+        ref="moreMenuRef"
+        class="minutes-more-menu"
+        :style="moreMenuStyle"
+        @click.stop
+      >
         <button type="button" :class="{ active: editor?.isActive('link') }" @click="setLink(); closeMoreMenu()">
           링크
         </button>
@@ -97,7 +106,7 @@
           </button>
         </template>
       </div>
-    </div>
+    </Teleport>
     <EditorContent v-if="editor" :editor="editor" class="minutes-editor-content" />
   </div>
 </template>
@@ -132,19 +141,32 @@ import {
   Underline as UnderlineIcon,
   Undo2,
 } from '@lucide/vue'
-import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { parseTiptapDocument, stringifyTiptapDocument } from '../../lib/minutes-content'
 
 const props = defineProps({
   modelValue: { type: String, default: '' },
   disabled: { type: Boolean, default: false },
   readonly: { type: Boolean, default: false },
+  toolbarVariant: { type: String, default: 'default' },
 })
 
 const emit = defineEmits(['update:modelValue'])
 
 const moreMenuOpen = ref(false)
 const moreMenuRef = ref(null)
+const moreButtonWrapRef = ref(null)
+const moreMenuStyle = ref({})
+const editorClasses = computed(() => ({
+  'minutes-editor-readonly': props.readonly,
+  'minutes-editor-compose': props.toolbarVariant === 'compose',
+}))
+const toolbarClasses = computed(() => [
+  'minutes-editor-toolbar',
+  {
+    'minutes-editor-toolbar--compose': props.toolbarVariant === 'compose',
+  },
+])
 const INLINE_HEADING_PRESETS = {
   1: { fontSize: '24px' },
   2: { fontSize: '20px' },
@@ -256,25 +278,63 @@ function setLink() {
 
 function toggleMoreMenu() {
   moreMenuOpen.value = !moreMenuOpen.value
+  if (moreMenuOpen.value) {
+    nextTick(updateMoreMenuPosition)
+  }
 }
 
 function closeMoreMenu() {
   moreMenuOpen.value = false
 }
 
+function updateMoreMenuPosition() {
+  if (!moreMenuOpen.value || !moreButtonWrapRef.value) return
+
+  const triggerRect = moreButtonWrapRef.value.getBoundingClientRect()
+  const menuWidth = Math.max(moreMenuRef.value?.offsetWidth || 0, 176)
+  const menuHeight = Math.max(moreMenuRef.value?.offsetHeight || 0, 220)
+
+  let left = triggerRect.right - menuWidth
+  left = Math.max(12, Math.min(left, window.innerWidth - menuWidth - 12))
+
+  let top = triggerRect.bottom + 8
+  if (top + menuHeight > window.innerHeight - 12 && triggerRect.top - menuHeight - 8 >= 12) {
+    top = triggerRect.top - menuHeight - 8
+  }
+
+  moreMenuStyle.value = {
+    left: `${left}px`,
+    top: `${Math.max(12, top)}px`,
+  }
+}
+
 function handleDocumentPointerDown(event) {
   if (!moreMenuOpen.value) return
   const target = event.target
   if (moreMenuRef.value?.contains?.(target)) return
+  if (moreButtonWrapRef.value?.contains?.(target)) return
   moreMenuOpen.value = false
 }
 
+function handleViewportChange() {
+  if (!moreMenuOpen.value) return
+  updateMoreMenuPosition()
+}
+
+watch(moreMenuOpen, (open) => {
+  if (open) nextTick(updateMoreMenuPosition)
+})
+
 onMounted(() => {
   document.addEventListener('pointerdown', handleDocumentPointerDown)
+  window.addEventListener('resize', handleViewportChange)
+  window.addEventListener('scroll', handleViewportChange, true)
 })
 
 onBeforeUnmount(() => {
   document.removeEventListener('pointerdown', handleDocumentPointerDown)
+  window.removeEventListener('resize', handleViewportChange)
+  window.removeEventListener('scroll', handleViewportChange, true)
 })
 
 function normalizeWebUrl(value) {

@@ -164,16 +164,16 @@ function forwardSelectRange(roomId, start, end) {
   min-height: 152px;
 }
 .reservation-timeline :deep(.reservation-block) {
-  top: 50%;
-  transform: translateY(-50%);
-  min-height: 60px;
+  top: calc(50% - 28px);
+  transform: none;
+  min-height: 56px;
   padding: 8px 10px;
   border-radius: 10px;
 }
 .reservation-timeline :deep(.drag-selection) {
-  top: calc(50% - 30px);
+  top: calc(50% - 28px);
   bottom: auto;
-  height: 60px;
+  height: 56px;
   transform: none;
 }
 .reservation-timeline :deep(.reservation-block strong) {

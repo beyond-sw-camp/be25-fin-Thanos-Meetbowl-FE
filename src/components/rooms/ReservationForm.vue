@@ -72,50 +72,6 @@
       <small>참석자 중 회의록을 검토할 1명을 지정합니다.</small>
     </label>
 
-    <div class="external-invitee-section">
-      <div class="external-invitee-header">
-        <strong>외부 초대 <span>(선택)</span></strong>
-      </div>
-      <div class="external-invitee-inputs">
-        <label>
-          이름
-          <input
-            :value="form.externalInviteeName"
-            type="text"
-            placeholder="외부 참석자 이름"
-            @input="$emit('update:external-invitee-name', $event.target.value)"
-            @keydown.enter.prevent="$emit('add-external-invitee')"
-          >
-        </label>
-        <label>
-          이메일
-          <input
-            :value="form.externalInviteeEmail"
-            type="email"
-            placeholder="guest@example.com"
-            @input="$emit('update:external-invitee-email', $event.target.value)"
-            @keydown.enter.prevent="$emit('add-external-invitee')"
-          >
-        </label>
-        <button type="button" class="secondary-button" @click="$emit('add-external-invitee')">
-          추가
-        </button>
-      </div>
-      <div v-if="form.externalInvitees?.length" class="external-invitee-chips">
-        <span
-          v-for="invitee in form.externalInvitees"
-          :key="`${invitee.email}-${invitee.name}`"
-          class="external-invitee-chip"
-        >
-          {{ invitee.name }}
-          <small>&lt;{{ invitee.email }}&gt;</small>
-          <button type="button" aria-label="외부 참석자 제거" @click="$emit('remove-external-invitee', invitee.email)">
-            ×
-          </button>
-        </span>
-      </div>
-    </div>
-
     <label>회의 내용 <span class="field-optional">(선택)</span><textarea v-model="form.content" rows="4" placeholder="회의의 목적, 주요 의제, 참고 사항을 입력하세요"></textarea></label>
     <div class="reservation-form-footer">
       <div v-if="generalWarning" class="reservation-inline-warning reservation-inline-warning--footer" role="alert">
@@ -152,10 +108,6 @@ defineEmits([
   'enable-room-usage',
   'disable-room-usage',
   'attendee-reject',
-  'add-external-invitee',
-  'remove-external-invitee',
-  'update:external-invitee-name',
-  'update:external-invitee-email',
   'schedule-field-edited',
 ])
 const reviewerOptions = computed(() => props.form.attendees.filter((attendee) => attendee.userId))
