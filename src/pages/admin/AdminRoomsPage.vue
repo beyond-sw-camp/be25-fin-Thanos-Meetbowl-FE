@@ -96,6 +96,9 @@ const roomModal = ref(false)
 const siteModal = ref(false)
 const blockModal = ref(false)
 const blockForm = ref({ roomId: '', start: '', end: '', reason: '' })
+// 사용 제한 해제 확인 모달(회색 블록 클릭 시). 대상 블록을 담아 정보 표시 후 해제한다.
+const unblockModal = ref(false)
+const unblockTarget = ref(null)
 const editingRoom = ref(null)
 
 const roomForm = ref(createEmptyRoomForm())
@@ -673,9 +676,9 @@ function selectRoom(room) {
 
 async function onBlockClick(block) {
   selectedRoomId.value = block.roomId
-  // 차단(회색) 블록은 회의 상세 대신 해제를 묻고, 예약 블록은 회의 상세를 연다.
+  // 차단(회색) 블록은 회의 상세 대신 해제 모달을 열고, 예약 블록은 회의 상세를 연다.
   if (block.isBlock) {
-    await removeBlock(block)
+    openUnblockModal(block)
     return
   }
   await openDetail(block)
@@ -731,24 +734,40 @@ async function saveBlock() {
   }
 }
 
-async function removeBlock(block) {
-  if (saving.value) return
-  const reasonLabel = block.reason ? `'${block.reason}' ` : ''
-  if (!window.confirm(`${block.start} ~ ${block.end} ${reasonLabel}사용 제한을 해제하시겠습니까?`)) return
+function openUnblockModal(block) {
+  unblockTarget.value = block
+  actionError.value = ''
+  successMessage.value = ''
+  unblockModal.value = true
+}
 
+function closeUnblockModal() {
+  unblockModal.value = false
+  unblockTarget.value = null
+}
+
+async function confirmUnblock() {
+  const block = unblockTarget.value
+  if (saving.value || !block) return
+
+  saving.value = true
   actionError.value = ''
   successMessage.value = ''
 
   try {
     await deleteRoomBlock(block.roomId, block.blockId)
     successMessage.value = '사용 제한을 해제했습니다.'
+    closeUnblockModal()
     await loadDayData()
   } catch (error) {
     if (error?.status === 403) {
       forbidden.value = true
+      closeUnblockModal()
       return
     }
     actionError.value = error?.message || '사용 제한 해제에 실패했습니다.'
+  } finally {
+    saving.value = false
   }
 }
 
@@ -1604,6 +1623,30 @@ function normalizeBuilding(item) {
             </div>
           </footer>
         </form>
+      </ModalShell>
+
+      <!-- 시간대 사용 제한 해제 모달 (회색 블록 클릭) -->
+      <ModalShell v-if="unblockModal && unblockTarget" modal-class="admin-modal" @close="closeUnblockModal">
+        <header class="admin-modal-header">
+          <div class="admin-modal-title">
+            <h2>사용 제한 해제</h2>
+            <p class="admin-modal-subtitle">이 시간대의 사용 제한을 해제하면 다시 예약할 수 있습니다.</p>
+          </div>
+          <button type="button" class="admin-modal-close" @click="closeUnblockModal">닫기</button>
+        </header>
+        <div class="admin-modal-body">
+          <p v-if="actionError" class="admin-modal-inline-error">{{ actionError }}</p>
+          <label>회의실<input :value="roomMap[unblockTarget.roomId]?.name || '-'" disabled></label>
+          <label>사용 제한 시간대<input :value="`${unblockTarget.start} ~ ${unblockTarget.end}`" disabled></label>
+          <label v-if="unblockTarget.reason">사유<input :value="unblockTarget.reason" disabled></label>
+        </div>
+        <footer class="admin-modal-footer">
+          <div class="admin-modal-actions-left"></div>
+          <div class="admin-modal-actions-right">
+            <ActionButton variant="secondary" type="button" @click="closeUnblockModal">취소</ActionButton>
+            <ActionButton variant="primary" type="button" :disabled="saving" @click="confirmUnblock">{{ saving ? '해제 중...' : '사용 제한 해제' }}</ActionButton>
+          </div>
+        </footer>
       </ModalShell>
 
       <ModalShell v-if="roomModal" modal-class="admin-modal" @close="closeRoomModal">
