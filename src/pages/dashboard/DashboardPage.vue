@@ -52,7 +52,7 @@ export default defineComponent({
     const selectedId = ref('')
     const timelineExpanded = ref(false)
     const unreadMailCount = ref(0)
-    const minutesCount = ref(0)
+    const minuteItems = ref([])
     const loadError = ref(false)
     const scheduleLoadError = ref(false)
 
@@ -102,8 +102,11 @@ export default defineComponent({
     const visibleTodays = computed(() =>
       timelineExpanded.value ? todays.value : todays.value.slice(0, 3),
     )
-    // 현재 진행 중 — 날짜 무관, 모든 IN_PROGRESS.
-    const liveMeetings = computed(() => meetings.value.filter((meeting) => meeting.status === 'live'))
+    const reviewNeededMinutesCount = computed(() =>
+      minuteItems.value.filter((minute) =>
+        minute?.reviewerUserId === myUserId.value && minute?.status === 'IN_REVIEW',
+      ).length,
+    )
     // 오늘 예정된 회의 — 오늘의 SCHEDULED(예정)만.
     const todayScheduledCount = computed(() => todays.value.filter((meeting) => meeting.status === 'upcoming').length)
 
@@ -173,7 +176,7 @@ export default defineComponent({
       {
         label: '읽지 않은 메일',
         value: unreadMailCount.value,
-        note: '건',
+        note: '개의 새 메일',
         to: '/app/mail',
         icon: Mail,
         tone: 'mail',
@@ -181,25 +184,25 @@ export default defineComponent({
       {
         label: '오늘 예정된 회의',
         value: todayScheduledCount.value,
-        note: '오늘 예정된 회의',
+        note: '개의 일정',
         to: '/app/meetings?tab=active',
         icon: CalendarCheck2,
         tone: 'schedule',
       },
       {
         label: '최근 내 회의록',
-        value: minutesCount.value,
+        value: minuteItems.value.length,
         note: '최근 7일 기준',
         to: '/app/minutes',
         icon: FileText,
         tone: 'minutes',
       },
       {
-        label: '현재 진행 중',
-        value: liveMeetings.value.length,
-        note: '진행 중인 회의',
-        to: '/app/meetings?tab=active',
-        icon: Users,
+        label: '검토해야 하는 회의록',
+        value: reviewNeededMinutesCount.value,
+        note: '건 검토 대기',
+        to: '/app/minutes',
+        icon: FileText,
         tone: 'live',
       },
     ])
@@ -245,7 +248,7 @@ export default defineComponent({
       unreadMailCount.value = mailResult.status === 'fulfilled'
         ? (mailResult.value.items || []).filter((mail) => !mail.read).length
         : 0
-      minutesCount.value = minutesResult.status === 'fulfilled' ? minutesResult.value.length : 0
+      minuteItems.value = minutesResult.status === 'fulfilled' ? minutesResult.value : []
     }
     onMounted(load)
 
@@ -309,8 +312,10 @@ export default defineComponent({
           <span :class="['dashboard-kpi-icon', kpi.tone]"><component :is="kpi.icon" :size="24" /></span>
           <div class="dashboard-kpi-copy">
             <span>{{ kpi.label }}</span>
-            <strong>{{ kpi.value }}</strong>
-            <em>{{ kpi.note }}</em>
+            <div class="dashboard-kpi-value-row">
+              <strong>{{ kpi.value }}</strong>
+              <em>{{ kpi.note }}</em>
+            </div>
           </div>
         </RouterLink>
       </div>
