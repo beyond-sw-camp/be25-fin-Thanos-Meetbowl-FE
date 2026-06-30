@@ -40,7 +40,7 @@
       </div>
     </div>
     <input v-model="draft.subject" placeholder="제목">
-    <MinutesEditor v-model="draft.body" />
+    <MailComposeEditor v-model="draft.body" />
     <label
       class="upload-zone-small mail-upload-zone"
       @dragover.prevent
@@ -74,7 +74,7 @@
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { ChevronDown, FileType2, Paperclip, Search, Upload, X } from '@lucide/vue'
 import ModalShell from '../common/ModalShell.vue'
-import MinutesEditor from '../minutes/MinutesEditor.vue'
+import MailComposeEditor from './MailComposeEditor.vue'
 import { formatUserChipLabel } from '../../utils/userLabel'
 
 const props = defineProps({

@@ -45,30 +45,6 @@
           <small>총 {{ files.length }}건</small>
         </div>
 
-        <article v-if="showingSampleFiles" class="card shared-sample-card">
-          <div class="shared-member-section-title">
-            <strong>업로드 예시</strong>
-            <small>파일을 올리면 아래와 비슷한 형태로 목록에 표시됩니다.</small>
-          </div>
-          <div class="shared-sample-grid">
-            <div v-for="file in sampleSharedFiles" :key="file.fileId" class="shared-sample-item">
-              <div class="shared-doc-cell">
-                <span :class="['shared-doc-icon', fileTone(file.originalFileName)]"><component :is="fileIcon(file.originalFileName)" :size="17" /></span>
-                <div>
-                  <strong>{{ file.originalFileName }}</strong>
-                  <small>{{ file.contentType }}</small>
-                </div>
-              </div>
-              <div class="shared-sample-meta">
-                <span class="badge primary">{{ file.currentVersion }}</span>
-                <span>{{ userLabel(file.uploaderUserId) }}</span>
-                <span>{{ formatSize(file.sizeBytes) }}</span>
-                <span>{{ displayDate(file.uploadedAt) }}</span>
-              </div>
-            </div>
-          </div>
-        </article>
-
         <div class="table-card shared-table-card">
           <table>
             <thead>
@@ -82,7 +58,7 @@
               </tr>
             </thead>
             <tbody>
-              <tr v-for="file in tableFiles" :key="file.fileId" :class="{ 'shared-example-row': file.sample }" @click="openFile(file)">
+              <tr v-for="file in filteredFiles" :key="file.fileId" @click="openFile(file)">
                 <td>
                   <div class="shared-doc-cell">
                     <span :class="['shared-doc-icon', fileTone(file.originalFileName)]"><component :is="fileIcon(file.originalFileName)" :size="17" /></span>
@@ -97,8 +73,7 @@
                 <td>{{ formatSize(file.sizeBytes) }}</td>
                 <td class="shared-nowrap-cell">{{ displayDate(file.uploadedAt) }}</td>
                 <td class="file-action-cell">
-                  <span v-if="file.sample" class="badge">예시</span>
-                  <button v-else type="button" class="more-button" @click.stop="toggleFileActionMenu(file.fileId)" aria-label="파일 관리"><MoreHorizontal :size="17" /></button>
+                  <button type="button" class="more-button" @click.stop="toggleFileActionMenu(file.fileId)" aria-label="파일 관리"><MoreHorizontal :size="17" /></button>
                   <div v-if="fileActionFileId === file.fileId" class="file-action-menu" @click.stop>
                     <button type="button" @click="downloadFile(file)"><Download :size="14" /> 다운로드</button>
                     <button type="button" @click="openFileInfo(file)"><Info :size="14" /> 파일 정보</button>
@@ -106,7 +81,7 @@
                   </div>
                 </td>
               </tr>
-              <tr v-if="!tableFiles.length"><td colspan="6"><div class="empty-state">문서가 없습니다.</div></td></tr>
+              <tr v-if="!filteredFiles.length"><td colspan="6"><div class="empty-state">문서가 없습니다.</div></td></tr>
             </tbody>
           </table>
         </div>
@@ -434,94 +409,6 @@ const toasts = ref([])
 const activeSpace = computed(() => spaces.value.find((space) => space.workspaceId === activeSpaceId.value))
 const isActiveSpaceOwner = computed(() => Boolean(activeSpace.value?.ownerUserId && activeSpace.value.ownerUserId === auth.user?.userId))
 const filteredFiles = computed(() => files.value.filter((file) => !keyword.value.trim() || file.originalFileName.toLowerCase().includes(keyword.value.trim().toLowerCase())))
-const sampleSharedFiles = ref([
-  {
-    fileId: 'sample-shared-1',
-    originalFileName: 'UI_개선_회의록_v1.pdf',
-    contentType: 'application/pdf',
-    currentVersion: 'v1',
-    uploaderUserId: auth.user?.userId || 'sample-user-1',
-    sizeBytes: 2_310_000,
-    uploadedAt: '2026-06-29T05:10:00Z',
-    sample: true,
-    previewKind: 'info',
-    versions: [
-      {
-        versionId: 'sample-shared-1-v1',
-        version: 'v1',
-        changeMemo: '첫 업로드본',
-        uploaderUserId: auth.user?.userId || 'sample-user-1',
-        sizeBytes: 2_310_000,
-        uploadedAt: '2026-06-29T05:10:00Z',
-        previewText: 'UI 개선 회의록 초안입니다.\n- 카메라/마이크 입장 설정 축소\n- 회의록 수정 툴바 정리\n- 커뮤니티 상세 화면 보정',
-      },
-    ],
-  },
-  {
-    fileId: 'sample-shared-2',
-    originalFileName: '브랜드_가이드_초안.pptx',
-    contentType: 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
-    currentVersion: 'v3',
-    uploaderUserId: 'sample-user-2',
-    sizeBytes: 4_820_000,
-    uploadedAt: '2026-06-29T03:40:00Z',
-    sample: true,
-    previewKind: 'info',
-    versions: [
-      {
-        versionId: 'sample-shared-2-v3',
-        version: 'v3',
-        changeMemo: '발표 흐름과 브랜드 컬러 수정',
-        uploaderUserId: 'sample-user-2',
-        sizeBytes: 4_820_000,
-        uploadedAt: '2026-06-29T03:40:00Z',
-        previewText: '브랜드 가이드 초안 v3\n- 메인 컬러 팔레트 정리\n- 발표 슬라이드 타이틀 스타일 통일\n- 커버 페이지 비주얼 교체',
-      },
-      {
-        versionId: 'sample-shared-2-v2',
-        version: 'v2',
-        changeMemo: '슬라이드 목차 추가',
-        uploaderUserId: 'sample-user-2',
-        sizeBytes: 4_600_000,
-        uploadedAt: '2026-06-28T09:20:00Z',
-        previewText: '브랜드 가이드 초안 v2\n- 목차 추가\n- 제품 소개 섹션 문구 수정',
-      },
-    ],
-  },
-  {
-    fileId: 'sample-shared-3',
-    originalFileName: '회의실_예약_현황.xlsx',
-    contentType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-    currentVersion: 'v2',
-    uploaderUserId: 'sample-user-3',
-    sizeBytes: 860_000,
-    uploadedAt: '2026-06-28T23:20:00Z',
-    sample: true,
-    previewKind: 'info',
-    versions: [
-      {
-        versionId: 'sample-shared-3-v2',
-        version: 'v2',
-        changeMemo: '강의실 4 예약 현황 반영',
-        uploaderUserId: 'sample-user-3',
-        sizeBytes: 860_000,
-        uploadedAt: '2026-06-28T23:20:00Z',
-        previewText: '회의실 예약 현황 시트입니다.\n- 강의실 4, 5 현황 반영\n- 시간대별 사용 가능 여부 표기\n- 예약 현황 탭 업데이트',
-      },
-      {
-        versionId: 'sample-shared-3-v1',
-        version: 'v1',
-        changeMemo: '초기 업로드',
-        uploaderUserId: 'sample-user-3',
-        sizeBytes: 790_000,
-        uploadedAt: '2026-06-27T14:30:00Z',
-        previewText: '회의실 예약 현황 시트 초기본',
-      },
-    ],
-  },
-])
-const showingSampleFiles = computed(() => Boolean(activeSpaceId.value && !files.value.length && !keyword.value.trim()))
-const tableFiles = computed(() => (showingSampleFiles.value ? sampleSharedFiles.value : filteredFiles.value))
 const memberRows = computed(() => members.value.map((member) => {
   const user = userMap.value.get(member.userId) || {}
   return {
@@ -616,10 +503,6 @@ async function loadFilesForSpace(spaceId, useCache) {
 
 async function openFile(file) {
   fileActionFileId.value = ''
-  if (file?.sample) {
-    openSampleFile(file)
-    return
-  }
   openDoc.value = file
   versionDraft.value = { file: null, newVersion: '', changeMemo: '' }
   await loadFilePreview(file)
@@ -631,18 +514,6 @@ async function openFile(file) {
   }
   selectedVersion.value = versions.value[0] || null
   await Promise.all(versions.value.map((version) => cacheUser(version.uploaderUserId)))
-}
-
-function openSampleFile(file) {
-  clearFilePreviewUrl()
-  openDoc.value = file
-  versionDraft.value = { file: null, newVersion: suggestNextVersion(file.currentVersion), changeMemo: '' }
-  filePreviewKind.value = file.previewKind || 'info'
-  filePreviewText.value = ''
-  filePreviewError.value = ''
-  filePreviewLoading.value = false
-  versions.value = file.versions || []
-  selectedVersion.value = versions.value[0] || null
 }
 
 async function openFileInfo(file) {
@@ -679,10 +550,6 @@ async function submitNewVersion() {
   if (!openDoc.value || !versionDraft.value.file || !versionDraft.value.newVersion.trim() || versionUploading.value) {
     return
   }
-  if (openDoc.value.sample) {
-    await submitSampleVersion()
-    return
-  }
   const fileId = openDoc.value.fileId
   versionUploading.value = true
   try {
@@ -717,42 +584,6 @@ function prepareVersionUpload() {
   window.requestAnimationFrame(() => {
     versionFileInput.value?.click()
   })
-}
-
-async function submitSampleVersion() {
-  if (!openDoc.value?.sample || !versionDraft.value.file) return
-  versionUploading.value = true
-  try {
-    const nextUploadedAt = new Date().toISOString()
-    const nextVersion = {
-      versionId: `sample-${Date.now()}`,
-      version: versionDraft.value.newVersion.trim(),
-      changeMemo: versionDraft.value.changeMemo.trim(),
-      uploaderUserId: auth.user?.userId || openDoc.value.uploaderUserId,
-      sizeBytes: versionDraft.value.file.size,
-      uploadedAt: nextUploadedAt,
-      previewText: versionDraft.value.file.name,
-    }
-    const updated = {
-      ...openDoc.value,
-      originalFileName: versionDraft.value.file.name,
-      contentType: versionDraft.value.file.type || openDoc.value.contentType,
-      currentVersion: nextVersion.version,
-      sizeBytes: versionDraft.value.file.size,
-      uploadedAt: nextUploadedAt,
-      versions: [nextVersion, ...versions.value],
-    }
-    sampleSharedFiles.value = sampleSharedFiles.value.map((file) => file.fileId === updated.fileId ? updated : file)
-    openDoc.value = updated
-    versions.value = updated.versions
-    selectedVersion.value = nextVersion
-    await loadLocalFilePreview(versionDraft.value.file, updated)
-    versionDraft.value = { file: null, newVersion: '', changeMemo: '' }
-    if (versionFileInput.value) versionFileInput.value.value = ''
-    showToast('새 버전 업로드 완료', '예시 파일에서도 버전 업로드 입력 흐름을 확인할 수 있습니다.')
-  } finally {
-    versionUploading.value = false
-  }
 }
 
 function openCreate() {
@@ -879,12 +710,6 @@ function toggleFileActionMenu(fileId) {
 }
 
 async function downloadFile(file) {
-  if (file?.sample) {
-    const sampleBlob = new Blob([versionPreviewText.value || file.originalFileName], { type: 'text/plain;charset=utf-8' })
-    saveBlob(sampleBlob, `${file.originalFileName}.txt`)
-    showToast('다운로드 시작', file.originalFileName)
-    return
-  }
   if (!activeSpaceId.value || !file?.fileId) return
   fileActionFileId.value = ''
   const { blob, headers } = await downloadSharedWorkspaceFile(activeSpaceId.value, file.fileId)
@@ -923,30 +748,6 @@ async function loadFilePreview(file) {
       filePreviewUrl.value = window.URL.createObjectURL(blob)
     } else if (kind === 'text') {
       filePreviewText.value = await blob.text()
-    }
-  } catch (error) {
-    filePreviewError.value = error?.message || '파일 미리보기를 불러오지 못했습니다.'
-  } finally {
-    filePreviewLoading.value = false
-  }
-}
-
-async function loadLocalFilePreview(file, fallbackDoc = openDoc.value) {
-  clearFilePreviewUrl()
-  filePreviewLoading.value = true
-  filePreviewError.value = ''
-  filePreviewText.value = ''
-  filePreviewKind.value = 'unsupported'
-
-  try {
-    const kind = previewKind(file.type || fallbackDoc?.contentType || '')
-    filePreviewKind.value = kind
-    if (kind === 'image' || kind === 'pdf') {
-      filePreviewUrl.value = window.URL.createObjectURL(file)
-    } else if (kind === 'text') {
-      filePreviewText.value = await file.text()
-    } else {
-      filePreviewKind.value = 'info'
     }
   } catch (error) {
     filePreviewError.value = error?.message || '파일 미리보기를 불러오지 못했습니다.'
@@ -1125,8 +926,6 @@ async function cacheUser(userId) {
 }
 
 function userLabel(userId) {
-  if (userId === 'sample-user-2') return '정하준'
-  if (userId === 'sample-user-3') return '이진'
   return userMap.value.get(userId)?.name || userId
 }
 
