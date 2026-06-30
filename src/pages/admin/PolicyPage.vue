@@ -1,5 +1,6 @@
 <script setup>
 import { computed, onMounted, ref } from 'vue'
+import { CalendarDays, Clock3, FileText, Mail, Save } from '@lucide/vue'
 import AppSelect from '../../components/common/AppSelect.vue'
 import {
   getAdminMailRetentionPolicy,
@@ -8,8 +9,8 @@ import {
 import {
   formatRetentionPeriod,
   fromRetentionDays,
+  MAX_DAYS,
   MAX_MONTHS,
-  MAX_WEEKS,
   MAX_YEARS,
   toRetentionDays,
   validateRetentionPeriod,
@@ -46,15 +47,45 @@ const notificationPolicySaved = ref(false)
 
 const yearOptions = Array.from({ length: MAX_YEARS + 1 }, (_, value) => value)
 const monthOptions = Array.from({ length: MAX_MONTHS + 1 }, (_, value) => value)
-const weekOptions = Array.from({ length: MAX_WEEKS + 1 }, (_, value) => value)
+const dayOptions = Array.from({ length: MAX_DAYS + 1 }, (_, value) => value)
+const mailRetentionDaysTotal = computed(() => (
+  toRetentionDays(
+    mailForm.value.retentionYears,
+    mailForm.value.retentionMonths,
+    mailForm.value.retentionDays,
+  )
+))
 
 const retentionPeriodText = computed(() => (
   formatRetentionPeriod(
     mailForm.value.retentionYears,
     mailForm.value.retentionMonths,
-    mailForm.value.retentionWeeks,
+    mailForm.value.retentionDays,
   )
 ))
+const overviewItems = computed(() => [
+  {
+    label: '회의록 보관',
+    value: `${retentionPolicy.value.minutesRetentionDays}일`,
+    description: '회의록 데이터 기준',
+    icon: CalendarDays,
+    tone: 'orange',
+  },
+  {
+    label: '백업 문서 보관',
+    value: `${retentionPolicy.value.backupRetentionDays}일`,
+    description: '문서 백업 기준',
+    icon: FileText,
+    tone: 'blue',
+  },
+  {
+    label: '메일 보관',
+    value: `${mailRetentionDaysTotal.value}일`,
+    description: mailForm.value.autoDeleteEnabled ? '자동 삭제 사용' : '자동 삭제 미사용',
+    icon: Mail,
+    tone: 'green',
+  },
+])
 
 onMounted(() => {
   loadMailPolicy()
@@ -96,22 +127,24 @@ async function saveAllPolicies() {
   const validationMessage = validateRetentionPeriod(
     mailForm.value.retentionYears,
     mailForm.value.retentionMonths,
-    mailForm.value.retentionWeeks,
+    mailForm.value.retentionDays,
   )
   if (validationMessage) {
     retentionDaysError.value = validationMessage
     return
   }
 
+  const retentionDays = toRetentionDays(
+    mailForm.value.retentionYears,
+    mailForm.value.retentionMonths,
+    mailForm.value.retentionDays,
+  )
+
   pageSaving.value = true
 
   try {
     const savedPolicy = await updateAdminMailRetentionPolicy({
-      retentionDays: toRetentionDays(
-        mailForm.value.retentionYears,
-        mailForm.value.retentionMonths,
-        mailForm.value.retentionWeeks,
-      ),
+      retentionDays,
       autoDeleteEnabled: mailForm.value.autoDeleteEnabled,
     })
 
@@ -143,7 +176,7 @@ function applyMailPolicy(result) {
   mailForm.value = {
     retentionYears: retentionPeriod.years,
     retentionMonths: retentionPeriod.months,
-    retentionWeeks: retentionPeriod.weeks,
+    retentionDays: retentionPeriod.days,
     autoDeleteEnabled: Boolean(result?.autoDeleteEnabled),
   }
 }
@@ -151,8 +184,8 @@ function applyMailPolicy(result) {
 function createEmptyMailForm() {
   return {
     retentionYears: 0,
-    retentionMonths: 0,
-    retentionWeeks: 0,
+    retentionMonths: 2,
+    retentionDays: 0,
     autoDeleteEnabled: false,
   }
 }
@@ -197,17 +230,9 @@ function onRetentionMonthsChange(event) {
   retentionDaysError.value = ''
 }
 
-function onRetentionWeeksChange(event) {
-  mailForm.value.retentionWeeks = Number.parseInt(event?.target?.value || '0', 10)
+function onRetentionDaysChange(event) {
+  mailForm.value.retentionDays = Number.parseInt(event?.target?.value || '0', 10)
   retentionDaysError.value = ''
-}
-
-function isMonthOptionDisabled(month) {
-  return toRetentionDays(mailForm.value.retentionYears, month, mailForm.value.retentionWeeks) > 3650
-}
-
-function isWeekOptionDisabled(week) {
-  return toRetentionDays(mailForm.value.retentionYears, mailForm.value.retentionMonths, week) > 3650
 }
 
 function selectAutoDeleteOption(value) {
@@ -223,48 +248,42 @@ function flashSavedState(target) {
 </script>
 
 <template>
-  <section class="page admin-page settings-page">
-    <header class="page-header">
-      <h1>{{ title }}</h1>
-      <p>{{ description }}</p>
+  <section class="page admin-page settings-page policy-page">
+    <header class="page-header policy-page-header">
+      <div>
+        <h1>{{ title }}</h1>
+        <p>{{ description }}</p>
+      </div>
+      <div class="policy-page-actions">
+        <span class="badge primary policy-updated-badge">
+          <Clock3 :size="14" />
+          <span>마지막 수정</span>
+          <strong>{{ formatDateTime(pageUpdatedAt) }}</strong>
+        </span>
+        <button
+          type="button"
+          class="primary-button policy-summary-save"
+          :disabled="pageSaving"
+          @click="saveAllPolicies"
+        >
+          <Save :size="16" />
+          <span>{{ pageSaving ? '저장 중...' : '전체 저장' }}</span>
+        </button>
+      </div>
     </header>
 
     <article class="card policy-summary-card">
-      <div class="policy-summary-head">
-        <div>
-          <h2>페이지 최종 수정</h2>
-          <p>보관 정책 페이지 전체의 마지막 변경 시각입니다.</p>
-        </div>
-        <div class="policy-summary-meta">
-          <span class="badge primary policy-updated-badge">{{ formatDateTime(pageUpdatedAt) }}</span>
-          <div class="admin-actions">
-            <button
-              type="button"
-              class="primary-button policy-summary-save"
-              :disabled="pageSaving"
-              @click="saveAllPolicies"
-            >
-              {{ pageSaving ? '저장 중...' : '전체 저장' }}
-            </button>
-          </div>
-        </div>
-      </div>
       <div class="policy-overview-grid">
-        <div class="policy-overview-item">
-          <span>회의록 보관</span>
-          <strong>{{ retentionPolicy.minutesRetentionDays }}일</strong>
-          <small>회의록 데이터 기준</small>
-        </div>
-        <div class="policy-overview-item">
-          <span>백업 문서 보관</span>
-          <strong>{{ retentionPolicy.backupRetentionDays }}일</strong>
-          <small>문서 백업 기준</small>
-        </div>
-        <div class="policy-overview-item">
-          <span>메일 보관</span>
-          <strong>{{ retentionPeriodText }}</strong>
-          <small>{{ mailForm.autoDeleteEnabled ? '자동 삭제 사용' : '자동 삭제 미사용' }}</small>
-        </div>
+        <article v-for="item in overviewItems" :key="item.label" class="policy-overview-item">
+          <div :class="['policy-overview-icon', `tone-${item.tone}`]">
+            <component :is="item.icon" :size="22" />
+          </div>
+          <div class="policy-overview-copy">
+            <span>{{ item.label }}</span>
+            <strong>{{ item.value }}</strong>
+            <small>{{ item.description }}</small>
+          </div>
+        </article>
       </div>
       <p class="policy-summary-note">회의록, 백업 문서, 메일 데이터의 보관 기준을 한 화면에서 관리합니다.</p>
     </article>
@@ -366,7 +385,7 @@ function flashSavedState(target) {
             <section class="mail-policy-field mail-policy-panel">
               <div class="policy-panel-head">
                 <label class="mail-policy-label" for="mail-retention-years">보관 기간</label>
-                <p>보관 기간을 년/개월/주 조합으로 설정합니다.</p>
+                <p>보관 기간을 년/월/일 조합으로 설정합니다.</p>
               </div>
               <div class="mail-policy-help-group">
                 <small class="mail-policy-help mail-policy-current">현재 설정: {{ retentionPeriodText }}</small>
@@ -382,34 +401,22 @@ function flashSavedState(target) {
                     {{ year }}년
                   </option>
                 </AppSelect>
-
                 <AppSelect
                   class="mail-policy-select"
                   :value="mailForm.retentionMonths"
                   @change="onRetentionMonthsChange"
                 >
-                  <option
-                    v-for="month in monthOptions"
-                    :key="`month-${month}`"
-                    :value="month"
-                    :disabled="isMonthOptionDisabled(month)"
-                  >
-                    {{ month }}개월
+                  <option v-for="month in monthOptions" :key="`month-${month}`" :value="month">
+                    {{ month }}월
                   </option>
                 </AppSelect>
-
                 <AppSelect
                   class="mail-policy-select"
-                  :value="mailForm.retentionWeeks"
-                  @change="onRetentionWeeksChange"
+                  :value="mailForm.retentionDays"
+                  @change="onRetentionDaysChange"
                 >
-                  <option
-                    v-for="week in weekOptions"
-                    :key="`week-${week}`"
-                    :value="week"
-                    :disabled="isWeekOptionDisabled(week)"
-                  >
-                    {{ week }}주
+                  <option v-for="day in dayOptions" :key="`day-${day}`" :value="day">
+                    {{ day }}일
                   </option>
                 </AppSelect>
               </div>
@@ -457,10 +464,26 @@ function flashSavedState(target) {
 .settings-page {
   display: grid;
   gap: 22px;
+  background: #fff;
 }
 
 .settings-page > .page-header {
   margin-bottom: 0;
+}
+
+.policy-page-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 18px;
+}
+
+.policy-page-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
 }
 
 .policy-card-grid {
@@ -482,25 +505,15 @@ function flashSavedState(target) {
   display: grid;
   gap: 14px;
   margin-bottom: 0;
+  padding: 20px;
 }
 
-.policy-summary-head {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 16px;
-  padding-bottom: 14px;
-  border-bottom: 1px solid var(--border);
-}
-
-.policy-summary-head h2,
 .policy-card-head h2 {
   margin: 0;
   font-size: 17px;
   line-height: 1.35;
 }
 
-.policy-summary-head p,
 .policy-card-head p {
   margin: 4px 0 0;
   color: var(--muted-foreground);
@@ -511,62 +524,104 @@ function flashSavedState(target) {
 .policy-overview-grid {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 10px;
+  gap: 14px;
 }
 
 .policy-overview-item {
   display: grid;
-  gap: 4px;
-  border: 1px solid var(--border);
-  border-radius: 10px;
-  background: #fcfcfd;
-  padding: 12px 14px;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 14px;
+  align-items: center;
+  border: 1px solid rgba(226, 232, 240, 0.92);
+  border-radius: 18px;
+  background: linear-gradient(180deg, #ffffff 0%, #fffdfa 100%);
+  padding: 18px 20px;
+  box-shadow: 0 14px 30px rgba(15, 23, 42, 0.04);
 }
 
-.policy-overview-item span,
-.policy-overview-item small {
-  color: var(--muted-foreground);
+.policy-overview-icon {
+  width: 56px;
+  height: 56px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 18px;
+}
+
+.policy-overview-icon.tone-orange {
+  background: linear-gradient(180deg, #fff2e8, #ffe3d0);
+  color: #f97316;
+}
+
+.policy-overview-icon.tone-blue {
+  background: linear-gradient(180deg, #eef4ff, #dbeafe);
+  color: #2563eb;
+}
+
+.policy-overview-icon.tone-green {
+  background: linear-gradient(180deg, #ecfdf5, #d1fae5);
+  color: #16a34a;
+}
+
+.policy-overview-copy {
+  min-width: 0;
+  display: grid;
+  gap: 4px;
 }
 
 .policy-overview-item span {
-  font-size: 12px;
+  color: #475467;
+  font-size: 13px;
   font-weight: 700;
+  white-space: nowrap;
 }
 
 .policy-overview-item strong {
   color: var(--foreground);
-  font-size: 18px;
+  font-size: 28px;
   line-height: 1.2;
+  letter-spacing: -0.04em;
+  white-space: nowrap;
 }
 
 .policy-overview-item small {
+  color: #667085;
   font-size: 12px;
   line-height: 1.45;
-}
-
-.policy-summary-meta {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  flex-wrap: wrap;
-  justify-content: flex-end;
+  white-space: nowrap;
 }
 
 .policy-updated-badge {
-  min-height: 32px;
-  padding-inline: 10px;
+  min-height: 42px;
+  padding-inline: 14px;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  background: #fff7ef;
+  color: #c2410c;
+  font-size: 13px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.policy-updated-badge strong {
+  font-weight: 800;
 }
 
 .policy-summary-save {
-  min-height: 38px;
-  padding-inline: 14px;
-  font-size: 13px;
+  min-height: 42px;
+  padding-inline: 18px;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+  white-space: nowrap;
 }
 
 .policy-summary-note {
   margin: 0;
   color: var(--muted-foreground);
-  font-size: 13px;
+  font-size: 12px;
 }
 
 .policy-section-group {
@@ -652,18 +707,28 @@ function flashSavedState(target) {
 
 .policy-input-field > input {
   width: 100%;
-  min-height: 40px;
+  height: 36px;
   border: 1px solid var(--border);
   border-radius: 8px;
   background: white;
-  padding: 0 12px;
+  padding: 0 10px;
   box-sizing: border-box;
+  font: inherit;
+  line-height: 36px;
+  appearance: textfield;
+  -moz-appearance: textfield;
 }
 
 .policy-input-field > input:focus {
   outline: none;
   border-color: var(--primary);
   box-shadow: 0 0 0 3px rgba(243, 115, 33, 0.15);
+}
+
+.policy-input-field > input::-webkit-outer-spin-button,
+.policy-input-field > input::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
 }
 
 .policy-check-field {
@@ -749,18 +814,30 @@ function flashSavedState(target) {
 .mail-policy-input-row {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 10px;
+  gap: 8px;
   margin-top: 2px;
+  align-items: center;
+}
+
+.mail-policy-input-row :deep(.app-select),
+.mail-policy-input-row .mail-policy-select {
+  min-width: 0;
+  width: 100%;
+}
+
+.mail-policy-input-row :deep(select) {
+  height: 36px;
+  padding: 0 10px;
 }
 
 .mail-policy-select {
   width: 100%;
   min-width: 0;
-  height: 40px;
+  height: 36px;
   border: 1px solid var(--border);
   border-radius: 8px;
   background: white;
-  padding: 0 34px 0 12px;
+  padding: 0 30px 0 10px;
   color: var(--foreground);
   font: inherit;
   font-size: 14px;
@@ -814,15 +891,16 @@ function flashSavedState(target) {
 }
 
 .mail-policy-choice-group {
-  display: inline-flex;
-  gap: 8px;
-  flex-wrap: wrap;
-  align-self: flex-start;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  width: 100%;
   margin-top: 2px;
 }
 
 .mail-policy-choice {
-  min-width: 96px;
+  width: 100%;
+  min-width: 0;
   border: 1px solid var(--border);
   border-radius: 10px;
   min-height: 38px;
@@ -856,22 +934,25 @@ function flashSavedState(target) {
 }
 
 @media (max-width: 768px) {
+  .policy-page-header {
+    flex-direction: column;
+  }
+
+  .policy-page-actions {
+    justify-content: flex-start;
+  }
+
   .policy-field-grid,
   .mail-policy-input-row {
     grid-template-columns: 1fr;
   }
 
-  .policy-summary-meta {
-    justify-content: flex-start;
-  }
-
-  .policy-summary-head {
-    flex-direction: column;
-    align-items: stretch;
+  .mail-policy-choice-group {
+    grid-template-columns: 1fr;
   }
 
   .mail-policy-choice {
-    width: auto;
+    width: 100%;
   }
 }
 </style>

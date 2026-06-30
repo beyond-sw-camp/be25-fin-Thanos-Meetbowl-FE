@@ -1,17 +1,16 @@
 const DAYS_PER_YEAR = 365
 const DAYS_PER_MONTH = 30
-const DAYS_PER_WEEK = 7
 const MAX_YEARS = 10
 const MAX_MONTHS = 11
-const MAX_WEEKS = 4
+const MAX_DAYS = 30
 const MIN_RETENTION_DAYS = 1
 const MAX_RETENTION_DAYS = 3650
 
-export function toRetentionDays(years, months, weeks) {
+export function toRetentionDays(years, months, days) {
   // FE 드롭다운 선택값을 BE가 요구하는 일(day) 단위 정수로 환산한다.
   return Number(years) * DAYS_PER_YEAR
     + Number(months) * DAYS_PER_MONTH
-    + Number(weeks) * DAYS_PER_WEEK
+    + Number(days)
 }
 
 export function fromRetentionDays(retentionDays) {
@@ -20,47 +19,45 @@ export function fromRetentionDays(retentionDays) {
     return {
       years: 0,
       months: 0,
-      weeks: 0,
+      days: 0,
     }
   }
 
   let years = Math.floor(numericDays / DAYS_PER_YEAR)
   const remainingDays = numericDays % DAYS_PER_YEAR
   let months = Math.floor(remainingDays / DAYS_PER_MONTH)
-  const remainingDaysAfterMonths = remainingDays - (months * DAYS_PER_MONTH)
-  // 개월로 나누고 남은 일수는 가장 가까운 주 단위로 반올림해 화면 드롭다운에 다시 매핑한다.
-  let weeks = Math.round(remainingDaysAfterMonths / DAYS_PER_WEEK)
+  let days = remainingDays - (months * DAYS_PER_MONTH)
 
-  if (weeks > MAX_WEEKS) {
+  if (days > MAX_DAYS) {
     months += 1
-    weeks = 0
+    days = 0
   }
 
   if (months >= 12) {
     years += 1
     months = 0
-    weeks = 0
+    days = 0
   }
 
   if (years > MAX_YEARS) {
     years = MAX_YEARS
     months = 0
-    weeks = 0
+    days = 0
   }
 
   return {
     years,
     months: Math.min(Math.max(months, 0), MAX_MONTHS),
-    weeks: Math.min(Math.max(weeks, 0), MAX_WEEKS),
+    days: Math.min(Math.max(days, 0), MAX_DAYS),
   }
 }
 
-export function validateRetentionPeriod(years, months, weeks) {
+export function validateRetentionPeriod(years, months, days) {
   const numericYears = Number(years)
   const numericMonths = Number(months)
-  const numericWeeks = Number(weeks)
+  const numericDays = Number(days)
 
-  if (!Number.isInteger(numericYears) || !Number.isInteger(numericMonths) || !Number.isInteger(numericWeeks)) {
+  if (!Number.isInteger(numericYears) || !Number.isInteger(numericMonths) || !Number.isInteger(numericDays)) {
     return '보관 기간을 다시 선택해 주세요.'
   }
 
@@ -69,13 +66,13 @@ export function validateRetentionPeriod(years, months, weeks) {
     || numericYears > MAX_YEARS
     || numericMonths < 0
     || numericMonths > MAX_MONTHS
-    || numericWeeks < 0
-    || numericWeeks > MAX_WEEKS
+    || numericDays < 0
+    || numericDays > MAX_DAYS
   ) {
     return '보관 기간을 다시 선택해 주세요.'
   }
 
-  const retentionDays = toRetentionDays(numericYears, numericMonths, numericWeeks)
+  const retentionDays = toRetentionDays(numericYears, numericMonths, numericDays)
   // 화면 선택 조합이더라도 최종 저장 기준은 retentionDays 상한/하한으로 한 번 더 검증한다.
   if (retentionDays < MIN_RETENTION_DAYS || retentionDays > MAX_RETENTION_DAYS) {
     return `보관 기간은 ${MIN_RETENTION_DAYS}일 이상 ${MAX_RETENTION_DAYS}일 이하여야 합니다.`
@@ -84,18 +81,17 @@ export function validateRetentionPeriod(years, months, weeks) {
   return ''
 }
 
-export function formatRetentionPeriod(years, months, weeks) {
+export function formatRetentionPeriod(years, months, days) {
   // helper text와 현재 적용값 문구에서 동일한 표현을 재사용한다.
-  return `${Number(years)}년 ${Number(months)}개월 ${Number(weeks)}주`
+  return `${Number(years)}년 ${Number(months)}월 ${Number(days)}일`
 }
 
 export {
+  MAX_DAYS,
   DAYS_PER_MONTH,
-  DAYS_PER_WEEK,
   DAYS_PER_YEAR,
   MAX_MONTHS,
   MAX_RETENTION_DAYS,
-  MAX_WEEKS,
   MAX_YEARS,
   MIN_RETENTION_DAYS,
 }
