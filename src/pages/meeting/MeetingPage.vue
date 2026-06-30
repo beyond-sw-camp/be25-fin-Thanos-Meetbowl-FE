@@ -2899,9 +2899,11 @@ async function loadMeetingTitle() {
 
 async function reportMeetingStarted() {
   if (meetingStartReported.value) return
-  if (isGuestMeetingRoute.value || !auth.isAuthenticated) return
+  if (!meetingId.value) return
 
   try {
+    // 회의실 사용 현황과 관리자 대시보드는 회의가 실제로 시작되면 status=IN_PROGRESS로 전환된 값을 본다.
+    // 시작 API는 비로그인/게스트 경로도 허용하므로, guest 링크 입장도 연결 직후 시작 상태를 같은 방식으로 보고한다.
     await postJson(`/meetings/${meetingId.value}/start`, {})
     meetingStartReported.value = true
   } catch (error) {
