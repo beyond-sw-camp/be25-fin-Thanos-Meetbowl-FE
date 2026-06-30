@@ -46,6 +46,7 @@ const recentAuditLogRows = computed(() =>
 )
 const mailRetentionPolicy = computed(() => summary.value?.mailRetentionPolicy || null)
 const meetingRoomSummary = computed(() => summary.value?.meetingRoomSummary || null)
+// 대시보드 비교 그래프는 "예약이 시작된 시간대"와 "실제로 점유된 시간대"를 별도 시계열로 받는다.
 const reservationStartUsage = computed(() => meetingRoomSummary.value?.timeSlotUsage || [])
 const occupancyUsage = computed(() => meetingRoomSummary.value?.timeSlotOccupancyUsage || [])
 const visibleReservationStartUsage = computed(() =>

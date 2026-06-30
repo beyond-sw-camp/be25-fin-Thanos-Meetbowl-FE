@@ -1816,7 +1816,7 @@ input:focus { border-color: var(--primary); box-shadow: 0 0 0 3px rgba(243,115,3
   box-sizing: border-box;
   border: 1px solid var(--border);
   border-radius: 18px;
-  background: linear-gradient(180deg, #fffdf7, #ffffff);
+  background: #ffffff;
   padding: 16px 16px 8px;
 }
 .admin-usage-chart { width: 100%; height: 264px; display: block; overflow: visible; }
