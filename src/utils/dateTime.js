@@ -95,6 +95,35 @@ export function utcToKstClock(value) {
   }).format(new Date(value))
 }
 
+// UTC ISO 또는 KST 'YYYY-MM-DD' → KST 요일 번호(0=일 … 6=토)
+export function kstWeekday(value) {
+  if (!value) return 0
+  const map = { Sun: 0, Mon: 1, Tue: 2, Wed: 3, Thu: 4, Fri: 5, Sat: 6 }
+  const input = String(value).length === 10 ? `${value}T12:00:00+09:00` : value
+  const wd = new Intl.DateTimeFormat('en-US', { timeZone: 'Asia/Seoul', weekday: 'short' }).format(
+    new Date(input),
+  )
+  return map[wd] ?? 0
+}
+
+// KST 기준 이번 주(월~일)를 UTC ISO 반개구간 [from, to) 로 (통계 집계용)
+export function kstWeekRangeUtc(date) {
+  const offsetToMonday = (kstWeekday(date) + 6) % 7 // 월요일=0, 일요일=6
+  const monday = shiftDateKst(date, -offsetToMonday)
+  const nextMonday = shiftDateKst(monday, 7)
+  return { from: kstDayRangeUtc(monday).from, to: kstDayRangeUtc(nextMonday).from }
+}
+
+// KST 기준 이번 달(1일~말일)을 UTC ISO 반개구간 [from, to) 로 (통계 집계용)
+export function kstMonthRangeUtc(date) {
+  const [year, month] = date.split('-').map(Number)
+  const first = `${year}-${String(month).padStart(2, '0')}-01`
+  const nextYear = month === 12 ? year + 1 : year
+  const nextMonth = month === 12 ? 1 : month + 1
+  const nextFirst = `${nextYear}-${String(nextMonth).padStart(2, '0')}-01`
+  return { from: kstDayRangeUtc(first).from, to: kstDayRangeUtc(nextFirst).from }
+}
+
 // KST 'YYYY-MM-DD' 를 delta일 이동한 'YYYY-MM-DD' (날짜 네비게이터 < >)
 export function shiftDateKst(date, deltaDays) {
   const base = new Date(`${date}T00:00:00+09:00`)
