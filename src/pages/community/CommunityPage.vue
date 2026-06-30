@@ -458,7 +458,6 @@ export default defineComponent({
     <section v-if="writing" class="page community-write-page">
       <header class="page-header">
         <div class="community-write-breadcrumbs">
-          <span>커뮤니티</span>
           <span>도파민</span>
           <span>글쓰기</span>
         </div>
@@ -491,7 +490,6 @@ export default defineComponent({
 
             <div class="community-write-actions">
               <button type="button" class="ghost-button" @click="closeWritePage">취소</button>
-              <button type="button" class="secondary-button small" @click="saveDraft">임시 저장</button>
               <button type="submit" class="primary-button small">등록</button>
             </div>
           </form>
@@ -1434,7 +1432,11 @@ export default defineComponent({
 }
 
 .community-write-field .app-select {
-  width: min(380px, 100%);
+  width: 100%;
+}
+
+.community-write-field .app-select-wrap {
+  width: min(240px, 100%);
 }
 
 .community-write-form .minutes-editor,

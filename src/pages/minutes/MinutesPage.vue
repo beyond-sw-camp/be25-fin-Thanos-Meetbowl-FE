@@ -101,7 +101,7 @@ const selected = computed(() => {
 })
 const selectedStatus = computed(() => selected.value?.rawStatus || '')
 const canEditSelected = computed(() => {
-  if (!selected.value || !['DRAFT', 'IN_REVIEW'].includes(selectedStatus.value)) return false
+  if (!selected.value || !['DRAFT', 'IN_REVIEW', 'APPROVED', 'SHARED'].includes(selectedStatus.value)) return false
   return selected.value.reviewerUserId === auth.user?.userId
 })
 const canApproveSelected = computed(() => {

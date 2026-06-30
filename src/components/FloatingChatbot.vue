@@ -4,6 +4,8 @@
     type="button"
     class="chatbot-floating-button"
     :aria-label="hasCompletedResponse ? 'AI 챗봇 응답 완료, 열기' : 'AI 챗봇 열기'"
+    :style="buttonStyle"
+    @pointerdown="startButtonDrag"
     @click="openChatbot"
   >
     <MessageSquare :size="22" />
@@ -12,8 +14,12 @@
 
   <div v-else class="chatbot-floating-layer">
     <div class="chatbot-floating-backdrop" @click="open = false"></div>
-    <article class="chatbot-panel chatbot-floating-panel">
-      <header class="chatbot-panel-header">
+    <article class="chatbot-panel chatbot-floating-panel" :style="panelStyle">
+      <header
+        ref="panelHeader"
+        class="chatbot-panel-header chatbot-draggable-header"
+        @pointerdown="startPanelDrag"
+      >
         <div class="chatbot-title">
           <span class="chatbot-title-icon"><Sparkles :size="17" /></span>
           <span>
@@ -69,7 +75,7 @@
 </template>
 
 <script setup>
-import { nextTick, ref } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue'
 import { FileText, MessageSquare, Send, Sparkles, X } from '@lucide/vue'
 import { askChatbot } from '../lib/chatbot'
 import { formatChatbotSourceLabel } from '../lib/chatbot-sources'
@@ -81,8 +87,52 @@ const loading = ref(false)
 const errorMessage = ref('')
 const messageScroll = ref(null)
 const hasCompletedResponse = ref(false)
+const panelHeader = ref(null)
+const buttonPosition = ref(null)
+const panelPosition = ref(null)
+const dragState = ref(null)
+const buttonDragState = ref(null)
+const suppressNextOpen = ref(false)
+
+const buttonStyle = computed(() => {
+  if (!buttonPosition.value) return {}
+  return {
+    left: `${buttonPosition.value.left}px`,
+    top: `${buttonPosition.value.top}px`,
+    right: 'auto',
+    bottom: 'auto',
+  }
+})
+
+const panelStyle = computed(() => {
+  if (!panelPosition.value) return {}
+  return {
+    left: `${panelPosition.value.left}px`,
+    top: `${panelPosition.value.top}px`,
+    right: 'auto',
+    bottom: 'auto',
+  }
+})
+
+onMounted(() => {
+  window.addEventListener('pointermove', handleButtonDragMove)
+  window.addEventListener('pointerup', stopButtonDrag)
+  window.addEventListener('pointermove', handlePanelDragMove)
+  window.addEventListener('pointerup', stopPanelDrag)
+})
+
+onBeforeUnmount(() => {
+  window.removeEventListener('pointermove', handleButtonDragMove)
+  window.removeEventListener('pointerup', stopButtonDrag)
+  window.removeEventListener('pointermove', handlePanelDragMove)
+  window.removeEventListener('pointerup', stopPanelDrag)
+})
 
 async function openChatbot() {
+  if (suppressNextOpen.value) {
+    suppressNextOpen.value = false
+    return
+  }
   open.value = true
   hasCompletedResponse.value = false
   await scrollToBottom()
@@ -134,6 +184,78 @@ function handleComposerEnter(event) {
 async function scrollToBottom() {
   await nextTick()
   if (messageScroll.value) messageScroll.value.scrollTop = messageScroll.value.scrollHeight
+}
+
+function startButtonDrag(event) {
+  if (window.innerWidth < 900) return
+  const rect = event.currentTarget.getBoundingClientRect()
+  buttonPosition.value = {
+    left: rect.left,
+    top: rect.top,
+  }
+  buttonDragState.value = {
+    offsetX: event.clientX - rect.left,
+    offsetY: event.clientY - rect.top,
+    width: rect.width,
+    height: rect.height,
+    pointerId: event.pointerId,
+    moved: false,
+  }
+}
+
+function handleButtonDragMove(event) {
+  if (!buttonDragState.value || event.pointerId !== buttonDragState.value.pointerId) return
+  const maxLeft = Math.max(12, window.innerWidth - buttonDragState.value.width - 12)
+  const maxTop = Math.max(12, window.innerHeight - buttonDragState.value.height - 12)
+  const nextLeft = Math.min(Math.max(12, event.clientX - buttonDragState.value.offsetX), maxLeft)
+  const nextTop = Math.min(Math.max(12, event.clientY - buttonDragState.value.offsetY), maxTop)
+  if (Math.abs(nextLeft - buttonPosition.value.left) > 2 || Math.abs(nextTop - buttonPosition.value.top) > 2) {
+    buttonDragState.value.moved = true
+  }
+  buttonPosition.value = {
+    left: nextLeft,
+    top: nextTop,
+  }
+}
+
+function stopButtonDrag(event) {
+  if (!buttonDragState.value) return
+  if (event.pointerId !== undefined && event.pointerId !== buttonDragState.value.pointerId) return
+  const moved = buttonDragState.value.moved
+  buttonDragState.value = null
+  suppressNextOpen.value = moved
+}
+
+function startPanelDrag(event) {
+  if (window.innerWidth < 900) return
+  if (event.target.closest('button')) return
+  const panel = event.currentTarget?.closest('.chatbot-floating-panel')
+  if (!panel) return
+  const rect = panel.getBoundingClientRect()
+  panelPosition.value = {
+    left: rect.left,
+    top: rect.top,
+  }
+  dragState.value = {
+    offsetX: event.clientX - rect.left,
+    offsetY: event.clientY - rect.top,
+    width: rect.width,
+    height: rect.height,
+  }
+}
+
+function handlePanelDragMove(event) {
+  if (!dragState.value) return
+  const maxLeft = Math.max(12, window.innerWidth - dragState.value.width - 12)
+  const maxTop = Math.max(12, window.innerHeight - dragState.value.height - 12)
+  panelPosition.value = {
+    left: Math.min(Math.max(12, event.clientX - dragState.value.offsetX), maxLeft),
+    top: Math.min(Math.max(12, event.clientY - dragState.value.offsetY), maxTop),
+  }
+}
+
+function stopPanelDrag() {
+  dragState.value = null
 }
 
 </script>

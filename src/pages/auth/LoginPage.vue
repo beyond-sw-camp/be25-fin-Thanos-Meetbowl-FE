@@ -1,6 +1,7 @@
 <script>
 import { defineComponent, ref } from 'vue'
 import { useRouter } from 'vue-router'
+import { CalendarCheck2, Eye, FileText, LockKeyhole, Sparkles, User } from '@lucide/vue'
 import ModalShell from '../../components/common/ModalShell.vue'
 import { requestPasswordReset } from '../../lib/auth.js'
 import { clearRememberedLoginId, readRememberedLoginId, writeRememberedLoginId } from '../../lib/auth-session'
@@ -9,6 +10,12 @@ import { useAuthStore } from '../../stores/auth'
 export default defineComponent({
   components: {
     ModalShell,
+    CalendarCheck2,
+    Eye,
+    FileText,
+    LockKeyhole,
+    Sparkles,
+    User,
   },
   setup() {
     const auth = useAuthStore()
@@ -19,6 +26,7 @@ export default defineComponent({
     const rememberLoginId = ref(Boolean(rememberedLoginId))
     const error = ref('')
     const loading = ref(false)
+    const passwordVisible = ref(false)
     const passwordResetOpen = ref(false)
     const passwordResetLoading = ref(false)
     const passwordResetError = ref('')
@@ -115,6 +123,7 @@ export default defineComponent({
     return {
       loginId,
       password,
+      passwordVisible,
       rememberLoginId,
       error,
       loading,
@@ -132,20 +141,47 @@ export default defineComponent({
   template: `
     <main class="login-page">
       <section class="login-brand">
-        <div class="brand large"><span class="brand-mark">M</span><span>Meetbowl</span></div>
-        <div>
-          <h1>회의실에서 결정으로,<br>결정에서 실행으로.</h1>
-          <p>예약, 화상회의, 자동 회의록 메일 공유까지 하나의 흐름으로 연결되는 업무 플랫폼입니다.</p>
-          <div class="login-tags"><span>회의실 예약</span><span>AI 회의록</span><span>AI 요약</span></div>
+        <div class="brand large login-brand-marking"><span class="brand-mark">M</span><span>Meetbowl</span></div>
+        <div class="login-brand-copy">
+          <h1>
+            <span class="login-headline-line">회의실 <em>예약</em>부터</span>
+            <span class="login-headline-line">자동 <em>회의록</em>까지</span>
+            <span class="login-headline-line">회의의 <em>모든 과정</em>을 하나로</span>
+          </h1>
+          <p>예약, 화상회의, 자동 회의록, 메일 공유까지 하나의 흐름으로 연결되는 업무 플랫폼입니다.</p>
+          <div class="login-tags">
+            <span><CalendarCheck2 :size="16" /> 회의실 예약</span>
+            <span><Sparkles :size="16" /> AI 회의록</span>
+            <span><FileText :size="16" /> AI 요약</span>
+          </div>
         </div>
-        <small>© 2026 Meetbowl Inc.</small>
+<!--        <div class="login-brand-illustration" aria-hidden="true">-->
+<!--          <div class="login-illus-card login-illus-main"></div>-->
+<!--          <div class="login-illus-bubble"></div>-->
+<!--          <div class="login-illus-calendar"></div>-->
+<!--        </div>-->
+        <small class="login-copyright">© 2026 Meetbowl Inc.</small>
       </section>
       <section class="login-form-wrap">
         <form class="login-card" @submit.prevent="submit">
+          <div class="login-card-icon"><LockKeyhole :size="28" /></div>
           <h2>로그인</h2>
           <p>사내 업무 플랫폼에 접속해 주세요.</p>
-          <label>아이디<input v-model="loginId" autofocus></label>
-          <label>비밀번호<input v-model="password" type="password"></label>
+          <label>
+            아이디
+            <span class="login-input-wrap">
+              <User :size="18" />
+              <input v-model="loginId" placeholder="아이디를 입력하세요" autofocus>
+            </span>
+          </label>
+          <label>
+            비밀번호
+            <span class="login-input-wrap">
+              <LockKeyhole :size="18" />
+              <input v-model="password" :type="passwordVisible ? 'text' : 'password'" placeholder="비밀번호를 입력하세요">
+              <button class="login-input-action" type="button" aria-label="비밀번호 표시 전환" @click="passwordVisible = !passwordVisible"><Eye :size="18" /></button>
+            </span>
+          </label>
           <div class="login-form-actions">
             <label class="checkbox-field">
               <input v-model="rememberLoginId" type="checkbox">
