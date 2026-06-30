@@ -1904,6 +1904,9 @@ input:focus { border-color: var(--primary); box-shadow: 0 0 0 3px rgba(243,115,3
   min-height: 0;
 }
 .admin-audit-log-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
   padding: 6px 0;
   min-height: 0;
   border-bottom: 1px solid var(--border);
@@ -1912,14 +1915,23 @@ input:focus { border-color: var(--primary); box-shadow: 0 0 0 3px rgba(243,115,3
 .admin-audit-log-summary {
   display: flex;
   flex-wrap: wrap;
-  align-items: start;
+  align-items: center;
   gap: 6px;
+  flex: 1 1 auto;
   min-width: 0;
   color: var(--muted-foreground);
   font-size: 12px;
   line-height: 1.35;
 }
 .admin-audit-log-summary > * { min-width: 0; white-space: nowrap; flex: 0 0 auto; }
+.admin-audit-log-meta {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 6px;
+  flex: 0 0 auto;
+  white-space: nowrap;
+}
 .admin-audit-log-action { color: var(--foreground); font-weight: 700; }
 .admin-audit-log-target,
 .admin-audit-log-field,

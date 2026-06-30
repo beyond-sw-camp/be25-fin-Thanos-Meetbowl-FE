@@ -47,6 +47,8 @@ function formatCompactDateTime(value) {
       <span class="admin-audit-log-action">{{ actionLabel }}</span>
       <span class="admin-audit-log-target">{{ targetLabel }}</span>
       <span class="admin-audit-log-field">{{ targetName }}</span>
+    </div>
+    <div class="admin-audit-log-meta">
       <span :class="['badge', resultTone]">{{ resultLabel }}</span>
       <span class="admin-audit-log-time">{{ createdAt }}</span>
       <RouterLink to="/admin/logs" class="admin-audit-log-link">상세 보기</RouterLink>
