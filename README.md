@@ -120,7 +120,7 @@
 <br>
 
 ## 10. API 명세서
-[API 명세서](https://playdatacademy.notion.site/372d943bcac2801c9be8e3fdbe38b6b4?v=372d943bcac2805d92ec000cfbed638d&source=copy_link)
+[API 명세서](https://0w10wfx2jn.apidog.io/)
 <br>
 
 
