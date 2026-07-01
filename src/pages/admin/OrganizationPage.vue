@@ -427,12 +427,21 @@ function closeModal() {
 
 function openDeleteConfirm() {
   if (!editingItem.value || deleteLoading.value) return
+  // 이전 시도의 에러가 남아 있으면 새로 열 때 지운다(삭제 모달 안에서 실패 이유를 보여주므로).
+  actionError.value = ''
+  // 삭제 확인 모달과 수정 모달이 겹쳐 보이지 않도록, 확인 모달을 열 때 수정 모달은 닫는다.
+  // editingItem 은 유지되므로 삭제 대상·라벨 계산에는 문제없다.
+  modalOpen.value = false
   deleteConfirmOpen.value = true
 }
 
 function closeDeleteConfirm() {
   if (deleteLoading.value) return
+  // 취소 시 남은 에러가 페이지로 새어 나오지 않게 함께 정리한다.
+  actionError.value = ''
   deleteConfirmOpen.value = false
+  // 삭제 확인은 수정 모달에서 열리므로, 취소하면 원래 수정 모달로 되돌린다(항상 모달은 하나만 표시).
+  if (editingItem.value) modalOpen.value = true
 }
 
 async function confirmDeleteItem() {
@@ -1089,7 +1098,8 @@ function getDepartmentTreeData(departmentId) {
         <p class="settings-success">{{ successMessage }}</p>
       </div>
 
-      <div v-if="actionError" class="card feedback-card">
+      <!-- 삭제 확인 모달이 열려 있을 땐 에러를 그 모달 안에서 보여주므로, 페이지 카드는 숨겨 겹침을 막는다. -->
+      <div v-if="actionError && !deleteConfirmOpen" class="card feedback-card">
         <div class="error-box">{{ actionError }}</div>
       </div>
 
@@ -1456,7 +1466,8 @@ function getDepartmentTreeData(departmentId) {
 
         <form class="admin-modal-form" @submit.prevent="saveItem">
           <div class="admin-modal-body">
-            <p v-if="actionError" class="admin-modal-inline-error">{{ actionError }}</p>
+            <!-- 삭제 확인 모달이 위에 떠 있을 땐 그쪽에서 에러를 보여주므로 여기선 숨겨 겹침을 막는다. -->
+            <p v-if="actionError && !deleteConfirmOpen" class="admin-modal-inline-error">{{ actionError }}</p>
             <label v-if="activeTab !== 'position'">
               계열사
               <AppSelect v-model="form.affiliateId" required>
@@ -1539,6 +1550,9 @@ function getDepartmentTreeData(departmentId) {
           <p>{{ deleteConfirmDescription() }}</p>
           <p class="organization-delete-target">{{ editingItem?.name || '-' }}</p>
         </div>
+
+        <!-- 삭제 실패(예: 하위 팀·소속 회원 존재) 이유를 취소/삭제 버튼 바로 위에 빨간 텍스트로 보여준다. -->
+        <p v-if="actionError" class="admin-modal-inline-error organization-delete-error">{{ actionError }}</p>
 
         <div class="modal-actions">
           <button type="button" class="secondary-button" :disabled="deleteLoading" @click="closeDeleteConfirm">
@@ -1646,6 +1660,28 @@ function getDepartmentTreeData(departmentId) {
   padding-bottom: 14px;
 }
 
+/*
+ * 활성화/비활성화 등 성공 안내(내부 .settings-success)는 텍스트 폭만큼의 얇은 초록 칩으로 표시한다.
+ * grid 아이템이라 justify-self:start 로 내용 폭만큼만, align-items:center 로 칩 기준 수직 가운데 정렬.
+ * :has()로 성공 카드만 겨냥해 동일 클래스인 에러 카드(.error-box)에는 영향 주지 않는다. (부서·팀·직급 공통)
+ */
+.feedback-card:has(.settings-success) {
+  justify-self: start;
+  display: inline-flex;
+  align-items: center;
+  padding: 7px 14px;
+  border: 1px solid #bbf7d0;
+  border-radius: 999px;
+  background: #ecfdf5;
+}
+
+/* 전역 .settings-success 의 margin/폰트 !important 를 덮어 칩 안에서 수직 가운데·슬림하게. */
+.feedback-card:has(.settings-success) .settings-success {
+  margin: 0 !important;
+  font-size: 13px !important;
+  line-height: 1.2;
+}
+
 .excel-result-card,
 .excel-error-card {
   display: grid;
@@ -1743,9 +1779,28 @@ function getDepartmentTreeData(departmentId) {
   line-height: 1.6;
 }
 
+/* 삭제 대상(부서/팀/직급) 이름을 칩(알약)으로 강조해 한눈에 보이게 한다. grid 항목이라 justify-self로 내용만큼만. */
 .organization-delete-target {
-  color: var(--muted-foreground);
-  font-size: 13px;
+  justify-self: start;
+  display: inline-flex;
+  align-items: center;
+  border-radius: 999px;
+  padding: 4px 14px;
+  border: 1px solid #fecaca;
+  background: #fef2f2;
+  color: var(--danger);
+  font-size: 14px;
+  font-weight: 700;
+}
+
+/* 삭제 실패 이유는 취소/삭제 버튼 바로 위에, 박스·바 없이 빨간 텍스트로만 보여준다. */
+.organization-delete-error {
+  border: 0;
+  background: transparent;
+  padding: 0;
+  margin: 0 0 5px;
+  color: var(--danger);
+  font-weight: 600;
 }
 
 .organization-user-summary-modal {
@@ -1819,6 +1874,12 @@ function getDepartmentTreeData(departmentId) {
 
 /* 취소·확인 버튼이 붙어 보여서 간격을 준다. gap은 flex 컨테이너에서만 먹으므로 display:flex를 함께 지정. */
 .excel-confirm-modal .modal-actions {
+  display: flex;
+  gap: 12px;
+}
+
+/* 부서/팀/직급 삭제 확인 모달의 취소·삭제 버튼도 동일하게 간격을 준다. */
+.organization-delete-modal .modal-actions {
   display: flex;
   gap: 12px;
 }

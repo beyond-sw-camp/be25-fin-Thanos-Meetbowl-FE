@@ -1479,11 +1479,14 @@ input:focus { border-color: var(--primary); box-shadow: 0 0 0 3px rgba(243,115,3
 .shared-drawer section .shared-version-history-title { margin-top: 32px; padding-top: 4px; }
 .shared-detail-body { display: grid; gap: 24px; background: linear-gradient(180deg, #fff 0%, #fffaf6 100%); }
 .shared-detail-card { border: 1px solid #e5e7eb; border-radius: 18px; background: white; padding: 22px; box-shadow: 0 12px 30px rgba(15,23,42,.06); }
+/* 상세 모달 카드의 섹션 제목(빠른 액션·버전 이력·파일 정보 등)이 아래 내용과 붙지 않도록 간격을 준다. */
+.shared-detail-card > .shared-member-section-title { margin-bottom: 12px; }
 .shared-preview-card { padding: 24px; }
 .shared-preview-panel { margin-top: 0; }
 .shared-detail-grid { display: grid; grid-template-columns: minmax(280px, 320px) minmax(320px, 1fr) minmax(260px, 320px); gap: 18px; align-items: stretch; }
-.shared-detail-grid > .shared-detail-card { min-height: 100%; display: flex; flex-direction: column; }
-.shared-detail-column { display: flex; flex-direction: column; gap: 18px; min-height: 100%; }
+/* min-width:0 이 없으면 긴 파일명 등 내용이 트랙(최대 320px)을 넘쳐 옆 컬럼(버전 이력)을 침범한다. 0으로 두어 내용이 트랙 안에서 잘리게(ellipsis) 한다. */
+.shared-detail-grid > .shared-detail-card { min-height: 100%; display: flex; flex-direction: column; min-width: 0; }
+.shared-detail-column { display: flex; flex-direction: column; gap: 18px; min-height: 100%; min-width: 0; }
 .shared-detail-column > .shared-detail-card:first-child { flex: 0 0 auto; }
 .shared-detail-column > .shared-detail-card:last-child { flex: 1 1 auto; }
 .shared-quick-actions { display: flex; flex-wrap: wrap; gap: 12px; }
@@ -1494,7 +1497,7 @@ input:focus { border-color: var(--primary); box-shadow: 0 0 0 3px rgba(243,115,3
 .version-card strong { font-size: 13px; font-weight: 700; letter-spacing: 0; }
 .version-card div small { margin-left: auto; color: var(--muted-foreground); font-size: 12px; }
 .version-card p { margin: 8px 0 0; color: var(--muted-foreground); font-size: 12px; }
-.shared-version-upload { display: grid; gap: 12px; margin: 0; border: 1px dashed var(--border); border-radius: 14px; background: #f8fafc; padding: 20px; }
+.shared-version-upload { display: grid; gap: 12px; margin: 0; min-width: 0; border: 1px dashed var(--border); border-radius: 14px; background: #f8fafc; padding: 20px; }
 .shared-version-file-input {
   position: absolute;
   width: 1px;
@@ -1509,6 +1512,8 @@ input:focus { border-color: var(--primary); box-shadow: 0 0 0 3px rgba(243,115,3
   display: flex;
   align-items: center;
   gap: 12px;
+  min-width: 0;
+  overflow: hidden;
   border: 1px solid var(--border);
   border-radius: 14px;
   background: white;
@@ -2032,13 +2037,21 @@ input:focus { border-color: var(--primary); box-shadow: 0 0 0 3px rgba(243,115,3
   gap: 2px;
   min-height: 0;
   display: grid;
-  grid-auto-rows: minmax(56px, auto);
+  /* 행을 내용대로 두지 않고(제각각) 카드 높이를 균등 분배해 모든 행 높이를 같게 한다. */
+  grid-auto-rows: minmax(56px, 1fr);
+  /* 헤더와 첫 행 사이 상단 공백만 따로 조절하는 값(음수=줄임 / 양수=늘림). 다른 행 간격과 무관. */
+  margin-top: -10px;
 }
-.admin-audit-log-item {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr);
-  align-items: start;
-  gap: 8px;
+/*
+ * .compact-list li 의 display:flex 가 (element+class 라) 더 구체적이라 실제로는 flex 행으로 렌더된다.
+ * 그래서 리스트+아이템 선택자로 specificity 를 올려 확실히 덮고, flex 기준으로 세로 중앙 정렬한다.
+ * li 는 리스트(grid, grid-auto-rows:1fr)의 항목이라 행 높이만큼 stretch → 행 높이는 균등, 내용은 중앙.
+ */
+.admin-audit-log-list .admin-audit-log-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
   padding: 6px 0;
   min-height: 0;
   border-bottom: 1px solid var(--border);
@@ -2081,7 +2094,7 @@ input:focus { border-color: var(--primary); box-shadow: 0 0 0 3px rgba(243,115,3
   line-height: 1.1;
   white-space: nowrap;
 }
-.admin-audit-log-link { color: var(--primary-dark); font-weight: 800; font-size: 14px; white-space: nowrap; }
+.admin-audit-log-link { color: var(--primary-dark); font-weight: 800; font-size: 14px; white-space: nowrap; margin-left: 6px;}
 .admin-dashboard-grid > .admin-chart-card:last-of-type,
 .admin-dashboard-grid > .admin-table-card {
   display: flex;
@@ -2094,11 +2107,28 @@ input:focus { border-color: var(--primary); box-shadow: 0 0 0 3px rgba(243,115,3
   min-height: 0;
   flex: 1;
 }
+/*
+ * '보관 정책 요약' 카드만 헤더 여백을 따로 조절한다(공용 .admin-dashboard-page .card-head 와 분리).
+ * specificity 가 같아 소스상 뒤에 두어 이 카드에서만 덮인다. 다른 대시보드 카드는 공용 값 그대로 유지.
+ * 값 = 위 좌우 아래. 세 번째(아래) 값이 헤더와 첫 행 사이 상단 공백을 결정 → 상단 공백은 이 값을 조절.
+ */
+.admin-retention-card .card-head {
+  margin: -22px -22px -13px;
+}
+
 .admin-retention-card .detail-list {
   gap: 0;
 }
 .admin-retention-card .detail-list > div {
-  padding: 14px 4px;
+  /*
+   * 각 항목 밴드를 같은 높이(min-height)로 맞춰 수평 구분선(바) 간격을 균등하게 하고,
+   * 그 밴드 안에서 라벨·값을 세로 중앙으로 정렬한다. (값 크기가 20px/13px로 달라도 바 기준 중앙 유지)
+   */
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  min-height: 84px;
+  padding: 6px 4px;
   border-top: 1px solid #edf1f6;
 }
 .admin-retention-card .detail-list > div:nth-child(-n + 2) {
