@@ -853,7 +853,7 @@ function formatChangeTitle(change) {
 
 .date-filter-popover-actions {
   display: flex;
-  justify-content: flex-end;
+  justify-content: center;
   gap: 8px;
 }
 
@@ -979,8 +979,8 @@ function formatChangeTitle(change) {
 }
 
 .admin-log-footer {
-  display: flex;
-  justify-content: space-between;
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
   align-items: center;
   gap: 12px;
   padding: 16px 4px 2px;
@@ -993,12 +993,14 @@ function formatChangeTitle(change) {
   color: var(--muted-foreground);
   font-size: 13px;
   font-weight: 600;
+  justify-self: start;
 }
 
 .admin-log-footer :deep(.pagination) {
   margin-top: 0;
-  justify-content: flex-end;
+  justify-content: center;
   gap: 8px;
+  justify-self: center;
 }
 
 .admin-log-footer :deep(.pagination button) {
@@ -1181,14 +1183,19 @@ function formatChangeTitle(change) {
   }
 
   .admin-log-footer {
-    flex-direction: column;
-    align-items: stretch;
+    grid-template-columns: 1fr;
+    justify-items: center;
     gap: 10px;
     margin-bottom: 32px;
   }
 
+  .admin-log-count {
+    justify-self: center;
+  }
+
   .admin-log-footer :deep(.pagination) {
-    justify-content: flex-start;
+    justify-content: center;
+    justify-self: center;
   }
 
   .audit-log-detail-modal {

@@ -162,7 +162,7 @@
             </div>
           </div>
 
-          <button type="button" class="icon-button topbar-help-button" @click="startTutorial">
+          <button v-if="!isLocalAdmin" type="button" class="icon-button topbar-help-button" @click="startTutorial">
             <CircleHelp :size="20" />
           </button>
 
