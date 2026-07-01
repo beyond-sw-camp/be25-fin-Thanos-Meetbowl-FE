@@ -1189,6 +1189,8 @@ function formatActionError(error, fallbackMessage) {
   justify-content: space-between;
   align-items: flex-start;
   gap: 12px;
+  /* '총 N명' 배지 */
+  margin-bottom: 16px;
 }
 
 .directory-head h2 {
