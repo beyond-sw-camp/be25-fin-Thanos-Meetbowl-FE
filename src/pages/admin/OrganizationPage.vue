@@ -1817,6 +1817,12 @@ function getDepartmentTreeData(departmentId) {
   font-size: 13px;
 }
 
+/* 취소·확인 버튼이 붙어 보여서 간격을 준다. gap은 flex 컨테이너에서만 먹으므로 display:flex를 함께 지정. */
+.excel-confirm-modal .modal-actions {
+  display: flex;
+  gap: 12px;
+}
+
 .retry-actions {
   margin-top: 12px;
 }
