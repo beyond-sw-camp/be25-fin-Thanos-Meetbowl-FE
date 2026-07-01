@@ -1474,9 +1474,7 @@ const sttEmptyStateMessage = computed(() => {
 const currentCaptionEmptyStateMessage = computed(() => sttEmptyStateMessage.value)
 const sttStatusHint = computed(() => {
   if (!meetingRoom.value) return ''
-  if (finalizedCaptions.value.length > 0 || streamingCaptionPreview.value) {
-    return lastCaptionText.value ? `마지막 수신 문장: ${lastCaptionText.value}` : ''
-  }
+  if (finalizedCaptions.value.length > 0 || streamingCaptionPreview.value) return ''
   if (!mic.value) return '마이크가 꺼져 있으면 STT가 문장을 만들 수 없습니다.'
   if (sttRuntimeStatus.value) return `STT 상태: ${sttRuntimeStatus.value}`
   if (lastCaptionReceivedAt.value) return '자막은 수신됐지만 아직 화면에 고정된 문장이 없습니다.'
@@ -2899,9 +2897,11 @@ async function loadMeetingTitle() {
 
 async function reportMeetingStarted() {
   if (meetingStartReported.value) return
-  if (isGuestMeetingRoute.value || !auth.isAuthenticated) return
+  if (!meetingId.value) return
 
   try {
+    // 회의실 사용 현황과 관리자 대시보드는 회의가 실제로 시작되면 status=IN_PROGRESS로 전환된 값을 본다.
+    // 시작 API는 비로그인/게스트 경로도 허용하므로, guest 링크 입장도 연결 직후 시작 상태를 같은 방식으로 보고한다.
     await postJson(`/meetings/${meetingId.value}/start`, {})
     meetingStartReported.value = true
   } catch (error) {

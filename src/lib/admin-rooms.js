@@ -76,3 +76,14 @@ export function deleteMeetingBuilding(buildingId) {
 export function createSiteWithBuilding(payload) {
   return postJson('/admin/meeting-sites-with-building', payload, adminRequestOptions)
 }
+
+// 회의실 시간대 차단 등록. payload: { startAt, endAt(UTC ISO), reason? }.
+// 차단된 구간은 백엔드 예약 가드가 신규 예약을 막는다(409 MEETING_ROOM_BLOCKED).
+export function createRoomBlock(roomId, payload) {
+  return postJson(`/admin/meeting-rooms/${roomId}/blocks`, payload, adminRequestOptions)
+}
+
+// 회의실 시간대 차단 해제.
+export function deleteRoomBlock(roomId, blockId) {
+  return deleteJson(`/admin/meeting-rooms/${roomId}/blocks/${blockId}`, adminRequestOptions)
+}

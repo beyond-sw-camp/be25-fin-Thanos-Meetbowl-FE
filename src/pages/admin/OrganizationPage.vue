@@ -1420,8 +1420,14 @@ function getDepartmentTreeData(departmentId) {
               <tr v-if="!positionRows.length">
                 <td colspan="5"><div class="empty-state">등록된 직급이 없습니다.</div></td>
               </tr>
-              <tr v-for="position in positionRows" :key="position.positionId">
-                <td>{{ position.affiliateName }}</td>
+              <tr v-for="(position, index) in positionRows" :key="position.positionId">
+                <td
+                  v-if="index === 0"
+                  :rowspan="positionRows.length"
+                  class="organization-shared-cell organization-affiliate-cell"
+                >
+                  {{ position.affiliateName }}
+                </td>
                 <td>{{ position.name }}</td>
                 <td>{{ position.sortOrder ?? '-' }}</td>
                 <td>{{ position.userCount }}명</td>
@@ -2093,8 +2099,13 @@ function getDepartmentTreeData(departmentId) {
   cursor: default;
 }
 
+.organization-table th,
 .organization-table td {
-  vertical-align: top;
+  text-align: center;
+}
+
+.organization-table td {
+  vertical-align: middle;
 }
 
 .organization-shared-cell {
@@ -2189,26 +2200,33 @@ function getDepartmentTreeData(departmentId) {
 
 .organization-table-position table {
   table-layout: fixed;
+  width: 100%;
 }
 
 .organization-table-position th:nth-child(1),
 .organization-table-position td:nth-child(1) {
-  width: 220px;
+  width: 18%;
 }
 
 .organization-table-position th:nth-child(2),
 .organization-table-position td:nth-child(2) {
-  width: 84px;
+  width: 20%;
 }
 
 .organization-table-position th:nth-child(3),
 .organization-table-position td:nth-child(3) {
-  width: 92px;
+  width: 16%;
 }
 
 .organization-table-position th:nth-child(4),
 .organization-table-position td:nth-child(4) {
-  width: 140px;
+  width: 16%;
+}
+
+.organization-table-position th:nth-child(5),
+.organization-table-position td:nth-child(5) {
+  width: 30%;
+  white-space: nowrap;
 }
 
 /* 카드 푸터 스타일 */

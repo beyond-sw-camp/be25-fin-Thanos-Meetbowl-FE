@@ -595,7 +595,7 @@ async function loadDayData() {
     const hostIds = []
     const reservationMap = {}
     for (const room of reservationData || []) {
-      reservationMap[room.roomId] = (room.reservations || []).map((reservation) => {
+      const reservations = (room.reservations || []).map((reservation) => {
         hostIds.push(reservation.hostUserId)
         return {
           meetingId: reservation.meetingId,
@@ -610,6 +610,22 @@ async function loadDayData() {
           roomName: room.name,
         }
       })
+
+      // 관리자가 막아둔 시간대 차단을 회색(사용 불가) 블록으로 표시한다.
+      // blocksByRoom에 포함하면 RoomTimelineRow가 그 구간의 드래그-예약을 사전 차단한다(백엔드 거부와 이중 안전).
+      const blocks = (room.blocks || []).map((block) => ({
+        meetingId: block.blockId,
+        roomId: room.roomId,
+        title: block.reason || '사용 제한',
+        start: utcToKstClock(block.startAt),
+        end: utcToKstClock(block.endAt),
+        tone: 'unavailable',
+        mine: false,
+        isBlock: true,
+        roomName: room.name,
+      }))
+
+      reservationMap[room.roomId] = [...reservations, ...blocks]
     }
     blocksByRoom.value = reservationMap
 
@@ -717,6 +733,8 @@ async function onSaved() {
 }
 
 async function openDetail(item) {
+  // 사용 제한(회색) 블록은 회의가 아니므로 상세를 열지 않는다.
+  if (item?.isBlock) return
   detail.value = item
   detailFull.value = null
   detailRestricted.value = false
@@ -1104,6 +1122,16 @@ async function cancelReservation(meetingId) {
 
 .reservation-board-card.timeline-mode {
   width: 100%;
+}
+
+/* 관리자 시간대 차단(회색) 블록: 사용 불가 표시 + 칸 높이에 맞춰 세로 중앙 정렬(다른 블록과 통일) */
+.reservation-board-card :deep(.reservation-block) {
+  bottom: 8px;
+}
+.reservation-board-card :deep(.reservation-block.tone-unavailable) {
+  background: #94a3b8;
+  box-shadow: none;
+  cursor: default;
 }
 
 .reservation-board-head {

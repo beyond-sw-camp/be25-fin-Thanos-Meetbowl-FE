@@ -20,6 +20,12 @@ export default defineComponent({
   setup() {
     const auth = useAuthStore()
     const router = useRouter()
+    const quickLoginAccounts = [
+      { label: '한화시스템 조창희 프로님', loginId: 'testuser100', password: '12341234' },
+      { label: '한화시스템 임재철 프로님', loginId: 'testuser101', password: '12341234' },
+      { label: '문인수 강사님', loginId: 'testuser102', password: '12341234' },
+      { label: 'Admin', loginId: 'admin', password: '1234' },
+    ]
     const rememberedLoginId = readRememberedLoginId()
     const loginId = ref(rememberedLoginId)
     const password = ref('')
@@ -56,6 +62,13 @@ export default defineComponent({
       } finally {
         loading.value = false
       }
+    }
+
+    function applyQuickLogin(account) {
+      loginId.value = account.loginId
+      password.value = account.password
+      passwordVisible.value = false
+      error.value = ''
     }
 
     function openPasswordReset() {
@@ -127,6 +140,8 @@ export default defineComponent({
       rememberLoginId,
       error,
       loading,
+      quickLoginAccounts,
+      applyQuickLogin,
       submit,
       passwordResetOpen,
       passwordResetLoading,
@@ -182,6 +197,23 @@ export default defineComponent({
               <button class="login-input-action" type="button" aria-label="비밀번호 표시 전환" @click="passwordVisible = !passwordVisible"><Eye :size="18" /></button>
             </span>
           </label>
+          <section class="demo-box">
+            <div class="demo-box-copy">
+              <strong>심사위원 빠른 입력</strong>
+              <p>버튼을 누르면 로그인 정보가 자동으로 입력됩니다.</p>
+            </div>
+            <div class="demo-grid">
+              <button
+                v-for="account in quickLoginAccounts"
+                :key="account.loginId"
+                type="button"
+                @click="applyQuickLogin(account)"
+              >
+                <strong>{{ account.label }}</strong>
+                <small>{{ account.loginId }} / {{ account.password }}</small>
+              </button>
+            </div>
+          </section>
           <div class="login-form-actions">
             <label class="checkbox-field">
               <input v-model="rememberLoginId" type="checkbox">
