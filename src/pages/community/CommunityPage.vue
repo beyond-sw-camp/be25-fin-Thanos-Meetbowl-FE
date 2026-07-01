@@ -19,6 +19,7 @@ import {
 import AppSelect from '../../components/common/AppSelect.vue'
 import ActionButton from '../../components/common/ActionButton.vue'
 import MinutesEditor from '../../components/minutes/MinutesEditor.vue'
+import ConfirmDialog from '../../components/common/ConfirmDialog.vue'
 import {
   COMMUNITY_CATEGORIES,
   createComment,
@@ -42,6 +43,7 @@ export default defineComponent({
     AppSelect,
     ActionButton,
     MinutesEditor,
+    ConfirmDialog,
     ArrowLeft,
     Eye,
     Flame,
@@ -84,6 +86,8 @@ export default defineComponent({
     const draft = ref({ title: '', content: createEmptyRichContent(), category: '자유' })
     const editingPost = ref(false)
     const postDraft = ref({ title: '', content: '', category: '자유' })
+    // 게시글 삭제 확인 모달(네이티브 confirm 대신) 표시 여부
+    const postDeleteConfirmOpen = ref(false)
     const DRAFT_STORAGE_KEY = 'community-write-draft'
 
     function createEmptyRichContent() {
@@ -353,9 +357,19 @@ export default defineComponent({
       }
     }
 
-    async function removePost() {
+    // 삭제 버튼 → 확인 모달만 연다(실제 삭제는 confirmRemovePost).
+    function removePost() {
       if (!openPost.value) return
-      if (!window.confirm('이 게시글을 삭제하시겠습니까? 댓글·좋아요도 함께 삭제됩니다.')) return
+      postDeleteConfirmOpen.value = true
+    }
+
+    function cancelRemovePost() {
+      postDeleteConfirmOpen.value = false
+    }
+
+    async function confirmRemovePost() {
+      if (!openPost.value) return
+      postDeleteConfirmOpen.value = false
       actionError.value = ''
       try {
         await deletePost(openPost.value.id)
@@ -449,6 +463,9 @@ export default defineComponent({
       savePost,
       saveDraft,
       removePost,
+      postDeleteConfirmOpen,
+      cancelRemovePost,
+      confirmRemovePost,
       startEditPost,
       cancelEditPost,
       savePostEdit,
@@ -480,17 +497,18 @@ export default defineComponent({
               <input v-model="draft.title" placeholder="제목을 입력하세요">
             </label>
 
-            <label class="community-write-field">
+            <!-- 에디터는 label 로 감싸면 안 된다: label 클릭이 내부 첫 컨트롤(실행취소 버튼)로 전달돼 글이 지워지는 버그가 생김. -->
+            <div class="community-write-field">
               <span>내용</span>
               <MinutesEditor v-model="draft.content" />
-            </label>
+            </div>
 
             <p v-if="actionError" class="warning-text">{{ actionError }}</p>
             <p class="community-write-note">비방·인신공격 게시물은 관리자에 의해 삭제될 수 있습니다.</p>
 
             <div class="community-write-actions">
               <button type="button" class="ghost-button" @click="closeWritePage">취소</button>
-              <button type="submit" class="primary-button small">등록</button>
+              <button type="submit" class="primary-button">등록</button>
             </div>
           </form>
         </article>
@@ -737,6 +755,17 @@ export default defineComponent({
           </article>
         </aside>
       </div>
+
+      <ConfirmDialog
+        v-if="postDeleteConfirmOpen"
+        title="게시글 삭제"
+        message="이 게시글을 삭제하시겠습니까? 댓글·좋아요도 함께 삭제됩니다."
+        confirm-label="삭제"
+        cancel-label="취소"
+        tone="danger"
+        @cancel="cancelRemovePost"
+        @confirm="confirmRemovePost"
+      />
     </section>
   `,
 })
@@ -880,10 +909,11 @@ export default defineComponent({
   font-weight: 800;
 }
 
+/* 카테고리별로 배경색 */
 .community-category-자유 { background: #fff3ea; color: var(--primary-dark); }
 .community-category-회사생활 { background: #eef2ff; color: #4f46e5; }
-.community-category-취미 { background: #fff7ed; color: #ea580c; }
-.community-category-맛집 { background: #f5f3ff; color: #7c3aed; }
+.community-category-취미 { background: #ecfdf5; color: #059669; }
+.community-category-맛집 { background: #fdf2f8; color: #db2777; }
 .community-category-hot { background: #fff3ea; color: var(--primary-dark); }
 
 .community-controls {
@@ -1020,12 +1050,16 @@ export default defineComponent({
   color: #e11d48;
 }
 
+/* 내 글 칩 크기를 카테고리 칩 */
 .community-mine-tag {
-  padding: 4px 9px;
+  display: inline-flex;
+  align-items: center;
+  min-height: 26px;
+  padding: 0 10px;
   border-radius: 999px;
   background: #fff3ea;
   color: var(--primary-dark);
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 800;
 }
 
@@ -1418,6 +1452,12 @@ export default defineComponent({
 .community-write-form {
   display: grid;
   gap: 22px;
+}
+
+/* 글 수정 폼도 카테고리·제목·에디터 사이에 간격 */
+.community-edit-form {
+  display: grid;
+  gap: 8px;
 }
 
 .community-write-field {

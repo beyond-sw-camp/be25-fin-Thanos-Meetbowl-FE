@@ -150,7 +150,8 @@ async function saveAllPolicies() {
 
     applyMailPolicy(savedPolicy)
     pageUpdatedAt.value = new Date().toISOString()
-    mailSuccessMessage.value = '메일 보관 정책을 저장했습니다.'
+    mailSuccessMessage.value = '보관 정책을 저장했습니다.'
+    scheduleSuccessMessageClear()
     flashSavedState(retentionPolicySaved)
     flashSavedState(notificationPolicySaved)
   } catch (error) {
@@ -245,6 +246,16 @@ function flashSavedState(target) {
     target.value = false
   }, 1800)
 }
+
+// 저장 성공 안내를 10초 뒤 자동으로 감춘다. 연속 저장 시 이전 타이머를 취소해 중복 실행을 막는다.
+let successMessageTimer = null
+function scheduleSuccessMessageClear() {
+  if (successMessageTimer) window.clearTimeout(successMessageTimer)
+  successMessageTimer = window.setTimeout(() => {
+    mailSuccessMessage.value = ''
+    successMessageTimer = null
+  }, 10000)
+}
 </script>
 
 <template>
@@ -271,6 +282,9 @@ function flashSavedState(target) {
         </button>
       </div>
     </header>
+
+    <!-- 저장 성공 안내는 '전체 저장' 버튼(헤더) 바로 아래에서 즉시 보이도록 상단에 통합 배치한다. -->
+    <p v-if="mailSuccessMessage" class="settings-success policy-save-success">{{ mailSuccessMessage }}</p>
 
     <article class="card policy-summary-card">
       <div class="policy-overview-grid">
@@ -351,8 +365,6 @@ function flashSavedState(target) {
             </div>
           </section>
 
-          <p v-if="retentionPolicySaved" class="settings-success">정책을 저장했습니다.</p>
-          <p v-if="notificationPolicySaved" class="settings-success">정책을 저장했습니다.</p>
         </div>
       </article>
 
@@ -452,7 +464,6 @@ function flashSavedState(target) {
             </section>
           </div>
 
-          <p v-if="mailSuccessMessage" class="settings-success">{{ mailSuccessMessage }}</p>
           <div v-if="mailSaveErrorMessage" class="error-box mail-policy-submit-error">{{ mailSaveErrorMessage }}</div>
         </template>
       </article>
@@ -465,6 +476,29 @@ function flashSavedState(target) {
   display: grid;
   gap: 22px;
   background: #fff;
+}
+
+/*
+ * 정책 저장 성공 안내를 초록 칩(알약)으로 강조한다. 기존엔 초록 텍스트만이라 눈에 안 띄었다.
+ * 전역 .settings-success 가 color/font-size/margin 에 !important 를 걸어둬서 그 항목만 !important 로 덮는다.
+ * (scoped 라 이 페이지 성공 메시지에만 적용)
+ */
+.settings-success {
+  display: inline-flex;
+  align-items: center;
+  justify-self: start; /* grid 자식일 때 가로로 늘어나지 않고 내용 폭만큼만 */
+  border-radius: 999px;
+  padding: 6px 14px;
+  border: 1px solid #bbf7d0;
+  background: #ecfdf5;
+  font-size: 13px !important;
+  font-weight: 700;
+  margin: 12px 0 0 !important;
+}
+
+/* 저장 성공 안내를 '전체 저장' 버튼(우측 상단) 아래, 오른쪽에 맞춰 표시한다. */
+.policy-save-success {
+  justify-self: end;
 }
 
 .settings-page > .page-header {
