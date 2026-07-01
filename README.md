@@ -103,9 +103,10 @@
 
 
 ## 7. 데이터베이스 설계 (ERD)
-[ERD](https://www.erdcloud.com/d/yXrcCrnYFdM2P8q6b)
+[ERD]([https://www.erdcloud.com/d/yXrcCrnYFdM2P8q6b])
 
-<img width="1930" height="1330" alt="meetbowl" src="https://github.com/user-attachments/assets/66637be3-f064-4db5-a451-05c959c69a12" />
+<img width="6000" height="3832" alt="meetbowl final" src="https://github.com/user-attachments/assets/4ae83333-e434-423f-b4ac-1e8e7c2ed2c2" />
+
 
 <br>
 
@@ -120,7 +121,7 @@
 <br>
 
 ## 10. API 명세서
-[API 명세서](https://playdatacademy.notion.site/372d943bcac2801c9be8e3fdbe38b6b4?v=372d943bcac2805d92ec000cfbed638d&source=copy_link)
+[API 명세서](https://0w10wfx2jn.apidog.io/)
 <br>
 
 
@@ -152,7 +153,7 @@
 |   조원 이름	| 회고  	 |
 |---	|-------|
 |   이진   | |
-|   김지연   | |
+|   김지연   |   이번 프로젝트는 교육 과정에서 진행한 마지막 프로젝트였기 때문에 더욱 의미 있게 느껴졌습니다. 그동안 배운 내용을 실제로 적용해 볼 수 있었고, 기획부터 구현, 수정, 마무리까지 직접 경험하면서 하나의 서비스를 완성하는 과정이 쉽지 않다는 것을 알게 되었습니다. 예상하지 못한 오류도 있었지만, 문제를 해결해 나가면서 개발에 대한 이해도와 문제 해결 능력을 키울 수 있었습니다.<br> 마지막 프로젝트였던 만큼 아쉬움도 많이 남습니다. 시간이 더 있었다면 기능을 더 추가하거나 화면을 더 깔끔하게 다듬고, 코드 구조도 더 정리해 보고 싶었습니다. 하지만 제한된 시간 안에서 끝까지 프로젝트를 완성하며 많은 것을 배울 수 있었고, 이번 경험은 그동안의 성장을 확인할 수 있었던 뜻깊은 시간이었습니다. |
 |   윤정윤   | |
 |   이다윗   | |
 |   이서윤 	 | |
