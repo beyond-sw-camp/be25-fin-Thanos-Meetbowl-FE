@@ -33,10 +33,17 @@
             <button class="room-nav-button" type="button" aria-label="이전 날짜" @click="shiftDay(-1)">
               <ChevronLeft :size="18" />
             </button>
-            <button class="room-date-pill" type="button">
+            <button class="room-date-pill" type="button" @click="openDatePicker">
               <Calendar :size="18" />
               <span>{{ displayDateLabel }}</span>
             </button>
+            <input
+              ref="dateInput"
+              class="visually-hidden-date-input"
+              type="date"
+              :value="date"
+              @input="onDatePicked"
+            >
             <button class="room-nav-button" type="button" aria-label="다음 날짜" @click="shiftDay(1)">
               <ChevronRight :size="18" />
             </button>
@@ -378,6 +385,7 @@ const modal = ref(false)
 const detail = ref(null)
 const detailFull = ref(null)
 const detailRestricted = ref(false)
+const dateInput = ref(null)
 const pendingRoomId = ref('')
 const pendingStart = ref('09:00')
 const pendingEnd = ref('')
@@ -713,6 +721,20 @@ function shiftDay(delta) {
   date.value = shiftDateKst(date.value, delta)
 }
 
+function openDatePicker() {
+  if (typeof dateInput.value?.showPicker === 'function') {
+    dateInput.value.showPicker()
+    return
+  }
+  dateInput.value?.click()
+}
+
+function onDatePicked(event) {
+  const nextDate = String(event?.target?.value || '')
+  if (!nextDate) return
+  date.value = nextDate
+}
+
 function openCreate(roomId, start = '09:00') {
   pendingRoomId.value = roomId || activeRoomId.value
   pendingStart.value = start
@@ -809,6 +831,14 @@ async function cancelReservation(meetingId) {
 
 .reservation-board-header {
   margin-bottom: 10px;
+}
+
+.visually-hidden-date-input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+  pointer-events: none;
 }
 
 .reservation-toolbar-card {

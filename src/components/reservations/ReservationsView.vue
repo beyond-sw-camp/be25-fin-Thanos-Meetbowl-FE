@@ -54,7 +54,12 @@
             </tr>
           </thead>
           <tbody>
-            <tr v-for="item in displayedMeetings" :key="item.meetingId" :class="{ inactive: isInactive(item) }">
+            <tr
+              v-for="item in pagedMeetings"
+              :key="item.meetingId"
+              :class="{ inactive: isInactive(item), clickable: canOpenDetail(item) }"
+              @click="openDetail(item)"
+            >
               <td>{{ item.title }}</td>
               <td>{{ item.date }}</td>
               <td>{{ item.start }} ~ {{ item.end }}</td>
@@ -62,8 +67,8 @@
               <td><span :class="['badge', statusMeta(item.status).tone]">{{ statusMeta(item.status).label }}</span></td>
               <td v-if="allowCancel">
                 <template v-if="item.mine">
-                  <button class="icon-text" type="button" :disabled="!canEdit(item) || saving" @click="openEdit(item)">수정</button>
-                  <button class="icon-text danger" type="button" :disabled="!canCancel(item) || saving" @click="cancel(item)">예약 취소</button>
+                  <button class="icon-text" type="button" :disabled="!canEdit(item) || saving" @click.stop="openEdit(item)">수정</button>
+                  <button class="icon-text danger" type="button" :disabled="!canCancel(item) || saving" @click.stop="cancel(item)">예약 취소</button>
                 </template>
                 <span v-else class="muted-text">-</span>
               </td>
@@ -74,6 +79,8 @@
           </tbody>
         </table>
       </div>
+
+      <Pagination v-if="allowCancel" v-model="pageNo" :total-pages="totalPages" />
     </template>
 
     <ReservationModal
@@ -84,17 +91,67 @@
       @close="editTarget = null"
       @saved="onEditSaved"
     />
+    <ModalShell v-if="detailTarget" modal-class="detail-modal" @close="closeDetail">
+      <header>
+        <div><h2>{{ detailTarget.title }}</h2></div>
+        <button class="modal-close" type="button" aria-label="닫기" @click="closeDetail">×</button>
+      </header>
+      <div class="detail-body">
+        <dl class="detail-list">
+          <div><dt>날짜</dt><dd>{{ detailTarget.date }}</dd></div>
+          <div><dt>시간</dt><dd>{{ detailTarget.start }} ~ {{ detailTarget.end }}</dd></div>
+          <div><dt>회의실</dt><dd>{{ detailTarget.roomName }}</dd></div>
+          <div><dt>예약자</dt><dd>{{ detailHostName }}</dd></div>
+          <div>
+            <dt>참석자</dt>
+            <dd v-if="detailAttendees.length" class="detail-chip-group">
+              <span v-for="name in detailAttendees" :key="name" class="detail-chip">{{ name }}</span>
+            </dd>
+            <dd v-else>-</dd>
+          </div>
+          <div><dt>회의 내용</dt><dd>{{ detailDescription }}</dd></div>
+          <div><dt>상태</dt><dd><span :class="['badge', statusMeta(detailTarget.status).tone]">{{ statusMeta(detailTarget.status).label }}</span></dd></div>
+        </dl>
+        <p v-if="detailError" class="warning-text">{{ detailError }}</p>
+      </div>
+      <div class="modal-actions">
+        <button
+          v-if="allowCancel && detailTarget.mine"
+          class="danger-button"
+          type="button"
+          :disabled="saving || !canCancel(detailTarget)"
+          @click="cancel(detailTarget)"
+        >
+          예약 취소
+        </button>
+        <button
+          v-if="allowCancel && detailTarget.mine"
+          class="secondary-button"
+          type="button"
+          :disabled="!canEdit(detailTarget)"
+          @click="openEditFromDetail"
+        >
+          수정
+        </button>
+        <button class="primary-button" type="button" :disabled="isInactive(detailTarget)" @click="enterMeeting">
+          회의 입장
+        </button>
+      </div>
+    </ModalShell>
     <ConfirmDialog v-if="confirmDialog" v-bind="confirmDialog" @cancel="cancelConfirm" @confirm="acceptConfirm" />
   </section>
 </template>
 
 <script setup>
-import { computed, onMounted, ref } from 'vue'
+import { computed, nextTick, onMounted, ref, watch } from 'vue'
 import { CalendarCheck2, CalendarDays, CalendarRange } from '@lucide/vue'
 import { useAuthStore } from '../../stores/auth'
 import ReservationModal from '../rooms/ReservationModal.vue'
 import ConfirmDialog from '../common/ConfirmDialog.vue'
-import { cancelMeeting, getMeetings, getRooms } from '../../lib/reservations'
+import ModalShell from '../common/ModalShell.vue'
+import Pagination from '../common/Pagination.vue'
+import { cancelMeeting, getMeeting, getMeetings, getRooms } from '../../lib/reservations'
+import { openMeetingWindow } from '../../lib/meeting-route'
 import { compareByDistanceTo, shiftDateKst, todayKst, utcToKstClock, utcToKstDate } from '../../utils/dateTime'
 import { useConfirmDialog } from '../../composables/useConfirmDialog'
 
@@ -123,7 +180,12 @@ const saving = ref(false)
 const rooms = ref([])
 const meetings = ref([])
 const activeTab = ref('all')
+const pageNo = ref(1)
+const pageSize = 10
 const editTarget = ref(null)
+const detailTarget = ref(null)
+const detailFull = ref(null)
+const detailError = ref('')
 
 const tabs = [
   { key: 'all', label: '전체' },
@@ -160,6 +222,8 @@ const displayedMeetings = computed(() => {
     ? upcomingMeetings.value
     : upcomingMeetings.value.filter((meeting) => inPeriod(meeting, activeTab.value))
 })
+const totalPages = computed(() => Math.max(1, Math.ceil(displayedMeetings.value.length / pageSize)))
+const pagedMeetings = computed(() => displayedMeetings.value.slice((pageNo.value - 1) * pageSize, pageNo.value * pageSize))
 const countAll = computed(() => activeUpcomingMeetings.value.length)
 const countWeek = computed(() => activeUpcomingMeetings.value.filter((meeting) => inPeriod(meeting, 'week')).length)
 const countMonth = computed(() => activeUpcomingMeetings.value.filter((meeting) => inPeriod(meeting, 'month')).length)
@@ -170,6 +234,16 @@ const countCards = computed(() => [
 ])
 
 onMounted(load)
+
+watch(activeTab, () => {
+  pageNo.value = 1
+})
+
+watch(totalPages, (nextTotalPages) => {
+  if (pageNo.value > nextTotalPages) {
+    pageNo.value = nextTotalPages
+  }
+})
 
 async function load() {
   loading.value = true
@@ -230,7 +304,38 @@ function openEdit(meeting) {
 }
 async function onEditSaved() {
   editTarget.value = null
+  closeDetail()
   await load()
+}
+
+function canOpenDetail(meeting) {
+  return Boolean(meeting?.meetingId)
+}
+
+async function openDetail(meeting) {
+  if (!canOpenDetail(meeting) || saving.value) return
+  detailTarget.value = meeting
+  detailFull.value = null
+  detailError.value = ''
+  try {
+    detailFull.value = await getMeeting(meeting.meetingId)
+  } catch (error) {
+    detailError.value = error?.message || '회의 상세를 불러오지 못했습니다.'
+  }
+}
+
+function closeDetail() {
+  detailTarget.value = null
+  detailFull.value = null
+  detailError.value = ''
+}
+
+async function openEditFromDetail() {
+  if (!detailTarget.value) return
+  const target = detailTarget.value
+  closeDetail()
+  await nextTick()
+  openEdit(target)
 }
 
 async function cancel(meeting) {
@@ -246,6 +351,7 @@ async function cancel(meeting) {
   actionError.value = ''
   try {
     await cancelMeeting(meeting.meetingId)
+    closeDetail()
     await load()
   } catch (error) {
     if (error?.status === 403) {
@@ -257,6 +363,25 @@ async function cancel(meeting) {
     saving.value = false
   }
 }
+
+function enterMeeting() {
+  if (!detailTarget.value || isInactive(detailTarget.value)) return
+  openMeetingWindow(detailTarget.value.meetingId, {
+    scheduledAt: detailTarget.value.scheduledAt,
+    title: detailTarget.value.title,
+  })
+}
+
+const detailHostName = computed(() => {
+  if (detailFull.value?.hostUserName) return detailFull.value.hostUserName
+  return detailTarget.value?.mine ? '나' : '-'
+})
+
+const detailAttendees = computed(() =>
+  (detailFull.value?.attendees || []).map((attendee) => attendee.userName || attendee.name || '이름 미확인'),
+)
+
+const detailDescription = computed(() => detailFull.value?.description || '-')
 
 // 기간 필터/집계 — KST(UTC+9, 월요일 시작) 기준 경계를 UTC 인스턴트로 만들어 비교한다.
 function kstStart(dateStr) {
@@ -349,6 +474,9 @@ function inPeriod(meeting, period) {
 }
 .feedback-card {
   margin-bottom: 16px;
+}
+.clickable {
+  cursor: pointer;
 }
 /* 취소·종료된 예약은 회색으로 구분 */
 .inactive {
