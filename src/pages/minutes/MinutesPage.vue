@@ -317,12 +317,6 @@ function replaceListItem(next) {
   minuteItems.value = minuteItems.value.map((minute) => minute.meetingId === next.meetingId ? { ...minute, ...next } : minute)
 }
 
-function buildMinutesLink(meetingId) {
-  if (!meetingId) return ''
-  if (typeof window === 'undefined') return `/app/minutes/${meetingId}`
-  return `${window.location.origin}/app/minutes/${meetingId}`
-}
-
 function buildMinutesShareBody(minute) {
   return buildMinutesShareDocument({
     title: minute?.title,

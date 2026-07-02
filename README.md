@@ -121,7 +121,9 @@
 <br>
 
 ## 10. API 명세서
-[API 명세서](https://0w10wfx2jn.apidog.io/)
+[API 명세서(전체)](https://0w10wfx2jn.apidog.io/)
+<br>
+[API 명세서(주요 기능)](https://app.notion.com/p/playdatacademy/Meetbowl_-_API-38fd943bcac280e9ada2fbb40d676046)
 <br>
 
 

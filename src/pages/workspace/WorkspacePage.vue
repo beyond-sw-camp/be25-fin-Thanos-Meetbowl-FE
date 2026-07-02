@@ -1208,12 +1208,6 @@ function compactText(value) {
   return String(value || '').replace(/\s+/g, ' ').trim()
 }
 
-function buildMinutesLink(meetingId) {
-  if (!meetingId) return ''
-  if (typeof window === 'undefined') return `/app/minutes/${meetingId}`
-  return `${window.location.origin}/app/minutes/${meetingId}`
-}
-
 function buildMinutesShareBody(minute) {
   return buildMinutesShareDocument({
     title: minute?.title,
