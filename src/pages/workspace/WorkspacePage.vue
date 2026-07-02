@@ -134,8 +134,8 @@
         <RouterLink :to="'/app/backup/' + backup.backupId">
           <span class="workspace-file-icon mail"><Mail :size="17" /></span>
           <span>
-          <strong>{{ backup.title }}</strong>
-            <small>{{ backup.sourceType }} · {{ displayDate(backup.backedUpAt) }} · {{ compactText(backup.summary) }}</small>
+          <strong>{{ backup.title || '(제목 없음)' }}</strong>
+            <small>{{ displayDate(backup.backedUpAt) }}</small>
           </span>
         </RouterLink>
         <button type="button" class="workspace-backup-release" @click="releaseBackup(backup)">해제</button>
@@ -813,8 +813,13 @@ async function removeFavoriteMinute(minuteId) {
     confirmLabel: '즐겨찾기 해제',
   })
   if (!confirmed) return
-  await removeMinutesFavorite(minuteId)
-  minuteItems.value = minuteItems.value.map((minute) => minute.id === minuteId ? { ...minute, favorite: false } : minute)
+  try {
+    await removeMinutesFavorite(minuteId)
+    minuteItems.value = minuteItems.value.map((minute) => minute.id === minuteId ? { ...minute, favorite: false } : minute)
+  } catch (error) {
+    // 서버 해제가 실패하면 목록을 그대로 두고 사유를 알린다. 조용히 성공한 척하면 새로고침 시 다시 나타나 혼란을 준다.
+    showToast('즐겨찾기 해제 실패', error?.message || '회의록 즐겨찾기를 해제하지 못했습니다.')
+  }
 }
 
 async function toggleWorkspaceMinuteFavorite(minuteId) {
@@ -825,8 +830,13 @@ async function toggleWorkspaceMinuteFavorite(minuteId) {
   try {
     if (next) await addMinutesFavorite(minuteId)
     else await removeMinutesFavorite(minuteId)
-  } catch {
+  } catch (error) {
+    // 낙관적 갱신을 되돌리되, 실패를 조용히 묻지 않고 알려 "해제했는데 그대로 남는" 오인을 막는다.
     replaceWorkspaceMinuteItem({ ...item, favorite: !next })
+    showToast(
+      next ? '즐겨찾기 추가 실패' : '즐겨찾기 해제 실패',
+      error?.message || '회의록 즐겨찾기 상태를 변경하지 못했습니다.',
+    )
   }
 }
 

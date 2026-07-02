@@ -59,12 +59,14 @@
           </ActionButton>
           <div v-if="selected.size > 0" class="mail-selection-actions">
             <span class="mail-selection-summary">선택 {{ selected.size }}건</span>
-            <AppSelect v-model="bulkAction" size="md" class="mail-action-select" @change="applyBulkAction">
-              <option value="">작업 선택</option>
-              <option value="mark-read">읽음 처리</option>
-              <option value="backup">백업하기</option>
-              <option :value="tab === 'trash' ? 'permanent-delete' : 'delete'">{{ tab === 'trash' ? '영구 삭제' : '삭제' }}</option>
-            </AppSelect>
+            <ActionButton variant="secondary" @click="backupSelectedAction">
+              <Archive :size="15" />
+              백업하기
+            </ActionButton>
+            <ActionButton variant="secondary" @click="deleteSelected">
+              <Trash2 :size="15" />
+              {{ tab === 'trash' ? '영구 삭제' : '삭제' }}
+            </ActionButton>
           </div>
         </div>
       </div>
@@ -242,7 +244,6 @@ const pageNo = ref(1)
 const totalPages = ref(1)
 const totalElements = ref(0)
 const selected = ref(new Set())
-const bulkAction = ref('')
 const loading = ref(false)
 const errorMessage = ref('')
 const toasts = ref([])
@@ -295,7 +296,6 @@ async function loadMails() {
   loading.value = true
   errorMessage.value = ''
   selected.value = new Set()
-  bulkAction.value = ''
   try {
     const data = q.value.trim()
       ? await searchMails(q.value.trim(), { page: pageNo.value, size: pageSize.value })
@@ -424,26 +424,9 @@ function toggleSortDirection() {
   sort.value = sort.value === 'latest' ? 'oldest' : 'latest'
 }
 
-async function applyBulkAction() {
-  if (!bulkAction.value || selected.value.size === 0) {
-    bulkAction.value = ''
-    return
-  }
-
-  if (bulkAction.value === 'mark-read') {
-    await Promise.all([...selected.value].map((id) => changeMailRead(id, true)))
-    showToast('읽음 처리 완료', `${selected.value.size}개의 메일을 읽음 처리했어요.`)
-  }
-
-  if (bulkAction.value === 'backup') {
-    await backupSelected()
-  }
-
-  if (bulkAction.value === 'delete' || bulkAction.value === 'permanent-delete') {
-    await deleteSelected()
-  }
-
-  bulkAction.value = ''
+async function backupSelectedAction() {
+  if (selected.value.size === 0) return
+  await backupSelected()
   await refreshMailboxCounts()
   await loadMails()
 }
@@ -796,10 +779,6 @@ function dismissToast(id) {
   outline: none;
   border-color: rgba(243, 115, 33, 0.5);
   box-shadow: 0 0 0 3px rgba(243, 115, 33, 0.12);
-}
-
-.mail-action-select {
-  width: 158px;
 }
 
 .mail-error-box {

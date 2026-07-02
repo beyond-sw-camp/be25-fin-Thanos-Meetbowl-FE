@@ -296,7 +296,7 @@
                 <small>{{ member.department || member.team || '부서 미지정' }} · {{ member.email || member.userId }}</small>
               </span>
               <em>{{ member.role }}</em>
-              <button type="button" class="danger-text" @click="removeMember(member.userId)">삭제</button>
+              <button type="button" class="shared-member-remove" @click="removeMember(member.userId)"><UserMinus :size="14" /> 삭제</button>
             </div>
           </div>
           <label class="shared-audience-toggle">
@@ -335,7 +335,7 @@
 
 <script setup>
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
-import { Download, FileSpreadsheet, FileText, FileType2, FolderKanban, Info, MoreHorizontal, Plus, Search, Trash2, Upload, X } from '@lucide/vue'
+import { Download, FileSpreadsheet, FileText, FileType2, FolderKanban, Info, MoreHorizontal, Plus, Search, Trash2, Upload, UserMinus, X } from '@lucide/vue'
 import ActionButton from '../../components/common/ActionButton.vue'
 import ConfirmDialog from '../../components/common/ConfirmDialog.vue'
 import AppToastStack from '../../components/common/AppToastStack.vue'
