@@ -489,9 +489,9 @@ function formatDateRangeSummary(value) {
 }
 
 function formatChangeTitle(change) {
-  const before = change?.before ?? '-'
-  const after = change?.after ?? '-'
-  return `${change?.label || '변경 항목'}: ${before} → ${after}`
+  // 변경 항목의 표시 문자열은 change.text 에 '이전 → 이후' 형태로 들어온다(before/after 필드는 없음).
+  const text = change?.text ?? '-'
+  return `${change?.label || '변경 항목'}: ${text}`
 }
 </script>
 
@@ -667,7 +667,7 @@ function formatChangeTitle(change) {
                   <ul v-if="changeSummary.length" class="change-summary-list prominent">
                     <li v-for="change in changeSummary" :key="change.key" :title="formatChangeTitle(change)">
                       <strong>{{ change.label }}</strong>
-                      <span>{{ change.before }} → {{ change.after }}</span>
+                      <span>{{ change.text }}</span>
                     </li>
                   </ul>
                   <p v-else class="empty-change-text">표시할 작업 내용이 없습니다.</p>

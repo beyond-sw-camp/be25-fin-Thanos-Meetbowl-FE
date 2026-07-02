@@ -928,7 +928,7 @@ function formatActionError(error, fallbackMessage) {
               <dl class="directory-detail-modal__info-card directory-detail-modal__info-card--two">
                 <div class="directory-detail-modal__cell">
                   <dt>등록일</dt>
-                  <dd>{{ formatDisplayDate(selectedUser.activeFrom) }}</dd>
+                  <dd>{{ formatDisplayDate(selectedUser.createdAt) }}</dd>
                 </div>
                 <div class="directory-detail-modal__cell">
                   <dt>활성 시작일</dt>
@@ -996,7 +996,9 @@ function formatActionError(error, fallbackMessage) {
               권한
               <AppSelect v-model="editForm.role">
                 <option value="USER">USER</option>
-                <option value="ADMIN">ADMIN</option>
+                <!-- ADMIN 권한은 추가·수정 모달 어디서도 옵션으로 노출하지 않는다(UI로 admin 부여/변경 불가). -->
+                <!-- 이미 ADMIN인 사용자를 수정할 때는 select를 건드리지 않으면 기존 권한(ADMIN)이 그대로 저장된다. -->
+
               </AppSelect>
             </label>
             <label>
@@ -1281,6 +1283,23 @@ function formatActionError(error, fallbackMessage) {
   margin-bottom: 12px;
 }
 
+/*
+ * 수정/삭제 성공 안내를 칩(알약) 형태로 강조한다. 기존엔 초록 텍스트만이라 눈에 안 띄었다.
+ * 성공 메시지에만 적용되도록 .settings-success 를 함께 지정(에러 박스 .error-box 는 제외).
+ * 전역 .settings-success 가 color/font-size/margin 에 !important 를 걸어둬서 그 항목만 !important 로 덮는다.
+ */
+.settings-success.directory-feedback {
+  display: inline-flex;
+  align-items: center;
+  border-radius: 999px;
+  padding: 6px 14px;
+  border: 1px solid #bbf7d0;
+  background: #ecfdf5;
+  font-size: 13px !important;
+  font-weight: 700;
+  margin: 0 0 12px !important;
+}
+
 .directory-table :deep(table) {
   min-width: 1120px;
 }
@@ -1325,9 +1344,24 @@ function formatActionError(error, fallbackMessage) {
   line-height: 1.6;
 }
 
+/* 삭제 대상 유저 이름을 칩(알약) 형태로 강조해 한눈에 보이게 한다. grid 항목이라 justify-self로 내용만큼만 차지. */
 .delete-confirm-target {
-  color: var(--muted-foreground);
-  font-size: 13px;
+  justify-self: start;
+  display: inline-flex;
+  align-items: center;
+  border-radius: 999px;
+  padding: 6px 14px;
+  border: 1px solid #fecaca;
+  background: #fef2f2;
+  color: var(--danger);
+  font-size: 14px;
+  font-weight: 700;
+}
+
+/* 취소·회원 삭제 버튼이 붙어 보여서 간격을 준다. gap은 flex 컨테이너에서만 먹으므로 display:flex를 함께 지정. */
+.delete-confirm-modal .modal-actions {
+  display: flex;
+  gap: 12px;
 }
 
 .admin-modal {
