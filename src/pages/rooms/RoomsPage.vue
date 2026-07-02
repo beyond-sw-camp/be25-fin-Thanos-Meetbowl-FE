@@ -212,7 +212,7 @@
 
           <div v-else class="reservation-list-shell">
             <div class="reservation-list-content">
-              <table v-if="pagedListItems.length" class="reservation-list-table">
+              <table class="reservation-list-table">
                 <thead>
                   <tr>
                     <th>회의명</th>
@@ -224,7 +224,11 @@
                   </tr>
                 </thead>
                 <tbody>
-                  <tr v-for="item in pagedListItems" :key="item.meetingId" @click="openDetail(item)">
+                  <tr
+                    v-for="item in pagedListItems"
+                    :key="item.meetingId"
+                    @click="openDetail(item)"
+                  >
                     <td>{{ item.title }}</td>
                     <td>{{ item.roomName }}</td>
                     <td>{{ item.start }} - {{ item.end }}</td>
@@ -236,12 +240,11 @@
                     </td>
                     <td>{{ item.bookerName }}</td>
                   </tr>
+                  <tr v-if="!pagedListItems.length">
+                    <td colspan="6" class="empty-state-inline reservation-list-empty-cell">표시할 예약이 없습니다.</td>
+                  </tr>
                 </tbody>
               </table>
-
-              <div v-else class="reservation-list-empty">
-                <p>표시할 예약이 없습니다.</p>
-              </div>
             </div>
 
             <div class="reservation-list-footer">
@@ -368,6 +371,7 @@ const saving = ref(false)
 const rooms = ref([])
 const blocksByRoom = ref({})
 const meetings = ref([])
+const reservationItems = ref([])
 
 const date = ref(todayKst())
 const viewMode = ref('timeline')
@@ -472,10 +476,11 @@ const filteredBlocksByRoom = computed(() => {
 })
 
 const listItems = computed(() =>
-  meetings.value
+  reservationItems.value
     .filter((meeting) => {
       const room = roomMap.value[meeting.roomId]
       if (!room || !roomMatchesFilters(room)) return false
+      if (selectedRoomId.value && meeting.roomId !== selectedRoomId.value) return false
       const keyword = normalizeKeyword(globalSearch.value)
       if (!keyword) return true
       return meetingMatchesKeyword(meeting, keyword) || roomMatchesKeyword(room, keyword)
@@ -571,6 +576,9 @@ watch([globalSearch, buildingFilter, capacityFilter, pageSize], () => {
   currentPage.value = 1
   timelineCurrentPage.value = 1
 })
+watch(selectedRoomId, () => {
+  currentPage.value = 1
+})
 watch(boardRooms, (nextRooms) => {
   const nextPageCount = Math.max(1, Math.ceil(nextRooms.length / timelinePageSize))
   if (timelineCurrentPage.value > nextPageCount) {
@@ -599,13 +607,16 @@ async function loadDayData() {
       getRoomReservations({ from, to }),
       getMeetings({ role: 'all', from, to }),
     ])
+    const meetingMap = new Map((meetingData || []).map((meeting) => [meeting.meetingId, meeting]))
 
     const hostIds = []
     const reservationMap = {}
+    const flatReservations = []
     for (const room of reservationData || []) {
       const reservations = (room.reservations || []).map((reservation) => {
         hostIds.push(reservation.hostUserId)
-        return {
+        const meeting = meetingMap.get(reservation.meetingId)
+        const item = {
           meetingId: reservation.meetingId,
           roomId: room.roomId,
           title: reservation.title,
@@ -613,10 +624,14 @@ async function loadDayData() {
           scheduledEndAt: reservation.scheduledEndAt,
           start: utcToKstClock(reservation.scheduledAt),
           end: utcToKstClock(reservation.scheduledEndAt),
+          startMs: new Date(reservation.scheduledAt).getTime(),
           hostUserId: reservation.hostUserId,
           mine: reservation.hostUserId === myUserId.value,
           roomName: room.name,
+          attendeeCount: Array.isArray(meeting?.attendees) ? meeting.attendees.length : 0,
         }
+        flatReservations.push(item)
+        return item
       })
 
       // 관리자가 막아둔 시간대 차단을 회색(사용 불가) 블록으로 표시한다.
@@ -636,6 +651,7 @@ async function loadDayData() {
       reservationMap[room.roomId] = [...reservations, ...blocks]
     }
     blocksByRoom.value = reservationMap
+    reservationItems.value = flatReservations.sort((a, b) => a.startMs - b.startMs)
 
     meetings.value = (meetingData || [])
       .filter((meeting) => meeting.meetingRoomId)
