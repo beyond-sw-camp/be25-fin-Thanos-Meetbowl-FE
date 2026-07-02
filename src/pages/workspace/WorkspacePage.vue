@@ -521,9 +521,12 @@ const selectedWorkspaceMinute = computed(() => {
   const detail = workspaceMinuteDetailByMeetingId.value[selectedWorkspaceMinuteListItem.value.meetingId]
   return normalizeWorkspaceMinute(detail || selectedWorkspaceMinuteListItem.value)
 })
+const selectedWorkspaceMinuteStatus = computed(() => normalizeStatus(selectedWorkspaceMinute.value?.rawStatus))
 const canEditWorkspaceMinute = computed(() => false)
 const canApproveWorkspaceMinute = computed(() => false)
-const canShareWorkspaceMinute = computed(() => false)
+const canShareWorkspaceMinute = computed(() => Boolean(
+  selectedWorkspaceMinute.value && ['APPROVED', 'SHARED'].includes(selectedWorkspaceMinuteStatus.value),
+))
 
 watch(cursor, loadCalendar)
 watch(memoKeyword, () => { memoPage.value = 1 })
@@ -1014,7 +1017,7 @@ async function sendWorkspaceMinuteShare() {
     }
     replaceWorkspaceMinuteItem(normalizeWorkspaceMinute(shared))
     workspaceShareOpen.value = false
-    showToast('회의록 공유 완료', selectedWorkspaceMinute.value.title)
+    showToast('회의록 공유 완료', `${recipientUserIds.length}명에게 내부 메일을 보냈습니다.`)
   } catch (error) {
     workspaceShare.value.error = error?.message || '회의록 공유 메일 발송에 실패했습니다.'
   } finally {
@@ -1235,7 +1238,7 @@ function normalizeWorkspaceMinute(raw) {
     content: raw.content || '',
     reviewer: raw.reviewerName || raw.reviewerDepartment || '-',
     reviewerDepartment: raw.reviewerDepartment || '',
-    rawStatus: raw.status,
+    rawStatus: normalizeStatus(raw.status),
     statusLabel: statusLabel(raw.status),
     approvedAt: raw.approvedAt || null,
     favorite: Boolean(raw.favorite),
@@ -1247,13 +1250,18 @@ function replaceWorkspaceMinuteItem(next) {
 }
 
 function statusLabel(status) {
+  const normalized = normalizeStatus(status)
   return {
     DRAFT: '초안',
     IN_REVIEW: '검토중',
     APPROVED: '승인됨',
     SHARED: '공유됨',
     DELETION_SCHEDULED: '삭제 예정',
-  }[status] || status || '-'
+  }[normalized] || status || '-'
+}
+
+function normalizeStatus(status) {
+  return String(status || '').trim().toUpperCase()
 }
 
 function formatDate(value) {
