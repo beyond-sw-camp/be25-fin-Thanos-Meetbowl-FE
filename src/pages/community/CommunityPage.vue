@@ -198,6 +198,18 @@ export default defineComponent({
       loadPosts()
     })
 
+    watch(
+      () => route.query.postId,
+      async (postId) => {
+        if (!postId) {
+          if (openPost.value) closeDetailState()
+          return
+        }
+        await openPostDetailById(String(postId))
+      },
+      { immediate: true },
+    )
+
     onMounted(() => {
       syncKeywordFromRoute()
       loadPosts()
@@ -211,18 +223,49 @@ export default defineComponent({
         openPost.value = { ...detail, comments }
         commentText.value = ''
         editingCommentId.value = null
+        router.push({
+          path: '/app/community',
+          query: {
+            ...(route.query.q ? { q: route.query.q } : {}),
+            postId: post.id,
+          },
+        })
       } catch (err) {
         actionError.value = err?.message || '게시글을 불러오지 못했습니다.'
       }
     }
 
     function closeDetail() {
+      if (route.query.postId) {
+        router.push({
+          path: '/app/community',
+          query: route.query.q ? { q: route.query.q } : {},
+        })
+        return
+      }
+      closeDetailState()
+    }
+
+    function closeDetailState() {
       openPost.value = null
       commentText.value = ''
       editingCommentId.value = null
       editingPost.value = false
       actionError.value = ''
       loadPosts()
+    }
+
+    async function openPostDetailById(postId) {
+      if (!postId || openPost.value?.id === postId) return
+      actionError.value = ''
+      try {
+        const [detail, comments] = await Promise.all([getPost(postId), listComments(postId)])
+        openPost.value = { ...detail, comments }
+        commentText.value = ''
+        editingCommentId.value = null
+      } catch (err) {
+        actionError.value = err?.message || '게시글을 불러오지 못했습니다.'
+      }
     }
 
     async function toggleLike(post) {
