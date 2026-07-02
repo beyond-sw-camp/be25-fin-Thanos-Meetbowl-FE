@@ -2,8 +2,10 @@
 import { computed, onMounted, ref } from 'vue'
 import { CalendarCheck2, FileText, LockKeyhole, Sparkles, User } from '@lucide/vue'
 import AdminAuditLogItem from '../../components/admin/AdminAuditLogItem.vue'
+import AdminAuditLogDetailModal from '../../components/admin/AdminAuditLogDetailModal.vue'
 import AdminChartShell from '../../components/admin/AdminChartShell.vue'
 import AdminInsightCard from '../../components/admin/AdminInsightCard.vue'
+import { getAdminAuditLogDetail } from '../../lib/admin-audit-logs'
 import { getAdminDashboardSummary } from '../../lib/admin-dashboard'
 import { formatActionTypeLabel } from '../../lib/admin-audit-log-utils'
 import { useAuthStore } from '../../stores/auth'
@@ -14,6 +16,10 @@ const loading = ref(true)
 const errorMessage = ref('')
 const forbidden = ref(false)
 const summary = ref(null)
+const auditDetailOpen = ref(false)
+const auditDetailLoading = ref(false)
+const auditDetailError = ref('')
+const selectedAuditLog = ref(null)
 
 const dateTimeFormatter = new Intl.DateTimeFormat('ko-KR', {
   timeZone: 'Asia/Seoul',
@@ -534,6 +540,34 @@ function toPercentNumber(value) {
 function resultBadgeClass(result) {
   return `${result}`.toUpperCase() === 'SUCCESS' ? 'success' : 'warning'
 }
+
+async function openAuditLogDetail(log) {
+  if (!log?.auditLogId) return
+  auditDetailOpen.value = true
+  auditDetailLoading.value = true
+  auditDetailError.value = ''
+  selectedAuditLog.value = null
+
+  try {
+    selectedAuditLog.value = await getAdminAuditLogDetail(log.auditLogId)
+  } catch (error) {
+    if (error?.status === 403) {
+      forbidden.value = true
+      auditDetailOpen.value = false
+      return
+    }
+    auditDetailError.value = error?.message || '작업 로그 상세 정보를 불러오지 못했습니다.'
+  } finally {
+    auditDetailLoading.value = false
+  }
+}
+
+function closeAuditLogDetail() {
+  auditDetailOpen.value = false
+  auditDetailLoading.value = false
+  auditDetailError.value = ''
+  selectedAuditLog.value = null
+}
 </script>
 
 <template>
@@ -742,7 +776,12 @@ function resultBadgeClass(result) {
             <span class="badge">{{ recentAuditLogs.length }}건</span>
           </div>
           <ul v-if="recentAuditLogs.length" class="compact-list admin-audit-log-list">
-            <AdminAuditLogItem v-for="log in recentAuditLogRows" :key="log.auditLogId" :log="log" />
+            <AdminAuditLogItem
+              v-for="log in recentAuditLogRows"
+              :key="log.auditLogId"
+              :log="log"
+              @select="openAuditLogDetail"
+            />
           </ul>
           <p v-else class="empty-text">최근 관리자 작업 이력이 없습니다.</p>
         </article>
@@ -777,6 +816,14 @@ function resultBadgeClass(result) {
           </div>
         </dl>
       </article>
+
+      <AdminAuditLogDetailModal
+        :open="auditDetailOpen"
+        :loading="auditDetailLoading"
+        :error="auditDetailError"
+        :log="selectedAuditLog"
+        @close="closeAuditLogDetail"
+      />
     </template>
   </section>
 </template>

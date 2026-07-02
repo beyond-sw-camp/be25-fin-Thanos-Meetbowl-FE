@@ -9,6 +9,7 @@ import {
 const props = defineProps({
   log: { type: Object, required: true },
 })
+const emit = defineEmits(['select'])
 
 const actionLabel = computed(() => formatActionTypeLabel(props.log.actionType))
 const targetLabel = computed(() => formatTargetTypeLabel(props.log.targetType))
@@ -51,7 +52,16 @@ function formatCompactDateTime(value) {
     </div>
     <div class="admin-audit-log-meta">
       <span :class="['badge', resultTone]">{{ resultLabel }}</span>
-      <RouterLink to="/admin/logs" class="admin-audit-log-link">상세 보기</RouterLink>
+      <button type="button" class="admin-audit-log-link" @click="emit('select', props.log)">상세 보기</button>
     </div>
   </li>
 </template>
+
+<style scoped>
+.admin-audit-log-link {
+  border: 0;
+  background: transparent;
+  padding: 0;
+  cursor: pointer;
+}
+</style>
