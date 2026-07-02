@@ -367,7 +367,13 @@ import {
 } from '../../lib/workspace'
 import { previewKind, resolveBlobFileName, saveBlob } from '../../lib/file-actions'
 import { getUserSummary, searchUsers } from '../../lib/users'
-import { emptyTiptapDocument, extractTiptapText, stringifyTiptapDocument } from '../../lib/minutes-content.js'
+import {
+  buildMinutesShareDocument,
+  emptyTiptapDocument,
+  extractTiptapText,
+  isValidTiptapDocument,
+  stringifyTiptapDocument,
+} from '../../lib/minutes-content.js'
 import { addMinutes, formatKstDateTime, formatKstTime } from '../../utils/dateTime'
 import { workspaceDateKey, workspaceMonthCells, workspaceNow } from '../../data/workspaceData'
 import {
@@ -381,7 +387,6 @@ import {
   shareMeetingMinutes,
 } from '../../lib/minutes'
 import { useConfirmDialog } from '../../composables/useConfirmDialog'
-import { isValidTiptapDocument } from '../../lib/minutes-content'
 import { useAuthStore } from '../../stores/auth'
 
 const router = useRouter()
@@ -1210,21 +1215,12 @@ function buildMinutesLink(meetingId) {
 }
 
 function buildMinutesShareBody(minute) {
-  const summary = String(minute?.summary || '').trim() || '요약이 없습니다.'
-  const content = String(minute?.content || '').trim() || '본문이 없습니다.'
-  const link = buildMinutesLink(minute?.meetingId)
-  return `안녕하세요,
-
-${minute?.title || '회의록'} 회의록을 공유드립니다.
-
-[회의 요약]
-${summary}
-
-[회의록 본문]
-${content}
-
-[회의록 링크]
-${link}`
+  return buildMinutesShareDocument({
+    title: minute?.title,
+    summary: minute?.summary,
+    content: minute?.content,
+    link: buildMinutesLink(minute?.meetingId),
+  })
 }
 
 function normalizeWorkspaceMinute(raw) {
