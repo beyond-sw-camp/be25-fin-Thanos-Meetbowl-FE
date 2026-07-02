@@ -23,7 +23,7 @@
         </div>
       </div>
       <input v-model="draft.subject" :disabled="draft.sending" placeholder="제목">
-      <textarea v-model="draft.body" :disabled="draft.sending" rows="10"></textarea>
+      <MinutesEditor v-model="draft.body" :disabled="draft.sending" toolbar-variant="compose" />
       <p v-if="draft.error" class="error-box">{{ draft.error }}</p>
       <p class="share-copy-status">회의 참여자는 승인 시 자동 공유됩니다. 이 메일은 미참석자에게 별도로 공유할 때만 사용하세요.</p>
     </div>
@@ -43,6 +43,7 @@
 import { onMounted, onUnmounted, ref, watch } from 'vue'
 import { searchUsers } from '../../lib/users'
 import ModalShell from '../common/ModalShell.vue'
+import MinutesEditor from './MinutesEditor.vue'
 
 const props = defineProps({
   draft: { type: Object, required: true },

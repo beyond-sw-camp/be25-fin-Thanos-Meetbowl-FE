@@ -64,7 +64,7 @@ import {
   reviseMeetingMinutes,
   shareMeetingMinutes,
 } from '../../lib/minutes'
-import { extractTiptapText, isValidTiptapDocument } from '../../lib/minutes-content'
+import { buildMinutesShareDocument, isValidTiptapDocument } from '../../lib/minutes-content'
 import { useAuthStore } from '../../stores/auth'
 
 const route = useRoute()
@@ -318,23 +318,12 @@ function replaceListItem(next) {
 }
 
 function buildMinutesShareBody(minute) {
-  const summary = String(minute?.summary || '').trim() || '요약이 없습니다.'
-  const content = readableMinutesContent(minute?.content)
-  return `안녕하세요,
-
-${minute?.title || '회의록'} 회의록을 공유드립니다.
-
-[회의 요약]
-${summary}
-
-[회의록 본문]
-${content}`
-}
-
-function readableMinutesContent(value) {
-  const text = extractTiptapText(value)
-  if (text) return text
-  return String(value || '').trim() || '본문이 없습니다.'
+  return buildMinutesShareDocument({
+    title: minute?.title,
+    summary: minute?.summary,
+    content: minute?.content,
+    link: buildMinutesLink(minute?.meetingId),
+  })
 }
 
 function normalizeMinute(raw) {
