@@ -47,6 +47,7 @@
             <div class="calendar-event-stack">
               <span v-for="event in (eventsByDate[cell.key] || []).slice(0, 3)" :key="event.eventId" :class="['calendar-event-pill', event.source === 'MEETING' ? 'team' : 'mine']">
                 {{ event.timeLabel }} {{ event.title }}
+                <small v-if="event.sharedMeetingLabel">{{ event.sharedMeetingLabel }}</small>
               </span>
               <em v-if="(eventsByDate[cell.key] || []).length > 3">+{{ eventsByDate[cell.key].length - 3 }}건</em>
             </div>
@@ -64,6 +65,7 @@
             <div>
               <strong>{{ event.title }}</strong>
               <span>{{ event.timeRange }} <template v-if="event.description">· {{ event.description }}</template></span>
+              <small v-if="event.sharedMeetingLabel" class="workspace-event-shared-label">{{ event.sharedMeetingLabel }}</small>
             </div>
             <span :class="['badge', event.source === 'MEETING' ? 'navy' : 'primary']">{{ event.source === 'MEETING' ? '회의' : '개인' }}</span>
           </button>
@@ -380,9 +382,11 @@ import {
 } from '../../lib/minutes'
 import { useConfirmDialog } from '../../composables/useConfirmDialog'
 import { isValidTiptapDocument } from '../../lib/minutes-content'
+import { useAuthStore } from '../../stores/auth'
 
 const router = useRouter()
 const route = useRoute()
+const auth = useAuthStore()
 const tabs = [
   { id: 'calendar', label: '일정', icon: CalendarDays },
   { id: 'memo', label: '개인 메모장', icon: StickyNote },
@@ -461,7 +465,9 @@ const cells = computed(() => workspaceMonthCells(cursor.value.getFullYear(), cur
   weekday: date.getDay(),
   inMonth: date.getMonth() === cursor.value.getMonth(),
 })))
-const visibleEvents = computed(() => events.value.filter((event) => filter.value === 'all' || event.source === filter.value))
+const visibleEvents = computed(() => mergeVisibleEvents(
+  events.value.filter((event) => filter.value === 'all' || event.source === filter.value),
+))
 const eventsByDate = computed(() => {
   const map = {}
   visibleEvents.value.forEach((event) => {
@@ -584,6 +590,10 @@ async function loadCalendar() {
   to.setDate(from.getDate() + 42)
   try {
     events.value = (await getWorkspaceCalendar(from.toISOString(), to.toISOString())).map(normalizeEvent)
+    await Promise.all(
+      [...new Set(events.value.map((event) => event.ownerUserId).filter(Boolean))]
+        .map((userId) => cacheUser(userId)),
+    )
   } catch (error) {
     events.value = []
     errorMessage.value = error?.message || '일정을 불러오지 못했습니다.'
@@ -667,7 +677,55 @@ function normalizeEvent(event) {
     ...event,
     timeLabel: formatKstTime(event.startedAt),
     timeRange: `${formatKstTime(event.startedAt)} - ${formatKstTime(event.endedAt)}`,
+    sharedMeetingLabel: '',
   }
+}
+
+function mergeVisibleEvents(items) {
+  const myUserId = auth.user?.userId
+  if (!myUserId) return items
+
+  const grouped = new Map()
+  for (const event of items) {
+    if (event.source !== 'MEETING' || !event.sourceId) {
+      grouped.set(`event:${event.eventId}`, [event])
+      continue
+    }
+    const key = `meeting:${event.sourceId}:${event.startedAt}:${event.endedAt}`
+    const bucket = grouped.get(key) || []
+    bucket.push(event)
+    grouped.set(key, bucket)
+  }
+
+  return Array.from(grouped.values()).flatMap((bucket) => {
+    if (bucket.length === 1) return bucket
+    const includesMe = bucket.some((event) => event.ownerUserId === myUserId)
+    if (!includesMe) return bucket
+
+    const others = bucket
+      .map((event) => event.ownerUserId)
+      .filter((userId) => userId && userId !== myUserId)
+    const uniqueOthers = [...new Set(others)]
+    if (!uniqueOthers.length) return [bucket[0]]
+
+    const first = bucket[0]
+    return [{
+      ...first,
+      eventId: `shared-${first.sourceId}-${first.startedAt}`,
+      ownerUserId: myUserId,
+      sharedMeetingLabel: buildSharedMeetingLabel(uniqueOthers),
+    }]
+  })
+}
+
+function buildSharedMeetingLabel(userIds) {
+  if (!userIds.length) return ''
+  const names = userIds
+    .map((userId) => userName(userId))
+    .filter(Boolean)
+  if (!names.length) return '함께 참석'
+  if (names.length === 1) return `${names[0]}님과 함께 참석`
+  return `${names[0]}님 외 ${names.length - 1}명과 함께 참석`
 }
 
 function moveMonth(offset) {
@@ -917,7 +975,7 @@ function openWorkspaceMinuteShare() {
     recipients: [],
     query: '',
     subject: `[회의록 공유] ${selectedWorkspaceMinute.value.title}`,
-    body: `안녕하세요,\n\n${selectedWorkspaceMinute.value.title} 회의록을 공유드립니다.\n\n[AI 요약]\n${selectedWorkspaceMinute.value.summary}\n\n확인 부탁드립니다.`,
+    body: buildMinutesShareBody(selectedWorkspaceMinute.value),
     error: '',
     sending: false,
   }
@@ -1145,6 +1203,30 @@ function compactText(value) {
   return String(value || '').replace(/\s+/g, ' ').trim()
 }
 
+function buildMinutesLink(meetingId) {
+  if (!meetingId) return ''
+  if (typeof window === 'undefined') return `/app/minutes/${meetingId}`
+  return `${window.location.origin}/app/minutes/${meetingId}`
+}
+
+function buildMinutesShareBody(minute) {
+  const summary = String(minute?.summary || '').trim() || '요약이 없습니다.'
+  const content = String(minute?.content || '').trim() || '본문이 없습니다.'
+  const link = buildMinutesLink(minute?.meetingId)
+  return `안녕하세요,
+
+${minute?.title || '회의록'} 회의록을 공유드립니다.
+
+[회의 요약]
+${summary}
+
+[회의록 본문]
+${content}
+
+[회의록 링크]
+${link}`
+}
+
 function normalizeWorkspaceMinute(raw) {
   const startedAt = raw.meetingStartedAt || null
   const endedAt = raw.meetingEndedAt || null
@@ -1236,3 +1318,28 @@ function dismissToast(id) {
   toasts.value = toasts.value.filter((item) => item.id !== id)
 }
 </script>
+
+<style scoped>
+.calendar-event-pill small {
+  display: block;
+  font-size: 10px;
+  line-height: 1.35;
+  white-space: normal;
+}
+
+.calendar-event-pill.mine small {
+  color: rgba(154, 52, 18, .86);
+}
+
+.calendar-event-pill.team small {
+  color: rgba(30, 64, 175, .88);
+}
+
+.workspace-event-shared-label {
+  display: block;
+  margin-top: 4px;
+  color: var(--primary-dark);
+  font-size: 12px;
+  font-weight: 700;
+}
+</style>

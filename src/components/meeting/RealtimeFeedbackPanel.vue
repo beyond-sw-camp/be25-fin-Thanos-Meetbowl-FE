@@ -2,6 +2,7 @@
   <section
     class="realtime-feedback-panel"
     :class="{ 'feedback-height-expanded': expanded }"
+    :style="panelStyle"
     aria-labelledby="realtime-feedback-title"
   >
     <header class="realtime-feedback-header">
@@ -84,11 +85,11 @@
 </template>
 
 <script setup>
-import { ref } from 'vue'
+import { computed, ref } from 'vue'
 import { ChevronDown, ChevronUp } from '@lucide/vue'
 import { formatKstTime } from '../../utils/dateTime'
 
-defineProps({
+const props = defineProps({
   feedbacks: { type: Array, default: () => [] },
   connected: { type: Boolean, default: false },
   fill: { type: Boolean, default: false },
@@ -101,6 +102,12 @@ const FEEDBACK_TYPE_LABELS = {
 }
 
 const expanded = ref(false)
+const panelStyle = computed(() => {
+  if (props.fill || !expanded.value) return null
+  return {
+    height: 'min(560px, 68vh)',
+  }
+})
 
 function feedbackTypeLabel(type) {
   return FEEDBACK_TYPE_LABELS[type] || '회의 참고'

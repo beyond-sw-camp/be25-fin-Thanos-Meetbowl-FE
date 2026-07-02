@@ -1330,15 +1330,17 @@ const participantMediaTiles = computed(() => {
       initials: initialsFromName(participant.name),
       muted: !participant.micEnabled,
     }
+    const hasScreenVisual = Boolean(participant.screenTrack && participant.screenShareEnabled)
+    const hasCameraVisual = Boolean(participant.cameraTrack && participant.cameraEnabled)
 
     if (participant.screenTrack || participant.screenShareEnabled) {
       tiles.push({
         ...base,
         key: `${participant.key}:screen`,
         type: 'screen',
-        track: participant.screenTrack,
+        track: hasScreenVisual ? participant.screenTrack : null,
         label: `${participant.name} 화면`,
-        placeholder: '화면을 공유하는 중입니다.',
+        placeholder: hasScreenVisual ? '화면을 공유하는 중입니다.' : '화면 공유가 일시 중지되었습니다.',
       })
     }
 
@@ -1347,9 +1349,9 @@ const participantMediaTiles = computed(() => {
         ...base,
         key: `${participant.key}:camera`,
         type: 'camera',
-        track: participant.cameraTrack,
+        track: hasCameraVisual ? participant.cameraTrack : null,
         label: participant.name,
-        placeholder: '카메라를 준비하는 중입니다.',
+        placeholder: hasCameraVisual ? '카메라를 준비하는 중입니다.' : '카메라가 꺼져 있습니다.',
       })
     }
 
