@@ -384,6 +384,10 @@ function notificationVisual(notification) {
     return { icon: CalendarDays, toneClass: 'is-meeting', label: '회의 알림' }
   }
 
+  if (type.includes('COMMUNITY') || resourceType === 'COMMUNITY_POST') {
+    return { icon: MessageCircleMore, toneClass: 'is-community', label: '도파민 알림' }
+  }
+
   if (type.includes('MAIL') || resourceType === 'MAIL') {
     return { icon: Mail, toneClass: 'is-mail', label: '메일 알림' }
   }
@@ -395,7 +399,12 @@ function shouldToastNotification(notification) {
   if (notification?.read) return false
   const type = String(notification?.type || '').toUpperCase()
   const resourceType = String(notification?.resourceType || '').toUpperCase()
-  return type.includes('MAIL') || type.includes('MEETING') || resourceType === 'MAIL' || resourceType === 'MEETING'
+  return type.includes('MAIL')
+    || type.includes('MEETING')
+    || type.includes('COMMUNITY')
+    || resourceType === 'MAIL'
+    || resourceType === 'MEETING'
+    || resourceType === 'COMMUNITY_POST'
 }
 
 function showNotificationToast(notification) {
@@ -510,6 +519,22 @@ function closeHeaderDropdowns() {
   profileOpen.value = false
 }
 
+function handleMailReadEvent(event) {
+  const mailId = event?.detail?.mailId
+  if (!mailId) return
+  const removedCount = notifications.value.filter(
+    (notification) =>
+      notification.resourceType === 'MAIL'
+      && notification.resourceId === mailId
+      && !notification.read,
+  ).length
+  if (!removedCount) return
+  notifications.value = notifications.value.filter(
+    (notification) => !(notification.resourceType === 'MAIL' && notification.resourceId === mailId),
+  )
+  unreadCount.value = Math.max(0, unreadCount.value - removedCount)
+}
+
 function toggleNotifications() {
   profileOpen.value = false
   notificationsOpen.value = !notificationsOpen.value
@@ -564,6 +589,7 @@ async function handleMarkAllRead() {
 
 onMounted(() => {
   document.addEventListener('pointerdown', handleDocumentPointerDown, true)
+  window.addEventListener('meetbowl:mail-read', handleMailReadEvent)
 
   if (isAdmin.value) {
     refreshAdminNotificationCount().catch(() => {})
@@ -596,6 +622,7 @@ onMounted(() => {
 onBeforeUnmount(() => {
   notificationSource?.close()
   document.removeEventListener('pointerdown', handleDocumentPointerDown, true)
+  window.removeEventListener('meetbowl:mail-read', handleMailReadEvent)
 })
 
 const visibleSections = computed(() =>
