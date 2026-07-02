@@ -1203,16 +1203,9 @@ function compactText(value) {
   return String(value || '').replace(/\s+/g, ' ').trim()
 }
 
-function buildMinutesLink(meetingId) {
-  if (!meetingId) return ''
-  if (typeof window === 'undefined') return `/app/minutes/${meetingId}`
-  return `${window.location.origin}/app/minutes/${meetingId}`
-}
-
 function buildMinutesShareBody(minute) {
   const summary = String(minute?.summary || '').trim() || '요약이 없습니다.'
-  const content = String(minute?.content || '').trim() || '본문이 없습니다.'
-  const link = buildMinutesLink(minute?.meetingId)
+  const content = readableMinutesContent(minute?.content)
   return `안녕하세요,
 
 ${minute?.title || '회의록'} 회의록을 공유드립니다.
@@ -1221,10 +1214,13 @@ ${minute?.title || '회의록'} 회의록을 공유드립니다.
 ${summary}
 
 [회의록 본문]
-${content}
+${content}`
+}
 
-[회의록 링크]
-${link}`
+function readableMinutesContent(value) {
+  const text = extractTiptapText(value)
+  if (text) return text
+  return String(value || '').trim() || '본문이 없습니다.'
 }
 
 function normalizeWorkspaceMinute(raw) {
