@@ -114,7 +114,7 @@ const selected = computed(() => {
   const detail = detailByMeetingId.value[selectedListItem.value.meetingId]
   return normalizeMinute(detail || selectedListItem.value)
 })
-const selectedStatus = computed(() => selected.value?.rawStatus || '')
+const selectedStatus = computed(() => normalizeStatus(selected.value?.rawStatus))
 const canEditSelected = computed(() => {
   if (!selected.value || !['DRAFT', 'IN_REVIEW', 'APPROVED', 'SHARED'].includes(selectedStatus.value)) return false
   return selected.value.reviewerUserId === auth.user?.userId
@@ -306,6 +306,7 @@ async function sendShare() {
     detailByMeetingId.value = { ...detailByMeetingId.value, [shared.meetingId]: shared }
     replaceListItem(normalizeMinute(shared))
     shareOpen.value = false
+    showToast('회의록 공유 완료', `${recipientUserIds.length}명에게 내부 메일을 보냈습니다.`)
   } catch (error) {
     share.value.error = error?.message || '회의록 공유 메일 발송에 실패했습니다.'
   } finally {
@@ -343,7 +344,7 @@ function normalizeMinute(raw) {
     content: raw.content || '',
     reviewer: raw.reviewerName || raw.reviewerDepartment || '-',
     reviewerDepartment: raw.reviewerDepartment || '',
-    rawStatus: raw.status,
+    rawStatus: normalizeStatus(raw.status),
     statusLabel: statusLabel(raw.status),
     approvedAt: raw.approvedAt || null,
     favorite: Boolean(raw.favorite ?? favorites.value?.[raw.minutesId]),
@@ -351,13 +352,18 @@ function normalizeMinute(raw) {
 }
 
 function statusLabel(status) {
+  const normalized = normalizeStatus(status)
   return {
     DRAFT: '초안',
     IN_REVIEW: '검토중',
     APPROVED: '승인됨',
     SHARED: '공유됨',
     DELETION_SCHEDULED: '삭제 예정',
-  }[status] || status || '-'
+  }[normalized] || status || '-'
+}
+
+function normalizeStatus(status) {
+  return String(status || '').trim().toUpperCase()
 }
 
 function formatDate(value) {

@@ -26,9 +26,18 @@
         <button class="secondary-button minute-action-button" :disabled="pdfPending || editing" @click="downloadPdf">
           {{ pdfPending ? 'PDF 생성 중...' : 'PDF 다운로드' }}
         </button>
-        <button v-if="!readonlyMode && !editing" class="secondary-button minute-action-button" :disabled="!canEdit || actionPending" @click="$emit('start-edit')">수정</button>
-        <button v-if="!readonlyMode" class="primary-button minute-action-button" :disabled="!canApprove || actionPending" @click="$emit('approve')">승인</button>
-        <button v-if="!readonlyMode" class="primary-button minute-action-button" :disabled="!canShare || actionPending" @click="$emit('share')">내부 메일 공유</button>
+        <button v-if="!readonlyMode && !editing" type="button" class="secondary-button minute-action-button" :disabled="!canEdit || actionPending" @click="$emit('start-edit')">수정</button>
+        <button v-if="!readonlyMode" type="button" class="primary-button minute-action-button" :disabled="!canApprove || actionPending" @click="$emit('approve')">승인</button>
+        <button
+          v-if="!readonlyMode"
+          type="button"
+          class="primary-button minute-action-button"
+          :disabled="!canShare || actionPending"
+          :title="canShare ? '회의록을 내부 메일로 공유합니다.' : '승인된 회의록만 공유할 수 있습니다.'"
+          @click="$emit('share')"
+        >
+          내부 메일 공유
+        </button>
       </div>
     </header>
     <section class="ai-minutes-box">
