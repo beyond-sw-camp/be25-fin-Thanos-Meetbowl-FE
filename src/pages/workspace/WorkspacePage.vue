@@ -134,8 +134,8 @@
         <RouterLink :to="'/app/backup/' + backup.backupId">
           <span class="workspace-file-icon mail"><Mail :size="17" /></span>
           <span>
-          <strong>{{ backup.title }}</strong>
-            <small>{{ backup.sourceType }} · {{ displayDate(backup.backedUpAt) }} · {{ compactText(backup.summary) }}</small>
+          <strong>{{ backup.title || '(제목 없음)' }}</strong>
+            <small>{{ displayDate(backup.backedUpAt) }}</small>
           </span>
         </RouterLink>
         <button type="button" class="workspace-backup-release" @click="releaseBackup(backup)">해제</button>
