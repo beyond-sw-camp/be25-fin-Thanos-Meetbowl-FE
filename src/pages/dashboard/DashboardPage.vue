@@ -296,6 +296,7 @@ export default defineComponent({
       statusLabel,
       loadError,
       scheduleLoadError,
+      getMeetingJoinBlockedMessage,
       timelineActionLabel,
       timelineBadgeLabel,
       openMeetingFromTimeline,
