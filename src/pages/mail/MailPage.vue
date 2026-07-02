@@ -554,11 +554,6 @@ async function backupSelected() {
   showToast('백업 완료', `${ids.length}개의 메일을 백업했어요.`)
 }
 
-async function backupSelectedAction() {
-  if (selected.value.size === 0) return
-  await backupSelected()
-}
-
 async function backupMail(mailId) {
   await backupMails([mailId])
   showToast('메일 백업 완료', '메일을 백업했습니다.')
