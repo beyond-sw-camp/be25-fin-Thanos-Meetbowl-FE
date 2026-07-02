@@ -73,7 +73,7 @@
 
       <div v-if="errorMessage" class="error-box mail-error-box">{{ errorMessage }}</div>
 
-      <div class="mail-list-table">
+      <div class="mail-list-table" :class="{ busy: loading }">
         <div class="mail-list-head">
           <label class="mail-check-cell">
             <input type="checkbox" :checked="allChecked" @change="toggleAll">
@@ -249,6 +249,7 @@ const errorMessage = ref('')
 const toasts = ref([])
 const { confirmDialog, requestConfirm, cancelConfirm, acceptConfirm } = useConfirmDialog()
 const pageSize = ref(10)
+let loadRequestId = 0
 
 const pageItems = computed(() => {
   const copied = [...mailList.value]
@@ -275,14 +276,20 @@ watch(q, () => {
   }, 250)
 })
 
-watch(pageNo, () => loadMails())
+watch([tab, pageNo], () => loadMails())
 watch(pageSize, () => {
-  pageNo.value = 1
+  if (pageNo.value !== 1) {
+    pageNo.value = 1
+    return
+  }
   loadMails()
 })
 watch(() => route.query.q, () => {
   syncQueryFromRoute()
-  pageNo.value = 1
+  if (pageNo.value !== 1) {
+    pageNo.value = 1
+    return
+  }
   loadMails()
 })
 
@@ -293,6 +300,7 @@ onMounted(async () => {
 })
 
 async function loadMails() {
+  const requestId = ++loadRequestId
   loading.value = true
   errorMessage.value = ''
   selected.value = new Set()
@@ -300,12 +308,15 @@ async function loadMails() {
     const data = q.value.trim()
       ? await searchMails(q.value.trim(), { page: pageNo.value, size: pageSize.value })
       : await listMails(tab.value, { page: pageNo.value, size: pageSize.value })
+    if (requestId !== loadRequestId) return
     await applyMailPage(data)
   } catch (error) {
-    await applyMailPage({ items: [], page: 1, size: pageSize.value, totalElements: 0, totalPages: 1 })
+    if (requestId !== loadRequestId) return
     errorMessage.value = error?.message || '메일을 불러오지 못했습니다.'
   } finally {
-    loading.value = false
+    if (requestId === loadRequestId) {
+      loading.value = false
+    }
   }
 }
 
@@ -370,11 +381,11 @@ function normalizeMail(mail, sender) {
 }
 
 function changeTab(value) {
+  if (tab.value === value && pageNo.value === 1 && !open.value) return
   tab.value = value
   selected.value = new Set()
   pageNo.value = 1
   open.value = null
-  loadMails()
 }
 
 function syncQueryFromRoute() {
@@ -447,6 +458,7 @@ async function openMail(mail) {
     })
     if (!detail.read && tab.value === 'inbox') {
       await changeMailRead(mail.mailId, true)
+      notifyMailRead(mail.mailId)
     }
   } catch (error) {
     mail.read = wasRead
@@ -600,6 +612,11 @@ function buildQuotedMailBody(label, mail) {
 
 function extractMailText(value) {
   return extractTiptapText(value) || String(value || '')
+}
+
+function notifyMailRead(mailId) {
+  if (typeof window === 'undefined' || !mailId) return
+  window.dispatchEvent(new CustomEvent('meetbowl:mail-read', { detail: { mailId } }))
 }
 
 function printMail() {
@@ -787,6 +804,13 @@ function dismissToast(id) {
 
 .mail-list-table {
   display: grid;
+  position: relative;
+  transition: opacity 0.18s ease, transform 0.18s ease;
+}
+
+.mail-list-table.busy {
+  opacity: 0.72;
+  transform: translateY(2px);
 }
 
 .mail-list-head,

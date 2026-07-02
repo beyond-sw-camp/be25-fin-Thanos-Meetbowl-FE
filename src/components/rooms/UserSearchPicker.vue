@@ -7,6 +7,17 @@
     <label>참석자 검색<input v-model="query" placeholder="이름, 부서, 이메일로 검색하세요"></label>
     <div v-if="results.length" class="member-picker-results">
       <button
+        v-for="scope in scopeResults"
+        :key="scope.key"
+        type="button"
+        :disabled="checking"
+        class="member-picker-result-button member-picker-result-button--scope"
+        @click="addScope(scope)"
+      >
+        <strong>{{ scope.label }}</strong>
+        <span>{{ scope.description }}</span>
+      </button>
+      <button
         v-for="user in results"
         :key="user.userId"
         type="button"
@@ -36,7 +47,8 @@
 
 <script setup>
 import { computed, onBeforeUnmount, ref, watch } from 'vue'
-import { searchUsers } from '../../lib/users'
+import { listUsersByScope, searchUsers } from '../../lib/users'
+import { useAuthStore } from '../../stores/auth'
 
 const props = defineProps({
   modelValue: { type: Array, default: () => [] },
@@ -54,6 +66,7 @@ const query = ref('')
 const results = ref([])
 const checking = ref(false)
 const fixedUserIdSet = computed(() => new Set(props.fixedUserIds.filter(Boolean)))
+const auth = useAuthStore()
 let seq = 0
 let debounceTimer = null
 const DEBOUNCE_MS = 250
@@ -70,7 +83,11 @@ async function runSearch(keyword) {
       .map((user) => ({
         userId: user.userId,
         name: user.name || '-',
+        affiliateId: user.affiliateId || '',
+        departmentId: user.departmentId || '',
         department: user.department || '',
+        teamId: user.teamId || '',
+        team: user.team || '',
         position: user.position || '',
         email: user.email || '',
       }))
@@ -78,6 +95,42 @@ async function runSearch(keyword) {
     results.value = []
   }
 }
+
+const scopeResults = computed(() => {
+  const seen = new Set()
+  const items = []
+  for (const user of results.value) {
+    if (user?.teamId && user?.team) {
+      const key = `team:${user.teamId}`
+      if (!seen.has(key)) {
+        seen.add(key)
+        items.push({
+          key,
+          label: `${user.team} 팀 전체 추가`,
+          description: user.department ? `${user.department} 소속 팀 구성원 전체를 추가합니다.` : '팀 구성원 전체를 추가합니다.',
+          affiliateId: user.affiliateId || auth.user?.affiliateId || '',
+          departmentId: user.departmentId || '',
+          teamId: user.teamId,
+        })
+      }
+    }
+    if (user?.departmentId && user?.department) {
+      const key = `department:${user.departmentId}`
+      if (!seen.has(key)) {
+        seen.add(key)
+        items.push({
+          key,
+          label: `${user.department} 부서 전체 추가`,
+          description: '부서 구성원 전체를 추가합니다.',
+          affiliateId: user.affiliateId || auth.user?.affiliateId || '',
+          departmentId: user.departmentId,
+          teamId: '',
+        })
+      }
+    }
+  }
+  return items.slice(0, 6)
+})
 
 // 디바운스: 타이핑 중에는 호출하지 않고, 입력이 멈춘 뒤 DEBOUNCE_MS가 지나면 한 번만 검색한다.
 watch(query, (value) => {
@@ -113,11 +166,45 @@ async function add(user) {
     userId: user.userId,
     name: user.name,
     department: user.department || '',
+    team: user.team || '',
     position: user.position || '',
     email: user.email || '',
   }])
   query.value = ''
   results.value = []
+}
+
+async function addScope(scope) {
+  if (checking.value) return
+  checking.value = true
+  try {
+    const members = await listUsersByScope({
+      affiliateId: scope.affiliateId,
+      departmentId: scope.departmentId,
+      teamId: scope.teamId,
+    })
+    const selectedIds = new Set(props.modelValue.map((attendee) => attendee.userId))
+    const next = [...props.modelValue]
+    for (const member of members) {
+      if (!member?.userId) continue
+      if (member.userId === props.excludeUserId) continue
+      if (selectedIds.has(member.userId)) continue
+      next.push({
+        userId: member.userId,
+        name: member.name || '-',
+        department: member.department || '',
+        team: member.team || '',
+        position: member.position || '',
+        email: member.email || '',
+      })
+      selectedIds.add(member.userId)
+    }
+    emit('update:modelValue', next)
+    query.value = ''
+    results.value = []
+  } finally {
+    checking.value = false
+  }
 }
 
 function remove(userId) {
@@ -126,7 +213,7 @@ function remove(userId) {
 }
 
 function formatUserMeta(user) {
-  return [user?.department, user?.position].filter(Boolean).join(' · ') || '-'
+  return [user?.department, user?.team, user?.position].filter(Boolean).join(' · ') || '-'
 }
 </script>
 
@@ -195,6 +282,16 @@ function formatUserMeta(user) {
 .member-picker-result-button span {
   color: var(--muted-foreground);
   font-size: 13px;
+}
+.member-picker-result-button--scope {
+  border-color: rgba(243, 115, 33, 0.18);
+  background: #fff8f3;
+}
+.member-picker-result-button--scope strong {
+  color: #9a3412;
+}
+.member-picker-result-button--scope span {
+  color: #c2410c;
 }
 .participant-chips {
   display: flex;

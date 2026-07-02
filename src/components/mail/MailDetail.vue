@@ -40,6 +40,10 @@
       <div class="mail-body-rich">
         <MinutesEditor :modelValue="mail.body" readonly />
       </div>
+      <div v-if="relatedLink" class="mail-related-link">
+        <strong>관련 링크</strong>
+        <a :href="relatedLink">{{ relatedLinkLabel }}</a>
+      </div>
       <div v-if="attachmentCount" class="mail-attachments">
         <strong>첨부파일 {{ attachmentCount }}개</strong>
         <div v-if="attachments.length" class="mail-attachments-list">
@@ -71,6 +75,21 @@ defineEmits(['back', 'backup', 'delete', 'download-attachment', 'forward', 'prin
 const recipients = computed(() => props.mail.recipients || [])
 const attachments = computed(() => props.mail.attachments || props.mail.attachmentSummaries || [])
 const attachmentCount = computed(() => attachments.value.length || props.mail.attachmentCount || (props.mail.hasAttachments ? 1 : 0))
+const relatedLink = computed(() => {
+  const resourceType = props.mail.relatedResourceType
+  const resourceId = props.mail.relatedResourceId
+  if (!resourceType || !resourceId) return ''
+  if (resourceType === 'MEETING_MINUTES') return `/app/minutes/${resourceId}`
+  if (resourceType === 'MEETING') return `/app/meetings`
+  if (resourceType === 'WORKSPACE') return `/app/workspace`
+  return ''
+})
+const relatedLinkLabel = computed(() => {
+  if (props.mail.relatedResourceType === 'MEETING_MINUTES') return '회의록으로 이동'
+  if (props.mail.relatedResourceType === 'MEETING') return '회의 목록으로 이동'
+  if (props.mail.relatedResourceType === 'WORKSPACE') return '워크스페이스로 이동'
+  return '관련 화면으로 이동'
+})
 
 function attachmentName(attachment) {
   return attachment.originalFileName || attachment.fileName || attachment.name || attachment.storedFileName || '첨부파일'
@@ -112,3 +131,22 @@ function parseByteValue(value) {
   return Math.round(numeric)
 }
 </script>
+
+<style scoped>
+.mail-related-link {
+  display: grid;
+  gap: 6px;
+  margin-top: 18px;
+}
+
+.mail-related-link strong {
+  font-size: 12px;
+  color: var(--muted-foreground);
+}
+
+.mail-related-link a {
+  color: var(--primary);
+  font-weight: 700;
+  word-break: break-all;
+}
+</style>

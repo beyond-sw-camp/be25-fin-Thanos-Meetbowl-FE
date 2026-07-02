@@ -275,7 +275,7 @@ function openShare() {
     recipients: [],
     query: '',
     subject: `[회의록 공유] ${selected.value.title}`,
-    body: `안녕하세요,\n\n${selected.value.title} 회의록을 공유드립니다.\n\n[AI 요약]\n${selected.value.summary}\n\n확인 부탁드립니다.`,
+    body: buildMinutesShareBody(selected.value),
     error: '',
     sending: false,
   }
@@ -315,6 +315,30 @@ async function sendShare() {
 
 function replaceListItem(next) {
   minuteItems.value = minuteItems.value.map((minute) => minute.meetingId === next.meetingId ? { ...minute, ...next } : minute)
+}
+
+function buildMinutesLink(meetingId) {
+  if (!meetingId) return ''
+  if (typeof window === 'undefined') return `/app/minutes/${meetingId}`
+  return `${window.location.origin}/app/minutes/${meetingId}`
+}
+
+function buildMinutesShareBody(minute) {
+  const summary = String(minute?.summary || '').trim() || '요약이 없습니다.'
+  const content = String(minute?.content || '').trim() || '본문이 없습니다.'
+  const link = buildMinutesLink(minute?.meetingId)
+  return `안녕하세요,
+
+${minute?.title || '회의록'} 회의록을 공유드립니다.
+
+[회의 요약]
+${summary}
+
+[회의록 본문]
+${content}
+
+[회의록 링크]
+${link}`
 }
 
 function normalizeMinute(raw) {

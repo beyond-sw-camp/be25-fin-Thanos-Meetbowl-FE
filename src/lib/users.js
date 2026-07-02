@@ -8,13 +8,27 @@ function isSearchableMember(user) {
   return role !== 'ADMIN' && role !== 'SYSTEM'
 }
 
-export function searchUsers({ keyword = '', page = 1, size = 20 } = {}) {
+export function searchUsers({
+  keyword = '',
+  page = 1,
+  size = 20,
+  affiliateId: requestedAffiliateId,
+  departmentId,
+  teamId,
+  positionId,
+  status,
+} = {}) {
   const params = new URLSearchParams()
   const auth = useAuthStore()
   if (keyword.trim()) params.set('keyword', keyword.trim())
   params.set('page', String(page))
   params.set('size', String(size))
-  if (auth.user?.affiliateId) params.set('affiliateId', auth.user.affiliateId)
+  const affiliateId = requestedAffiliateId || auth.user?.affiliateId
+  if (affiliateId) params.set('affiliateId', affiliateId)
+  if (departmentId) params.set('departmentId', departmentId)
+  if (teamId) params.set('teamId', teamId)
+  if (positionId) params.set('positionId', positionId)
+  if (status) params.set('status', String(status).toUpperCase())
   return getJson(`/users/search?${params.toString()}`)
     .then((data) => ({
       ...data,
@@ -40,4 +54,36 @@ export function getUserSummary(userId) {
       }
       throw error
     })
+}
+
+export async function listUsersByScope({
+  affiliateId,
+  departmentId,
+  teamId,
+  positionId,
+  keyword = '',
+  status = 'ACTIVE',
+  size = 100,
+} = {}) {
+  const items = []
+  let page = 1
+  let totalPages = 1
+
+  while (page <= totalPages) {
+    const data = await searchUsers({
+      keyword,
+      affiliateId,
+      departmentId,
+      teamId,
+      positionId,
+      status,
+      page,
+      size,
+    })
+    items.push(...(data?.items || []))
+    totalPages = Math.max(1, Number(data?.totalPages) || 1)
+    page += 1
+  }
+
+  return items
 }

@@ -61,6 +61,9 @@ export function subscribeNotifications({ onNotification, onError } = {}) {
 const ROUTE_BY_TYPE = {
   MAIL_RECEIVED: '/app/mail',
   MAIL_SHARED: '/app/mail',
+  COMMUNITY_POST_COMMENTED: '/app/community',
+  COMMUNITY_POST_LIKED: '/app/community',
+  COMMUNITY_COMMENT_LIKED: '/app/community',
   MEETING_REMINDER: '/app/meetings',
   MEETING_UPDATED: '/app/my-attending',
   MEETING_CANCELLED: '/app/meetings',
@@ -77,6 +80,7 @@ export function notificationRoute(notification) {
   const { type, resourceType } = notification || {}
   if (type && ROUTE_BY_TYPE[type]) return ROUTE_BY_TYPE[type]
   if (resourceType === 'MAIL' || String(type || '').includes('MAIL')) return '/app/mail'
+  if (resourceType === 'COMMUNITY_POST' || String(type || '').includes('COMMUNITY')) return '/app/community'
   if (resourceType === 'MEETING_MINUTES') return '/app/minutes'
   if (resourceType === 'MEETING') return '/app/my-attending'
   return '/app/dashboard'

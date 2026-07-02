@@ -58,7 +58,7 @@
               </tr>
             </thead>
             <tbody>
-              <tr v-for="file in filteredFiles" :key="file.fileId" @click="openFile(file)">
+              <tr v-for="file in pagedFiles" :key="file.fileId" @click="openFile(file)">
                 <td>
                   <div class="shared-doc-cell">
                     <span :class="['shared-doc-icon', fileTone(file.originalFileName)]"><component :is="fileIcon(file.originalFileName)" :size="17" /></span>
@@ -85,6 +85,8 @@
             </tbody>
           </table>
         </div>
+
+        <Pagination v-model="pageNo" :total-pages="totalPages" />
       </main>
     </div>
 
@@ -339,6 +341,7 @@ import { Download, FileSpreadsheet, FileText, FileType2, FolderKanban, Info, Mor
 import ActionButton from '../../components/common/ActionButton.vue'
 import ConfirmDialog from '../../components/common/ConfirmDialog.vue'
 import AppToastStack from '../../components/common/AppToastStack.vue'
+import Pagination from '../../components/common/Pagination.vue'
 import {
   changeSharedWorkspaceAudience,
   addSharedWorkspaceFileVersion,
@@ -375,6 +378,8 @@ const selectedVersion = ref(null)
 const versionDraft = ref({ file: null, newVersion: '', changeMemo: '' })
 const versionUploading = ref(false)
 const keyword = ref('')
+const pageNo = ref(1)
+const pageSize = 10
 const openDoc = ref(null)
 const versionFileInput = ref(null)
 const fileActionFileId = ref('')
@@ -409,6 +414,8 @@ const toasts = ref([])
 const activeSpace = computed(() => spaces.value.find((space) => space.workspaceId === activeSpaceId.value))
 const isActiveSpaceOwner = computed(() => Boolean(activeSpace.value?.ownerUserId && activeSpace.value.ownerUserId === auth.user?.userId))
 const filteredFiles = computed(() => files.value.filter((file) => !keyword.value.trim() || file.originalFileName.toLowerCase().includes(keyword.value.trim().toLowerCase())))
+const totalPages = computed(() => Math.max(1, Math.ceil(filteredFiles.value.length / pageSize)))
+const pagedFiles = computed(() => filteredFiles.value.slice((pageNo.value - 1) * pageSize, pageNo.value * pageSize))
 const memberRows = computed(() => members.value.map((member) => {
   const user = userMap.value.get(member.userId) || {}
   return {
@@ -436,6 +443,20 @@ watch(userKeyword, async () => {
     return
   }
   await loadInviteCandidates(userKeyword.value)
+})
+
+watch(keyword, () => {
+  pageNo.value = 1
+})
+
+watch(activeSpaceId, () => {
+  pageNo.value = 1
+})
+
+watch(totalPages, (nextTotalPages) => {
+  if (pageNo.value > nextTotalPages) {
+    pageNo.value = nextTotalPages
+  }
 })
 
 watch(createMemberKeyword, async () => {

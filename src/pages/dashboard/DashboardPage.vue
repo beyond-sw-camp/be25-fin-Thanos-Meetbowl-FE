@@ -12,7 +12,7 @@ import {
   MoreVertical,
   Users,
 } from '@lucide/vue'
-import { openMeetingWindow } from '../../lib/meeting-route'
+import { getMeetingJoinBlockedMessage, openMeetingWindow } from '../../lib/meeting-route'
 import { useAuthStore } from '../../stores/auth'
 import { getMeetings, getRooms } from '../../lib/reservations'
 import { getWorkspaceCalendar } from '../../lib/workspace'
@@ -253,6 +253,9 @@ export default defineComponent({
     onMounted(load)
 
     function timelineActionLabel(meeting) {
+      if (meeting.status === 'upcoming' && getMeetingJoinBlockedMessage(meeting.scheduledAtMs)) {
+        return '입장 대기'
+      }
       return meeting.status === 'ended' ? '회의록 보기' : '입장하기'
     }
 
@@ -350,7 +353,19 @@ export default defineComponent({
               </div>
             </div>
             <div class="dashboard-timeline-actions">
-              <button class="ghost-button dashboard-timeline-action" type="button" @click.stop="openMeetingFromTimeline(meeting)">{{ timelineActionLabel(meeting) }}</button>
+              <button
+                v-if="meeting.status === 'ended' || meeting.status === 'live' || !getMeetingJoinBlockedMessage(meeting.scheduledAtMs)"
+                class="ghost-button dashboard-timeline-action"
+                type="button"
+                @click.stop="openMeetingFromTimeline(meeting)"
+              >{{ timelineActionLabel(meeting) }}</button>
+              <button
+                v-else
+                class="ghost-button dashboard-timeline-action"
+                type="button"
+                disabled
+                title="회의 시작 15분 전부터 입장할 수 있습니다"
+              >{{ timelineActionLabel(meeting) }}</button>
               <button class="dashboard-timeline-more" type="button" @click.stop="selectedId = meeting.id"><MoreVertical :size="18" /></button>
             </div>
           </article>

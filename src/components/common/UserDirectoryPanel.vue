@@ -626,7 +626,8 @@ function buildUserCreatePayload(targetForm) {
       ...targetForm,
       affiliateId: currentAdminAffiliateId.value || availableAffiliates.value[0]?.affiliateId || '',
     }),
-    status: targetForm.status,
+    // 신규 회원은 생성 시점에 항상 활성 상태로 저장한다.
+    status: 'ACTIVE',
   }
 }
 
@@ -998,7 +999,6 @@ function formatActionError(error, fallbackMessage) {
                 <option value="USER">USER</option>
                 <!-- ADMIN 권한은 추가·수정 모달 어디서도 옵션으로 노출하지 않는다(UI로 admin 부여/변경 불가). -->
                 <!-- 이미 ADMIN인 사용자를 수정할 때는 select를 건드리지 않으면 기존 권한(ADMIN)이 그대로 저장된다. -->
-
               </AppSelect>
             </label>
             <label>
