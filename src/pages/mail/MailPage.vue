@@ -59,19 +59,21 @@
           </ActionButton>
           <div v-if="selected.size > 0" class="mail-selection-actions">
             <span class="mail-selection-summary">선택 {{ selected.size }}건</span>
-            <AppSelect v-model="bulkAction" size="md" class="mail-action-select" @change="applyBulkAction">
-              <option value="">작업 선택</option>
-              <option value="mark-read">읽음 처리</option>
-              <option value="backup">백업하기</option>
-              <option :value="tab === 'trash' ? 'permanent-delete' : 'delete'">{{ tab === 'trash' ? '영구 삭제' : '삭제' }}</option>
-            </AppSelect>
+            <ActionButton variant="secondary" @click="backupSelectedAction">
+              <Archive :size="15" />
+              백업하기
+            </ActionButton>
+            <ActionButton variant="secondary" @click="deleteSelected">
+              <Trash2 :size="15" />
+              {{ tab === 'trash' ? '영구 삭제' : '삭제' }}
+            </ActionButton>
           </div>
         </div>
       </div>
 
       <div v-if="errorMessage" class="error-box mail-error-box">{{ errorMessage }}</div>
 
-      <div class="mail-list-table">
+      <div class="mail-list-table" :class="{ busy: loading }">
         <div class="mail-list-head">
           <label class="mail-check-cell">
             <input type="checkbox" :checked="allChecked" @change="toggleAll">
@@ -242,12 +244,12 @@ const pageNo = ref(1)
 const totalPages = ref(1)
 const totalElements = ref(0)
 const selected = ref(new Set())
-const bulkAction = ref('')
 const loading = ref(false)
 const errorMessage = ref('')
 const toasts = ref([])
 const { confirmDialog, requestConfirm, cancelConfirm, acceptConfirm } = useConfirmDialog()
 const pageSize = ref(10)
+let loadRequestId = 0
 
 const pageItems = computed(() => {
   const copied = [...mailList.value]
@@ -274,14 +276,20 @@ watch(q, () => {
   }, 250)
 })
 
-watch(pageNo, () => loadMails())
+watch([tab, pageNo], () => loadMails())
 watch(pageSize, () => {
-  pageNo.value = 1
+  if (pageNo.value !== 1) {
+    pageNo.value = 1
+    return
+  }
   loadMails()
 })
 watch(() => route.query.q, () => {
   syncQueryFromRoute()
-  pageNo.value = 1
+  if (pageNo.value !== 1) {
+    pageNo.value = 1
+    return
+  }
   loadMails()
 })
 
@@ -292,20 +300,23 @@ onMounted(async () => {
 })
 
 async function loadMails() {
+  const requestId = ++loadRequestId
   loading.value = true
   errorMessage.value = ''
   selected.value = new Set()
-  bulkAction.value = ''
   try {
     const data = q.value.trim()
       ? await searchMails(q.value.trim(), { page: pageNo.value, size: pageSize.value })
       : await listMails(tab.value, { page: pageNo.value, size: pageSize.value })
+    if (requestId !== loadRequestId) return
     await applyMailPage(data)
   } catch (error) {
-    await applyMailPage({ items: [], page: 1, size: pageSize.value, totalElements: 0, totalPages: 1 })
+    if (requestId !== loadRequestId) return
     errorMessage.value = error?.message || '메일을 불러오지 못했습니다.'
   } finally {
-    loading.value = false
+    if (requestId === loadRequestId) {
+      loading.value = false
+    }
   }
 }
 
@@ -370,11 +381,11 @@ function normalizeMail(mail, sender) {
 }
 
 function changeTab(value) {
+  if (tab.value === value && pageNo.value === 1 && !open.value) return
   tab.value = value
   selected.value = new Set()
   pageNo.value = 1
   open.value = null
-  loadMails()
 }
 
 function syncQueryFromRoute() {
@@ -424,26 +435,9 @@ function toggleSortDirection() {
   sort.value = sort.value === 'latest' ? 'oldest' : 'latest'
 }
 
-async function applyBulkAction() {
-  if (!bulkAction.value || selected.value.size === 0) {
-    bulkAction.value = ''
-    return
-  }
-
-  if (bulkAction.value === 'mark-read') {
-    await Promise.all([...selected.value].map((id) => changeMailRead(id, true)))
-    showToast('읽음 처리 완료', `${selected.value.size}개의 메일을 읽음 처리했어요.`)
-  }
-
-  if (bulkAction.value === 'backup') {
-    await backupSelected()
-  }
-
-  if (bulkAction.value === 'delete' || bulkAction.value === 'permanent-delete') {
-    await deleteSelected()
-  }
-
-  bulkAction.value = ''
+async function backupSelectedAction() {
+  if (selected.value.size === 0) return
+  await backupSelected()
   await refreshMailboxCounts()
   await loadMails()
 }
@@ -464,6 +458,7 @@ async function openMail(mail) {
     })
     if (!detail.read && tab.value === 'inbox') {
       await changeMailRead(mail.mailId, true)
+      notifyMailRead(mail.mailId)
     }
   } catch (error) {
     mail.read = wasRead
@@ -617,6 +612,11 @@ function buildQuotedMailBody(label, mail) {
 
 function extractMailText(value) {
   return extractTiptapText(value) || String(value || '')
+}
+
+function notifyMailRead(mailId) {
+  if (typeof window === 'undefined' || !mailId) return
+  window.dispatchEvent(new CustomEvent('meetbowl:mail-read', { detail: { mailId } }))
 }
 
 function printMail() {
@@ -798,16 +798,19 @@ function dismissToast(id) {
   box-shadow: 0 0 0 3px rgba(243, 115, 33, 0.12);
 }
 
-.mail-action-select {
-  width: 158px;
-}
-
 .mail-error-box {
   margin: 16px 20px 0;
 }
 
 .mail-list-table {
   display: grid;
+  position: relative;
+  transition: opacity 0.18s ease, transform 0.18s ease;
+}
+
+.mail-list-table.busy {
+  opacity: 0.72;
+  transform: translateY(2px);
 }
 
 .mail-list-head,

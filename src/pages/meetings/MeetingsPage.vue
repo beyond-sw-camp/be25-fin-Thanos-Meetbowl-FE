@@ -2,7 +2,10 @@
   <section class="page meetings-page">
     <header class="page-header rooms-header">
       <div><h1>회의</h1><p>내가 주최하거나 초대된 회의를 확인하고 새 회의를 생성합니다.</p></div>
-      <ActionButton variant="primary" @click="openCreate">내 회의 생성</ActionButton>
+      <div class="meeting-header-actions">
+        <ActionButton variant="secondary" @click="quickModal = true">빠른 회의 생성</ActionButton>
+        <ActionButton variant="primary" @click="openCreate">내 회의 생성</ActionButton>
+      </div>
     </header>
 
     <div class="card meetings-filter-card">
@@ -79,6 +82,13 @@
       @saved="onSaved"
     />
 
+    <QuickMeetingModal
+      v-if="quickModal"
+      :current-user="auth.user"
+      @close="quickModal = false"
+      @saved="onQuickSaved"
+    />
+
     <ModalShell v-if="detailMeeting" modal-class="detail-modal" @close="closeMeetingDetail">
       <header>
         <div class="meeting-title-row">
@@ -148,6 +158,7 @@ import { useRoute, useRouter } from 'vue-router'
 import Pagination from '../../components/common/Pagination.vue'
 import ModalShell from '../../components/common/ModalShell.vue'
 import ConfirmDialog from '../../components/common/ConfirmDialog.vue'
+import QuickMeetingModal from '../../components/meetings/QuickMeetingModal.vue'
 import ReservationModal from '../../components/rooms/ReservationModal.vue'
   
 import { getMeetingJoinBlockedMessage, openMeetingWindow } from '../../lib/meeting-route'
@@ -207,6 +218,7 @@ const loading = ref(false)
 const loadError = ref('')
 
 const modal = ref(false)
+const quickModal = ref(false)
 const modalMode = ref('create')
 const editingMeeting = ref(null)
 
@@ -449,6 +461,11 @@ async function onSaved() {
   if (shouldReturnWorkspace.value) router.push('/app/workspace')
 }
 
+async function onQuickSaved() {
+  quickModal.value = false
+  await loadMeetings()
+}
+
 function enterMeeting(meeting) {
   // 취소된 회의는 입장/회의록 대상이 아니다(버튼도 숨기지만 방어적으로 막는다).
   if (meeting.status === 'cancelled') return
@@ -508,6 +525,11 @@ function handleVisibilityChange() {
   font-size: 14px;
   font-weight: 700;
   line-height: 1;
+}
+.meeting-header-actions {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
 }
 /* 입장 대기(참석자, 시작 15분 이상 남음): 비활성 입장 버튼 + 안내 문구. */
 .modal-actions .primary-button:disabled,

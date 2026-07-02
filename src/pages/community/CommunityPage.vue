@@ -198,6 +198,18 @@ export default defineComponent({
       loadPosts()
     })
 
+    watch(
+      () => route.query.postId,
+      async (postId) => {
+        if (!postId) {
+          if (openPost.value) closeDetailState()
+          return
+        }
+        await openPostDetailById(String(postId))
+      },
+      { immediate: true },
+    )
+
     onMounted(() => {
       syncKeywordFromRoute()
       loadPosts()
@@ -211,18 +223,49 @@ export default defineComponent({
         openPost.value = { ...detail, comments }
         commentText.value = ''
         editingCommentId.value = null
+        router.push({
+          path: '/app/community',
+          query: {
+            ...(route.query.q ? { q: route.query.q } : {}),
+            postId: post.id,
+          },
+        })
       } catch (err) {
         actionError.value = err?.message || '게시글을 불러오지 못했습니다.'
       }
     }
 
     function closeDetail() {
+      if (route.query.postId) {
+        router.push({
+          path: '/app/community',
+          query: route.query.q ? { q: route.query.q } : {},
+        })
+        return
+      }
+      closeDetailState()
+    }
+
+    function closeDetailState() {
       openPost.value = null
       commentText.value = ''
       editingCommentId.value = null
       editingPost.value = false
       actionError.value = ''
       loadPosts()
+    }
+
+    async function openPostDetailById(postId) {
+      if (!postId || openPost.value?.id === postId) return
+      actionError.value = ''
+      try {
+        const [detail, comments] = await Promise.all([getPost(postId), listComments(postId)])
+        openPost.value = { ...detail, comments }
+        commentText.value = ''
+        editingCommentId.value = null
+      } catch (err) {
+        actionError.value = err?.message || '게시글을 불러오지 못했습니다.'
+      }
     }
 
     async function toggleLike(post) {
@@ -271,8 +314,16 @@ export default defineComponent({
 
     function addCommentOnEnter(event) {
       if (event?.isComposing || event?.keyCode === 229) return
+      if (event?.shiftKey) return
       event?.preventDefault?.()
       addComment()
+    }
+
+    function saveEditCommentOnEnter(comment, event) {
+      if (event?.isComposing || event?.keyCode === 229) return
+      if (event?.shiftKey) return
+      event?.preventDefault?.()
+      saveEditComment(comment)
     }
 
     function startEditComment(comment) {
@@ -455,6 +506,7 @@ export default defineComponent({
       likeComment,
       addComment,
       addCommentOnEnter,
+      saveEditCommentOnEnter,
       startEditComment,
       saveEditComment,
       removeComment,
@@ -720,11 +772,16 @@ export default defineComponent({
                   <button v-if="comment.mine && editingCommentId !== comment.id" type="button" class="community-danger" @click="removeComment(comment)">삭제</button>
                 </div>
                 <div v-if="editingCommentId === comment.id" class="comment-edit">
-                  <input v-model="editText" @keydown.enter="saveEditComment(comment)">
+                  <textarea
+                    v-model="editText"
+                    rows="3"
+                    class="comment-edit-textarea"
+                    @keydown.enter="saveEditCommentOnEnter(comment, $event)"
+                  ></textarea>
                   <button type="button" class="primary-button small" @click="saveEditComment(comment)">저장</button>
                   <button type="button" class="ghost-button" @click="editingCommentId = null">취소</button>
                 </div>
-                <p v-else>{{ comment.content }}</p>
+                <p v-else class="comment-content-text">{{ comment.content }}</p>
                 <button type="button" class="community-comment-like" :class="{ active: comment.liked }" @click="likeComment(comment)">
                   <Heart :size="13" :fill="comment.liked ? 'currentColor' : 'none'" /> {{ comment.likeCount }}
                 </button>
@@ -733,7 +790,13 @@ export default defineComponent({
 
             <div class="comment-composer">
               <span class="comment-composer-avatar"><UserRound :size="18" /></span>
-              <input v-model="commentText" placeholder="익명으로 댓글 작성" @keydown.enter.exact.prevent="addCommentOnEnter">
+              <textarea
+                v-model="commentText"
+                rows="3"
+                class="comment-composer-textarea"
+                placeholder="익명으로 댓글 작성"
+                @keydown.enter="addCommentOnEnter"
+              ></textarea>
               <button type="button" class="primary-button small" :disabled="commentSubmitting" @click="addComment">{{ commentSubmitting ? '등록 중...' : '등록' }}</button>
             </div>
           </article>
@@ -1293,10 +1356,11 @@ export default defineComponent({
   color: var(--danger);
 }
 
-.comment-list p {
+.comment-content-text {
   margin: 0;
   color: var(--foreground);
   line-height: 1.7;
+  white-space: pre-wrap;
 }
 
 .community-comment-like {
@@ -1313,26 +1377,28 @@ export default defineComponent({
 
 .comment-edit {
   display: flex;
+  align-items: flex-start;
   gap: 8px;
 }
 
-.comment-edit input,
+.comment-edit-textarea,
 .community-write-field input,
 .community-edit-form input,
-.comment-composer input {
+.comment-composer-textarea {
   flex: 1;
   min-width: 0;
-  height: 46px;
   border: 1px solid var(--border);
   border-radius: 12px;
   background: white;
-  padding: 0 14px;
+  padding: 12px 14px;
   font: inherit;
+  line-height: 1.6;
+  resize: vertical;
 }
 
 .comment-composer {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   gap: 12px;
   border-top: 1px solid var(--border);
   margin-top: 24px;

@@ -16,11 +16,8 @@ import {
   getAdminTeams,
   importOrganizationMembersExcel,
   updateAdminDepartment,
-  updateAdminDepartmentStatus,
   updateAdminPosition,
-  updateAdminPositionStatus,
   updateAdminTeam,
-  updateAdminTeamStatus,
 } from '../../lib/admin-organizations'
 import {
   buildDepartmentPayload,
@@ -435,6 +432,15 @@ function openDeleteConfirm() {
   deleteConfirmOpen.value = true
 }
 
+function openDeleteConfirmForItem(item) {
+  if (!item || deleteLoading.value) return
+  editingItem.value = item
+  modalOpen.value = false
+  actionError.value = ''
+  successMessage.value = ''
+  deleteConfirmOpen.value = true
+}
+
 function closeDeleteConfirm() {
   if (deleteLoading.value) return
   // 취소 시 남은 에러가 페이지로 새어 나오지 않게 함께 정리한다.
@@ -542,35 +548,6 @@ async function saveItem() {
       duplicatedSortOrderMessage || formatActionError(error, '저장에 실패했습니다.')
   } finally {
     saving.value = false
-  }
-}
-
-async function changeStatus(item) {
-  const nextStatus = item.status === 'ACTIVE' ? 'INACTIVE' : 'ACTIVE'
-
-  actionError.value = ''
-  successMessage.value = ''
-
-  try {
-    if (activeTab.value === 'organization' || activeTab.value === 'department') {
-      await updateAdminDepartmentStatus(item.departmentId, nextStatus)
-      successMessage.value = `부서를 ${nextStatus === 'ACTIVE' ? '활성화' : '비활성화'}했습니다.`
-    } else if (activeTab.value === 'team') {
-      await updateAdminTeamStatus(item.teamId, nextStatus)
-      successMessage.value = `팀을 ${nextStatus === 'ACTIVE' ? '활성화' : '비활성화'}했습니다.`
-    } else {
-      await updateAdminPositionStatus(item.positionId, nextStatus)
-      successMessage.value = `직급을 ${nextStatus === 'ACTIVE' ? '활성화' : '비활성화'}했습니다.`
-    }
-
-    await reloadAllData()
-  } catch (error) {
-    if (error?.status === 403) {
-      forbidden.value = true
-      return
-    }
-
-    actionError.value = error?.message || '상태 변경에 실패했습니다.'
   }
 }
 
@@ -1357,8 +1334,8 @@ function getDepartmentTreeData(departmentId) {
                 <td>{{ department.sortOrder ?? '-' }}</td>
                 <td>
                   <button class="icon-text organization-action-link" type="button" @click="openEditModal(department)">수정</button>
-                  <button class="icon-text danger-text organization-action-link organization-action-link--danger" type="button" @click="changeStatus(department)">
-                    {{ department.status === 'ACTIVE' ? '비활성화' : '활성화' }}
+                  <button class="icon-text danger-text organization-action-link organization-action-link--danger" type="button" @click="openDeleteConfirmForItem(department)">
+                    삭제
                   </button>
                 </td>
               </tr>
@@ -1404,8 +1381,8 @@ function getDepartmentTreeData(departmentId) {
                 <td>{{ team.sortOrder ?? '-' }}</td>
                 <td>
                   <button class="icon-text organization-action-link" type="button" @click="openEditModal(team)">수정</button>
-                  <button class="icon-text danger-text organization-action-link organization-action-link--danger" type="button" @click="changeStatus(team)">
-                    {{ team.status === 'ACTIVE' ? '비활성화' : '활성화' }}
+                  <button class="icon-text danger-text organization-action-link organization-action-link--danger" type="button" @click="openDeleteConfirmForItem(team)">
+                    삭제
                   </button>
                 </td>
               </tr>
@@ -1443,8 +1420,8 @@ function getDepartmentTreeData(departmentId) {
                 <td>{{ position.userCount }}명</td>
                 <td>
                   <button class="icon-text organization-action-link" type="button" @click="openEditModal(position)">수정</button>
-                  <button class="icon-text danger-text organization-action-link organization-action-link--danger" type="button" @click="changeStatus(position)">
-                    {{ position.status === 'ACTIVE' ? '비활성화' : '활성화' }}
+                  <button class="icon-text danger-text organization-action-link organization-action-link--danger" type="button" @click="openDeleteConfirmForItem(position)">
+                    삭제
                   </button>
                 </td>
               </tr>

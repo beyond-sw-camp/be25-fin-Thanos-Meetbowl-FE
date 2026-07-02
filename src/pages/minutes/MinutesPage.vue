@@ -43,6 +43,7 @@
     </div>
 
     <ShareMailModal v-if="shareOpen" :draft="share" @close="closeShare" @send="sendShare" />
+    <AppToastStack :items="toasts" @dismiss="dismissToast" />
   </section>
 </template>
 
@@ -52,6 +53,7 @@ import { useRoute, useRouter } from 'vue-router'
 import MinuteDetail from '../../components/minutes/MinuteDetail.vue'
 import MinuteList from '../../components/minutes/MinuteList.vue'
 import ShareMailModal from '../../components/minutes/ShareMailModal.vue'
+import AppToastStack from '../../components/common/AppToastStack.vue'
 import {
   addMinutesFavorite,
   approveMeetingMinutes,
@@ -85,7 +87,20 @@ const transcriptError = ref('')
 const transcriptLines = ref([])
 const editing = ref(false)
 const favorites = ref({})
+const toasts = ref([])
 const share = ref({ recipients: [], query: '', subject: '', body: '', error: '', sending: false })
+
+function showToast(title, message) {
+  const toast = { id: crypto.randomUUID?.() || String(Date.now()), title, message }
+  toasts.value = [toast, ...toasts.value].slice(0, 3)
+  setTimeout(() => {
+    toasts.value = toasts.value.filter((item) => item.id !== toast.id)
+  }, 2600)
+}
+
+function dismissToast(id) {
+  toasts.value = toasts.value.filter((item) => item.id !== id)
+}
 
 const filtered = computed(() => {
   const keyword = q.value.trim().toLowerCase()
@@ -219,9 +234,14 @@ async function toggleFavorite(id) {
   try {
     if (next) await addMinutesFavorite(id)
     else await removeMinutesFavorite(id)
-  } catch {
+  } catch (error) {
+    // 낙관적 갱신을 되돌리되, 실패를 조용히 묻지 않고 토스트로 알려 "해제했는데 그대로 남는" 오인을 막는다.
     favorites.value = { ...favorites.value, [id]: !next }
     replaceListItem({ ...item, favorite: !next })
+    showToast(
+      next ? '즐겨찾기 추가 실패' : '즐겨찾기 해제 실패',
+      error?.message || '회의록 즐겨찾기 상태를 변경하지 못했습니다.',
+    )
   }
 }
 
@@ -255,7 +275,7 @@ function openShare() {
     recipients: [],
     query: '',
     subject: `[회의록 공유] ${selected.value.title}`,
-    body: `안녕하세요,\n\n${selected.value.title} 회의록을 공유드립니다.\n\n[AI 요약]\n${selected.value.summary}\n\n확인 부탁드립니다.`,
+    body: buildMinutesShareBody(selected.value),
     error: '',
     sending: false,
   }
@@ -295,6 +315,30 @@ async function sendShare() {
 
 function replaceListItem(next) {
   minuteItems.value = minuteItems.value.map((minute) => minute.meetingId === next.meetingId ? { ...minute, ...next } : minute)
+}
+
+function buildMinutesLink(meetingId) {
+  if (!meetingId) return ''
+  if (typeof window === 'undefined') return `/app/minutes/${meetingId}`
+  return `${window.location.origin}/app/minutes/${meetingId}`
+}
+
+function buildMinutesShareBody(minute) {
+  const summary = String(minute?.summary || '').trim() || '요약이 없습니다.'
+  const content = String(minute?.content || '').trim() || '본문이 없습니다.'
+  const link = buildMinutesLink(minute?.meetingId)
+  return `안녕하세요,
+
+${minute?.title || '회의록'} 회의록을 공유드립니다.
+
+[회의 요약]
+${summary}
+
+[회의록 본문]
+${content}
+
+[회의록 링크]
+${link}`
 }
 
 function normalizeMinute(raw) {
