@@ -811,11 +811,23 @@
           </div>
 
           <div v-if="activeSidePanel !== 'ai'" class="meeting-side-feedback-dock">
-            <RealtimeFeedbackPanel
-              class="meeting-realtime-feedback meeting-realtime-feedback-dock"
-              :feedbacks="realtimeFeedbacks"
-              :connected="Boolean(meetingRoom)"
-            />
+            <button
+              type="button"
+              class="meeting-feedback-notice"
+              :class="{ 'has-feedback': realtimeFeedbacks.length }"
+              @click="toggleSidePanel('ai')"
+            >
+              <span class="meeting-feedback-notice-icon" aria-hidden="true">
+                <Sparkles :size="16" />
+              </span>
+              <span class="meeting-feedback-notice-copy">
+                <strong>{{ feedbackDockTitle }}</strong>
+                <small>{{ feedbackDockDescription }}</small>
+              </span>
+              <span v-if="realtimeFeedbacks.length" class="meeting-feedback-notice-count">
+                {{ realtimeFeedbacks.length }}건
+              </span>
+            </button>
           </div>
         </div>
       </template>
@@ -1243,6 +1255,16 @@ const shouldShowMeetingEndedScreen = computed(() =>
 const activeCaptionTabId = computed(() => `meeting-caption-tab-${captionDisplayMode.value}`)
 const activeCaptionPanelId = computed(() => `meeting-caption-panel-${captionDisplayMode.value}`)
 const realtimeFeedbacks = computed(() => sortedFeedbacks(feedbackMap.value))
+const feedbackDockTitle = computed(() => {
+  if (realtimeFeedbacks.value.length) return '새 실시간 피드백이 있습니다'
+  if (meetingRoom.value) return '실시간 피드백 대기 중'
+  return '회의 연결 후 피드백을 받을 수 있습니다'
+})
+const feedbackDockDescription = computed(() => {
+  if (realtimeFeedbacks.value.length) return '자세한 내용은 AI 피드백 패널에서 확인하세요.'
+  if (meetingRoom.value) return '이전 논의와 관련된 맥락이 감지되면 알려드립니다.'
+  return '연결이 완료되면 이 영역에 발생 여부만 표시됩니다.'
+})
 const supportsSpeakerSelection = computed(() =>
   typeof HTMLMediaElement !== 'undefined' && 'setSinkId' in HTMLMediaElement.prototype,
 )
