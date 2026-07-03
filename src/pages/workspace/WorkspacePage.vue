@@ -1265,7 +1265,10 @@ function normalizeStatus(status) {
 function canShareMinute(minute) {
   if (!minute) return false
   const status = normalizeStatus(minute.rawStatus)
-  return ['APPROVED', 'SHARED'].includes(status) || Boolean(minute.approvedAt)
+  const label = String(minute.statusLabel || '').trim()
+  return ['APPROVED', 'SHARED'].includes(status)
+    || ['승인됨', '공유됨'].includes(label)
+    || Boolean(minute.approvedAt)
 }
 
 function formatDate(value) {
