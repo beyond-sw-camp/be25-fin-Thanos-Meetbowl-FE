@@ -1218,6 +1218,12 @@ function buildMinutesShareBody(minute) {
   })
 }
 
+function buildMinutesLink(meetingId) {
+  if (!meetingId) return ''
+  const origin = globalThis.location?.origin || ''
+  return `${origin}/app/minutes/${meetingId}`
+}
+
 function normalizeWorkspaceMinute(raw) {
   const startedAt = raw.meetingStartedAt || null
   const endedAt = raw.meetingEndedAt || null
