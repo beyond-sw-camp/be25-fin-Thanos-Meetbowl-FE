@@ -10,8 +10,8 @@ function query(params = {}) {
   return queryString ? `?${queryString}` : ''
 }
 
-export function listMinutes({ keyword } = {}) {
-  return getJson(`/minutes${query({ keyword })}`)
+export function listMinutes({ keyword, favoriteOnly } = {}) {
+  return getJson(`/minutes${query({ keyword, favoriteOnly })}`)
 }
 
 export function getMeetingMinutes(meetingId) {

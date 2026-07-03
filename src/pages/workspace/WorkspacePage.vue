@@ -638,7 +638,7 @@ async function loadBackups() {
 async function loadMinutes() {
   minutesLoading.value = true
   try {
-    minuteItems.value = (await listMinutes()).map(normalizeWorkspaceMinute)
+    minuteItems.value = (await listMinutes({ favoriteOnly: true })).map(normalizeWorkspaceMinute)
     if (!workspaceMinuteId.value && minuteItems.value.length > 0) {
       workspaceMinuteId.value = workspaceMinuteItems.value[0]?.id || ''
     }
