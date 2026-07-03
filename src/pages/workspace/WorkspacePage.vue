@@ -523,9 +523,7 @@ const selectedWorkspaceMinute = computed(() => {
 const selectedWorkspaceMinuteStatus = computed(() => normalizeStatus(selectedWorkspaceMinute.value?.rawStatus))
 const canEditWorkspaceMinute = computed(() => false)
 const canApproveWorkspaceMinute = computed(() => false)
-const canShareWorkspaceMinute = computed(() => Boolean(
-  selectedWorkspaceMinute.value && ['APPROVED', 'SHARED'].includes(selectedWorkspaceMinuteStatus.value),
-))
+const canShareWorkspaceMinute = computed(() => canShareMinute(selectedWorkspaceMinute.value))
 
 watch(cursor, loadCalendar)
 watch(memoKeyword, () => { memoPage.value = 1 })
@@ -1240,7 +1238,7 @@ function normalizeWorkspaceMinute(raw) {
     rawStatus: normalizeStatus(raw.status),
     statusLabel: statusLabel(raw.status),
     approvedAt: raw.approvedAt || null,
-    favorite: Boolean(raw.favorite),
+    favorite: Boolean(raw.favorite ?? workspaceFavorites.value?.[raw.minutesId]),
   }
 }
 
@@ -1261,6 +1259,12 @@ function statusLabel(status) {
 
 function normalizeStatus(status) {
   return String(status || '').trim().toUpperCase()
+}
+
+function canShareMinute(minute) {
+  if (!minute) return false
+  const status = normalizeStatus(minute.rawStatus)
+  return ['APPROVED', 'SHARED'].includes(status) || Boolean(minute.approvedAt)
 }
 
 function formatDate(value) {

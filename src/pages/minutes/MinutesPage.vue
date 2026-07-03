@@ -123,7 +123,7 @@ const canApproveSelected = computed(() => {
   if (!selected.value || !['DRAFT', 'IN_REVIEW'].includes(selectedStatus.value)) return false
   return selected.value.reviewerUserId === auth.user?.userId
 })
-const canShareSelected = computed(() => Boolean(selected.value && ['APPROVED', 'SHARED'].includes(selectedStatus.value)))
+const canShareSelected = computed(() => canShareMinute(selected.value))
 
 onMounted(loadMinutes)
 
@@ -364,6 +364,12 @@ function statusLabel(status) {
 
 function normalizeStatus(status) {
   return String(status || '').trim().toUpperCase()
+}
+
+function canShareMinute(minute) {
+  if (!minute) return false
+  const status = normalizeStatus(minute.rawStatus)
+  return ['APPROVED', 'SHARED'].includes(status) || Boolean(minute.approvedAt)
 }
 
 function formatDate(value) {
