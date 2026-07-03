@@ -506,8 +506,7 @@ const pagedDriveFiles = computed(() => {
 watch(driveTotalPages, (total) => {
   if (drivePage.value > total) drivePage.value = total
 })
-const workspaceMinuteItems = computed(() => minuteItems.value.slice().sort((a, b) => {
-  if (Boolean(a.favorite) !== Boolean(b.favorite)) return a.favorite ? -1 : 1
+const workspaceMinuteItems = computed(() => minuteItems.value.filter((minute) => minute.favorite).sort((a, b) => {
   const aTime = Date.parse(a.approvedAt || a.meetingStartedAt || '') || 0
   const bTime = Date.parse(b.approvedAt || b.meetingStartedAt || '') || 0
   return bTime - aTime
