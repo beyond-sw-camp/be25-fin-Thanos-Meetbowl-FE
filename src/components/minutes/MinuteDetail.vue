@@ -31,7 +31,12 @@
         <button
           v-if="!readonlyMode"
           type="button"
-          class="primary-button minute-action-button"
+          :class="[
+            'primary-button',
+            'minute-action-button',
+            'minute-share-button',
+            { 'minute-share-button--ready': canShare }
+          ]"
           :disabled="actionPending"
           :title="canShare ? '회의록을 내부 메일로 공유합니다.' : '승인된 회의록만 공유할 수 있습니다.'"
           @click="$emit('share')"
