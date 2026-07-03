@@ -321,7 +321,7 @@ const siteUsageInsightItems = computed(() => [
     secondaryValue: `${visibleSiteBuildingUsage.value.length}개`,
   },
   {
-    label: '현재 시간대 점유 회의실',
+    label: '점유 분포 건물 수',
     value: `${visibleSiteBuildingUsage.value.length}개`,
     secondaryLabel: '현재 시간대 점유 회의실',
     secondaryValue: `${meetingRoomSummary.value?.inUseMeetingRoomCount ?? 0}개`,
